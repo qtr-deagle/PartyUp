@@ -20,19 +20,19 @@ export default function AdminReports() {
 
   const getStatusColor = (status: string) => {
     switch(status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-700';
-      case 'investigating': return 'bg-blue-100 text-blue-700';
-      case 'resolved': return 'bg-green-100 text-green-700';
-      default: return 'bg-gray-100 text-gray-700';
+      case 'pending': return 'bg-yellow-200/30 text-yellow-600 dark:text-yellow-400';
+      case 'investigating': return 'bg-primary/20 text-primary';
+      case 'resolved': return 'bg-accent/20 text-accent';
+      default: return 'bg-muted text-muted-foreground';
     }
   };
 
   const getSeverityColor = (severity: string) => {
     switch(severity) {
-      case 'high': return 'bg-red-100 text-red-700';
-      case 'medium': return 'bg-orange-100 text-orange-700';
-      case 'low': return 'bg-yellow-100 text-yellow-700';
-      default: return 'bg-gray-100 text-gray-700';
+      case 'high': return 'bg-destructive/20 text-destructive';
+      case 'medium': return 'bg-yellow-200/30 text-yellow-600 dark:text-yellow-400';
+      case 'low': return 'bg-accent/20 text-accent';
+      default: return 'bg-muted text-muted-foreground';
     }
   };
 

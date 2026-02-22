@@ -22,17 +22,17 @@ export default function TrustSafety({ trustData }: TrustSafetyProps) {
   };
 
   const getTrustColor = (level: number) => {
-    if (level >= 80) return "text-green-600 dark:text-green-400";
-    if (level >= 60) return "text-blue-600 dark:text-blue-400";
+    if (level >= 80) return "text-accent dark:text-accent";
+    if (level >= 60) return "text-primary dark:text-primary";
     if (level >= 40) return "text-yellow-600 dark:text-yellow-400";
     return "text-orange-600 dark:text-orange-400";
   };
 
   const getTrustBgColor = (level: number) => {
-    if (level >= 80) return "bg-green-100 dark:bg-green-900/30";
-    if (level >= 60) return "bg-blue-100 dark:bg-blue-900/30";
-    if (level >= 40) return "bg-yellow-100 dark:bg-yellow-900/30";
-    return "bg-orange-100 dark:bg-orange-900/30";
+    if (level >= 80) return "bg-accent/10 dark:bg-accent/20";
+    if (level >= 60) return "bg-primary/10 dark:bg-primary/20";
+    if (level >= 40) return "bg-yellow-100/30 dark:bg-yellow-900/30";
+    return "bg-orange-100/30 dark:bg-orange-900/30";
   };
 
   const getTrustLabel = (level: number) => {

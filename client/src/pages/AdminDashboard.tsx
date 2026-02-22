@@ -5,10 +5,10 @@ import Weather from '@/components/Weather';
 
 export default function AdminDashboard() {
   const stats = [
-    { label: 'Total Users', value: '1,234', icon: Users, color: 'bg-blue-100', textColor: 'text-blue-600' },
-    { label: 'Active Trips', value: '456', icon: Plane, color: 'bg-green-100', textColor: 'text-green-600' },
-    { label: 'Reports', value: '23', icon: AlertCircle, color: 'bg-red-100', textColor: 'text-red-600' },
-    { label: 'Revenue', value: '$12.5K', icon: TrendingUp, color: 'bg-purple-100', textColor: 'text-purple-600' },
+    { label: 'Total Users', value: '1,234', icon: Users, color: 'bg-primary/10', textColor: 'text-primary' },
+    { label: 'Active Trips', value: '456', icon: Plane, color: 'bg-accent/10', textColor: 'text-accent' },
+    { label: 'Reports', value: '23', icon: AlertCircle, color: 'bg-destructive/10', textColor: 'text-destructive' },
+    { label: 'Revenue', value: '$12.5K', icon: TrendingUp, color: 'bg-secondary/50', textColor: 'text-primary' },
   ];
 
   const recentActivity = [

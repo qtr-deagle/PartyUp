@@ -3,9 +3,11 @@ import { Bell } from 'lucide-react';
 import { useLocation } from 'wouter';
 import MobileNavigation from './MobileNavigation';
 import DesktopSidebar from './DesktopSidebar';
-import SOSButton from './SOSButton';
+import SafetyMenu from './SafetyMenu';
+import SafetyEdgeTab from './SafetyEdgeTab';
 import NotificationModal from './NotificationModal';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useSafetyUI } from '@/contexts/SafetyContext';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -21,7 +23,8 @@ interface LayoutProps {
  */
 export default function Layout({ children }: LayoutProps) {
   const [notificationOpen, setNotificationOpen] = useState(false);
-  const [, setLocation] = useLocation();
+  const [location, setLocationPath] = useLocation();
+  const { uiStyle } = useSafetyUI();
   const {
     notifications,
     unreadCount,
@@ -32,9 +35,16 @@ export default function Layout({ children }: LayoutProps) {
 
   const handleNotificationClick = (notification: any) => {
     if (notification.actionUrl) {
-      setLocation(notification.actionUrl);
+      setLocationPath(notification.actionUrl);
       setNotificationOpen(false);
     }
+  };
+
+  // Only show safety menu on screens where user might need it
+  // Hide on profile editing, settings, admin pages, etc.
+  const shouldShowSafetyMenu = () => {
+    const hiddenPaths = ['/settings', '/profile', '/admin', '/login', '/register'];
+    return !hiddenPaths.some(path => location.startsWith(path));
   };
 
   return (
@@ -96,10 +106,18 @@ export default function Layout({ children }: LayoutProps) {
         {children}
       </main>
 
-      {/* Floating SOS Button - visible on all screens */}
-      <div className="fixed bottom-28 md:bottom-8 right-4 md:right-8 z-50">
-        <SOSButton />
-      </div>
+      {/* Safety Buttons - Render based on user preference */}
+      {shouldShowSafetyMenu() && (
+        <>
+          {uiStyle === 'floating' ? (
+            <div className="fixed bottom-28 md:bottom-8 right-4 md:right-8 z-50">
+              <SafetyMenu />
+            </div>
+          ) : (
+            <SafetyEdgeTab />
+          )}
+        </>
+      )}
     </div>
   );
 }

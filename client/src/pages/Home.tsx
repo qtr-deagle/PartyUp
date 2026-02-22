@@ -1,166 +1,232 @@
-import React, { useState } from 'react';
+import React from 'react';
 import Layout from '@/components/Layout';
-import { Bell, MapPin, Star, Users, Calendar, Search, Heart, TrendingUp, Zap } from 'lucide-react';
+import { MapPin, Star, MapPinCheck, Users, Calendar, Activity, Shield } from 'lucide-react';
 import Weather from '@/components/Weather';
 
 export default function Home() {
-  const [selectedDate, setSelectedDate] = useState(21);
-
-  const destinations = [
-    { id: 1, name: 'Barcelona', location: 'Spain', price: '$450/day', image: 'bg-gradient-to-br from-blue-400 to-blue-500' },
-    { id: 2, name: 'Tokyo', location: 'Japan', price: '$570/day', image: 'bg-gradient-to-br from-pink-400 to-pink-500' },
-    { id: 3, name: 'Paris', location: 'France', price: '$690/day', image: 'bg-gradient-to-br from-purple-400 to-purple-500' },
+  const upcomingRides = [
+    { id: 1, type: 'travel-buddy', destination: 'Boracay', date: 'Mar 15', travelers: 2, status: 'confirmed', compatibility: 92 },
+    { id: 2, type: 'carpool', destination: 'Tagaytay', date: 'Mar 20', travelers: 3, status: 'pending', compatibility: 88 },
   ];
 
-  const events = [
-    { id: 1, date: 12, name: 'Mt. Merapi', location: 'Semarang, Indonesia', price: '$320/day' },
-    { id: 2, date: 14, name: 'Mt. Merbabu', location: 'Central Java, Indonesia', price: '$280/day' },
-    { id: 3, date: 15, name: 'Mt. Mandala', location: 'Papua, Indonesia', price: '$570/day' },
-    { id: 4, date: 15, name: 'Mt. Kerinci', location: 'Jambi, Indonesia', price: '$320/day' },
-    { id: 5, date: 21, name: 'Mt. Slamet', location: 'Tegal, Indonesia', price: '$560/day' },
-    { id: 6, date: 21, name: 'Mt. Latuk', location: 'Kalimantan, Indonesia', price: '$440/day' },
+  const nearbyMatches = [
+    { id: 1, name: 'Sarah', age: 24, destination: 'Boracay', distance: 2.3, compatibility: 92 },
+    { id: 2, name: 'Mike', age: 26, destination: 'Tagaytay', distance: 1.8, compatibility: 88 },
   ];
-
-  const dates = Array.from({ length: 14 }, (_, i) => ({ date: 12 + i, day: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][i % 7] }));
 
   return (
     <Layout>
-      {/* Header Section */}
-      <div className="md:sticky md:top-0 bg-background border-b border-border z-30">
-        <div className="p-4 sm:p-6 max-w-7xl mx-auto">
-          <div className="flex items-start justify-between mb-4 sm:mb-6">
-            <div>
-              <h1 className="text-2xl sm:text-4xl font-semibold text-foreground">Welcome back</h1>
-              <p className="text-sm sm:text-base text-muted-foreground mt-1">Explore the world and plan your next trip</p>
+      {/* Mobile View */}
+      <div className="md:hidden bg-background dark:bg-background min-h-screen">
+        {/* Header Section */}
+        <div className="relative p-4 bg-card dark:bg-card border-b border-border">
+          {/* Greeting */}
+          <h1 className="text-2xl font-bold text-foreground mb-2">Welcome back</h1>
+          <p className="text-sm text-muted-foreground">Let's find your next travel buddy</p>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {/* Active Pairing Status */}
+          <div className="p-4 bg-accent/10 border border-accent/30 rounded-2xl">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-accent animate-pulse"></div>
+                <span className="text-sm font-semibold text-accent">Active Pairing</span>
+              </div>
+              <Shield className="w-5 h-5 text-accent" />
+            </div>
+            <p className="text-xs text-accent-foreground">You're matched with Sarah for Boracay trip</p>
+          </div>
+
+          {/* Geofence Status */}
+          <div className="p-4 bg-primary/10 border border-primary/30 rounded-2xl">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold text-primary">Geofence Status</span>
+              <MapPinCheck className="w-5 h-5 text-primary" />
+            </div>
+            <p className="text-xs text-primary/70 mb-3">Within 5km safe zone - Makati CBD</p>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 bg-primary/20 rounded-full h-1">
+                <div className="bg-primary h-full rounded-full w-3/4"></div>
+              </div>
+              <span className="text-xs font-semibold text-primary">75%</span>
             </div>
           </div>
 
-          {/* Search Bar */}
-          <div className="flex gap-2 sm:gap-3">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Search Destination"
-                className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2.5 sm:py-3 text-sm sm:text-base bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
-              />
+          {/* Upcoming Rides */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-primary" /> Upcoming Rides
+              </h2>
+              <a href="/my-trips" className="text-xs text-primary hover:text-primary/80 font-semibold">View all</a>
             </div>
-            <button className="px-3 sm:px-4 py-2.5 sm:py-3 bg-primary text-primary-foreground rounded-xl font-semibold transition-smooth hover:shadow-lg active:scale-95 flex items-center gap-2">
-              <Zap className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
-            <button className="px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base bg-primary text-primary-foreground rounded-xl font-semibold transition-smooth hover:shadow-lg active:scale-95">
-              Search
-            </button>
+
+            <div className="space-y-3">
+              {upcomingRides.map((ride) => (
+                <div key={ride.id} className="p-4 bg-card dark:bg-card border border-border rounded-xl hover:border-primary dark:hover:border-primary transition-all">
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-semibold text-foreground">{ride.destination}</h3>
+                        <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
+                          ride.status === 'confirmed'
+                            ? 'bg-accent/20 text-accent'
+                            : 'bg-yellow-200 text-yellow-800'
+                        }`}>
+                          {ride.status === 'confirmed' ? '✓ Confirmed' : '⏳ Pending'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Calendar className="w-3 h-3" /> {ride.date}
+                      </p>
+                    </div>
+                    <span className="text-sm font-bold text-primary">{ride.compatibility}%</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Users className="w-3 h-3" /> {ride.travelers} travelers
+                  </div>
+                </div>
+              ))})
+            </div>
+          </div>
+
+          {/* Nearby Matches Preview */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <Users className="w-5 h-5 text-muted-foreground" /> Nearby Matches
+              </h2>
+              <a href="/match" className="text-xs text-primary hover:text-primary/80 font-semibold">Discover more</a>
+            </div>
+
+            <div className="space-y-2">
+              {nearbyMatches.map((match) => (
+                <div key={match.id} className="p-3 bg-card dark:bg-card border border-border rounded-lg hover:border-primary dark:hover:border-primary transition-all flex items-center justify-between">
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm font-bold text-primary-foreground">{match.name[0]}</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">{match.name}, {match.age}</p>
+                      <p className="text-xs text-muted-foreground">{match.destination} • {match.distance.toFixed(1)}km</p>
+                    </div>
+                  </div>
+                  <span className="text-sm font-bold text-primary">{match.compatibility}%</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="p-6 max-w-7xl mx-auto">
-        {/* Top Row: Weather + Discover */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
-          {/* Weather Widget */}
-          <div className="lg:col-span-1">
-            <Weather />
+      {/* Desktop View */}
+      <div className="hidden md:block bg-background dark:bg-background min-h-screen p-8">
+        <div className="max-w-7xl mx-auto space-y-8">
+          {/* Header */}
+          <div>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent mb-2">Welcome back</h1>
+            <p className="text-muted-foreground">Your travel safety dashboard</p>
           </div>
 
-          {/* Discover World Section */}
-          <div className="lg:col-span-3">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-2">
-                <h2 className="text-2xl font-bold text-foreground">Discover World</h2>
-                <span className="text-2xl">🌍</span>
-              </div>
-              <button className="text-primary font-semibold text-sm hover:underline flex items-center gap-1">
-                View all <TrendingUp className="w-4 h-4" />
-              </button>
-            </div>
+          {/* Top Row - Safety & Status */}
 
-            {/* Destination Cards */}
-            <div className="space-y-3">
-              {destinations.map((dest) => (
-                <div key={dest.id} className="card-luxury p-4 flex gap-4 items-center hover:shadow-lg transition-shadow cursor-pointer">
-                  <div className={`w-20 h-20 rounded-lg ${dest.image} flex-shrink-0`}></div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-foreground">{dest.name}</h3>
-                    <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-                      <MapPin className="w-4 h-4" />
-                      {dest.location}
-                    </p>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="font-semibold text-primary">{dest.price}</p>
-                    <button className="mt-2 p-2 bg-primary rounded-full text-white hover:shadow-md transition-smooth">
-                      <Heart className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Event Dates Section */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <h2 className="text-2xl font-bold text-foreground">Event Dates</h2>
-              <span className="text-2xl">🎯</span>
-            </div>
-            <button className="text-primary font-semibold text-sm hover:underline flex items-center gap-1">
-              View all <TrendingUp className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Date Picker */}
-          <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-            {dates.map((item) => (
-              <button
-                key={item.date}
-                onClick={() => setSelectedDate(item.date)}
-                className={`flex flex-col items-center justify-center p-3 rounded-lg min-w-[60px] text-sm font-medium transition-all ${selectedDate === item.date
-                    ? 'bg-primary text-primary-foreground shadow-md'
-                    : 'bg-card border border-border text-foreground hover:border-primary'
-                  }`}
-              >
-                <span className="text-xs text-muted-foreground mb-1">{item.day}</span>
-                <span>{item.date}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* Event Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {events
-              .filter((event) => event.date === selectedDate)
-              .map((event) => (
-                <div key={event.id} className="card-luxury p-4 flex gap-4 hover:shadow-lg transition-shadow cursor-pointer">
-                  <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-green-400 to-green-500 flex-shrink-0"></div>
-                  <div className="flex-1 min-w-0 flex items-center justify-between">
-                    <div>
-                      <h3 className="font-bold text-foreground">{event.name}</h3>
-                      <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-                        <MapPin className="w-4 h-4" />
-                        {event.location}
-                      </p>
-                      <p className="text-sm font-semibold text-primary mt-2">{event.price}</p>
+          {/* Main Content Grid */}
+          <div className="grid grid-cols-2 gap-6">
+            {/* Upcoming Rides */}
+            <div className="p-6 bg-card dark:bg-card border border-border rounded-2xl">
+              <h2 className="text-2xl font-bold text-foreground mb-6">Upcoming Rides</h2>
+              <div className="space-y-4">
+                {upcomingRides.map((ride) => (
+                  <div key={ride.id} className="p-4 bg-secondary dark:bg-secondary border border-border rounded-xl hover:border-primary dark:hover:border-primary transition-all">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h3 className="font-semibold text-foreground text-lg">{ride.destination}</h3>
+                        <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1">
+                          <Calendar className="w-4 h-4" /> {ride.date} • {ride.travelers} travelers
+                        </p>
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                        ride.status === 'confirmed'
+                          ? 'bg-accent/20 text-accent'
+                          : 'bg-yellow-200 text-yellow-800'
+                      }`}>
+                        {ride.status === 'confirmed' ? '✓ Confirmed' : '⏳ Pending'}
+                      </span>
                     </div>
-                    <button className="p-2 rounded-full hover:bg-primary/10 transition-smooth flex-shrink-0">
-                      <Heart className="w-5 h-5 text-primary" />
-                    </button>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Compatibility</span>
+                      <div className="flex items-center gap-2 flex-1 ml-3">
+                        <div className="flex-1 bg-muted rounded-full h-2">
+                          <div
+                            className="bg-primary h-full rounded-full"
+                            style={{ width: `${ride.compatibility}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-sm font-bold text-primary">{ride.compatibility}%</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
-          </div>
-        </div>
+                ))}
+              </div>
+              <button className="w-full mt-6 py-2 border border-primary/30 text-primary rounded-lg hover:bg-primary/5 transition-all font-semibold">
+                View All Trips
+              </button>
+            </div>
 
-        {/* Discount Banner */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary to-primary/80 p-8 text-white">
-          <div className="relative z-10">
-            <h3 className="text-2xl font-bold mb-2">🎉 Special Discount!</h3>
-            <p className="text-white/90">Get the best discounts on certain destinations and don't miss it.</p>
+            {/* Nearby Matches */}
+            <div className="p-6 bg-card dark:bg-card border border-border rounded-2xl">
+              <h2 className="text-2xl font-bold text-foreground mb-6">Nearby Matches</h2>
+              <div className="space-y-3">
+                {nearbyMatches.map((match) => (
+                  <div key={match.id} className="p-4 bg-secondary dark:bg-secondary border border-border rounded-xl hover:border-primary dark:hover:border-primary transition-all">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center flex-shrink-0">
+                        <span className="font-bold text-primary-foreground">{match.name[0]}</span>
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-foreground">{match.name}, {match.age}</p>
+                        <p className="text-sm text-muted-foreground">{match.destination} • {match.distance.toFixed(1)}km</p>
+                      </div>
+                      <span className="text-lg font-bold text-primary">{match.compatibility}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button className="w-full mt-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 hover:shadow-lg transition-all font-semibold">
+                Discover More
+              </button>
+            </div>
           </div>
-          <div className="absolute right-0 bottom-0 w-40 h-40 bg-white/10 rounded-full -mr-20 -mb-20"></div>
+
+          {/* Geofence & Security Info */}
+          <div className="p-6 bg-primary/10 dark:bg-primary/10 border border-primary/30 dark:border-primary/30 rounded-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                <MapPinCheck className="w-6 h-6 text-primary" /> Geofence Status
+              </h2>
+              <Activity className="w-6 h-6 text-primary" />
+            </div>
+            <div className="grid grid-cols-3 gap-6">
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">Current Zone</p>
+                <p className="text-lg font-bold text-foreground">Makati CBD</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">Safety Level</p>
+                <span className="text-lg font-bold text-accent">✓ Safe</span>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">Distance from Center</p>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 bg-primary/20 rounded-full h-2">
+                    <div className="bg-primary h-full rounded-full w-3/4"></div>
+                  </div>
+                  <span className="text-sm font-bold text-primary">3.5 km</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </Layout>

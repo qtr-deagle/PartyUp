@@ -29,9 +29,9 @@ export default function SuggestedBuddies({ buddies = [] }: SuggestedBuddiesProps
   };
 
   const getMatchColor = (percentage: number) => {
-    if (percentage >= 80) return "text-green-600 dark:text-green-400";
-    if (percentage >= 60) return "text-blue-600 dark:text-blue-400";
-    return "text-orange-600 dark:text-orange-400";
+    if (percentage >= 80) return "text-accent dark:text-accent";
+    if (percentage >= 60) return "text-primary dark:text-primary";
+    return "text-yellow-600 dark:text-yellow-400";
   };
 
   if (buddies.length === 0) {

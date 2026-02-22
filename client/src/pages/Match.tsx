@@ -108,10 +108,128 @@ export default function Match() {
 
   return (
     <Layout>
-      {/* Mobile Header */}
-      <div className="md:hidden sticky top-0 bg-card border-b border-border z-30 p-4">
-        <h1 className="text-2xl font-bold text-primary">Find Your Buddy</h1>
-        <p className="text-xs text-muted-foreground mt-1">Swipe to match with travelers</p>
+      {/* Mobile View - Full Screen */}
+      <div className="md:hidden flex flex-col h-screen w-screen fixed inset-0 bg-background">
+        {/* Mobile Header */}
+        <div className="bg-card border-b border-border z-30 p-4 flex-shrink-0">
+          <h1 className="text-2xl font-bold text-primary">Find Your Buddy</h1>
+          <p className="text-xs text-muted-foreground mt-1">Swipe to match with travelers</p>
+        </div>
+
+        {/* Main Content - Flex Grow */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Mobile Swipe Cards */}
+          <div className="flex-1 flex flex-col">
+            {currentTraveler ? (
+              <>
+                {/* Swipe Card */}
+                <div
+                  className={`flex-1 flex flex-col overflow-hidden rounded-none card-luxury transition-all duration-300 mx-0 ${swiping
+                      ? swipeDirection === 'left'
+                        ? 'opacity-0 -translate-x-full'
+                        : 'opacity-0 translate-x-full'
+                      : 'opacity-100 translate-x-0'
+                    }`}
+                >
+                  {/* Card Image */}
+                  <div className="flex-1 bg-gradient-to-br from-primary/20 to-accent/20 relative">
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="text-center">
+                        <div className="w-20 h-20 rounded-full bg-primary/30 mx-auto mb-4"></div>
+                        <p className="text-lg font-bold">{currentTraveler.name}</p>
+                        <p className="text-sm text-muted-foreground">{currentTraveler.age}</p>
+                      </div>
+                    </div>
+                    {currentTraveler.verified && (
+                      <div className="absolute top-4 right-4 px-3 py-1 bg-accent/90 text-white text-xs font-bold rounded-full">
+                        ✓ Verified
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Card Content */}
+                  <div className="flex-shrink-0 p-6 bg-card overflow-y-auto max-h-[50vh]">
+                    <div className="flex items-start justify-between mb-4">
+                      <div>
+                        <h2 className="text-xl font-bold">{currentTraveler.name}, {currentTraveler.age}</h2>
+                        <p className="text-sm text-muted-foreground mt-1">{currentTraveler.distance}</p>
+                      </div>
+                      <div className="flex items-center gap-1 bg-yellow-50 px-2 py-1 rounded-lg">
+                        <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                        <span className="text-sm font-medium">{currentTraveler.rating}</span>
+                      </div>
+                    </div>
+
+                    <div className="mb-4 p-3 bg-primary/5 rounded-lg">
+                      <div className="flex items-center gap-2 text-sm">
+                        <MapPin className="w-4 h-4 text-primary" />
+                        <span className="font-medium">{currentTraveler.destination}</span>
+                      </div>
+                    </div>
+
+                    <div className="mb-4">
+                      <p className="text-xs text-muted-foreground font-medium mb-2">Match Type</p>
+                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${currentTraveler.matchType === 'same-plan'
+                          ? 'bg-accent/10 text-accent'
+                          : 'bg-primary/10 text-primary'
+                        }`}>
+                        {currentTraveler.matchType === 'same-plan' ? '🤝 Same Plan' : '🧭 Experienced Buddy'}
+                      </span>
+                    </div>
+
+                    <div className="mb-6">
+                      <p className="text-xs text-muted-foreground font-medium mb-2">Interests</p>
+                      <div className="flex flex-wrap gap-2">
+                        {currentTraveler.interests.map((interest, i) => (
+                          <span key={i} className="px-3 py-1 bg-secondary text-secondary-foreground text-xs rounded-full">
+                            {interest}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-3">
+                      <button
+                        onClick={handleSkip}
+                        disabled={swiping}
+                        className="flex-1 py-3 border border-border rounded-lg font-medium transition-smooth hover:bg-secondary disabled:opacity-50"
+                      >
+                        <X className="w-5 h-5 mx-auto" />
+                      </button>
+                      <button
+                        onClick={handleMatch}
+                        disabled={swiping}
+                        className="flex-1 py-3 bg-accent text-accent-foreground rounded-lg font-medium transition-smooth hover:shadow-md disabled:opacity-50"
+                      >
+                        <Heart className="w-5 h-5 mx-auto fill-current" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Progress Indicator */}
+                <div className="flex-shrink-0 flex gap-2 justify-center py-4 bg-card border-t border-border">
+                  {travelers.map((_, i) => (
+                    <div
+                      key={i}
+                      className={`h-1 rounded-full transition-all ${i === currentIndex
+                          ? 'w-8 bg-primary'
+                          : i < currentIndex
+                            ? 'w-2 bg-primary/30'
+                            : 'w-2 bg-border'
+                        }`}
+                    ></div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <p className="text-muted-foreground">No more travelers to show</p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Desktop Header */}
@@ -122,125 +240,9 @@ export default function Match() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="p-4 md:p-8">
-        {/* Mobile Swipe Cards */}
-        <div className="md:hidden">
-          {currentTraveler ? (
-            <div className="space-y-4">
-              {/* Swipe Card */}
-              <div
-                className={`card-luxury overflow-hidden transition-all duration-300 ${
-                  swiping
-                    ? swipeDirection === 'left'
-                      ? 'opacity-0 -translate-x-full'
-                      : 'opacity-0 translate-x-full'
-                    : 'opacity-100 translate-x-0'
-                }`}
-              >
-                {/* Card Image */}
-                <div className="w-full h-80 bg-gradient-to-br from-primary/20 to-accent/20 relative">
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="w-20 h-20 rounded-full bg-primary/30 mx-auto mb-4"></div>
-                      <p className="text-lg font-bold">{currentTraveler.name}</p>
-                      <p className="text-sm text-muted-foreground">{currentTraveler.age}</p>
-                    </div>
-                  </div>
-                  {currentTraveler.verified && (
-                    <div className="absolute top-4 right-4 px-3 py-1 bg-accent/90 text-white text-xs font-bold rounded-full">
-                      ✓ Verified
-                    </div>
-                  )}
-                </div>
-
-                {/* Card Content */}
-                <div className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <h2 className="text-xl font-bold">{currentTraveler.name}, {currentTraveler.age}</h2>
-                      <p className="text-sm text-muted-foreground mt-1">{currentTraveler.distance}</p>
-                    </div>
-                    <div className="flex items-center gap-1 bg-yellow-50 px-2 py-1 rounded-lg">
-                      <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                      <span className="text-sm font-medium">{currentTraveler.rating}</span>
-                    </div>
-                  </div>
-
-                  <div className="mb-4 p-3 bg-primary/5 rounded-lg">
-                    <div className="flex items-center gap-2 text-sm">
-                      <MapPin className="w-4 h-4 text-primary" />
-                      <span className="font-medium">{currentTraveler.destination}</span>
-                    </div>
-                  </div>
-
-                  <div className="mb-4">
-                    <p className="text-xs text-muted-foreground font-medium mb-2">Match Type</p>
-                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${
-                      currentTraveler.matchType === 'same-plan'
-                        ? 'bg-accent/10 text-accent'
-                        : 'bg-primary/10 text-primary'
-                    }`}>
-                      {currentTraveler.matchType === 'same-plan' ? '🤝 Same Plan' : '🧭 Experienced Buddy'}
-                    </span>
-                  </div>
-
-                  <div className="mb-6">
-                    <p className="text-xs text-muted-foreground font-medium mb-2">Interests</p>
-                    <div className="flex flex-wrap gap-2">
-                      {currentTraveler.interests.map((interest, i) => (
-                        <span key={i} className="px-3 py-1 bg-secondary text-secondary-foreground text-xs rounded-full">
-                          {interest}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-3">
-                    <button
-                      onClick={handleSkip}
-                      disabled={swiping}
-                      className="flex-1 py-3 border border-border rounded-lg font-medium transition-smooth hover:bg-secondary disabled:opacity-50"
-                    >
-                      <X className="w-5 h-5 mx-auto" />
-                    </button>
-                    <button
-                      onClick={handleMatch}
-                      disabled={swiping}
-                      className="flex-1 py-3 bg-accent text-accent-foreground rounded-lg font-medium transition-smooth hover:shadow-md disabled:opacity-50"
-                    >
-                      <Heart className="w-5 h-5 mx-auto fill-current" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Progress Indicator */}
-              <div className="flex gap-2 justify-center">
-                {travelers.map((_, i) => (
-                  <div
-                    key={i}
-                    className={`h-1 rounded-full transition-all ${
-                      i === currentIndex
-                        ? 'w-8 bg-primary'
-                        : i < currentIndex
-                        ? 'w-2 bg-primary/30'
-                        : 'w-2 bg-border'
-                    }`}
-                  ></div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground">No more travelers to show</p>
-            </div>
-          )}
-        </div>
-
-        {/* Desktop Grid View */}
-        <div className="hidden md:grid grid-cols-3 gap-8">
+      {/* Desktop Main Content */}
+      <div className="hidden md:block p-4 md:p-8">
+        <div className="grid grid-cols-3 gap-8">
           {/* Filters Sidebar */}
           <div className="col-span-1">
             <div className="card-luxury p-6 sticky top-32">
@@ -302,11 +304,10 @@ export default function Match() {
                   </div>
 
                   <div className="mb-4">
-                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${
-                      traveler.matchType === 'same-plan'
+                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${traveler.matchType === 'same-plan'
                         ? 'bg-accent/10 text-accent'
                         : 'bg-primary/10 text-primary'
-                    }`}>
+                      }`}>
                       {traveler.matchType === 'same-plan' ? '🤝 Same Plan' : '🧭 Experienced'}
                     </span>
                   </div>

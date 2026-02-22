@@ -10,8 +10,8 @@ export default function MobileNavigation() {
     { id: 'home', label: 'Home', icon: Home, path: '/' },
     { id: 'match', label: 'Match', icon: Heart, path: '/match' },
     { id: 'carpooling', label: 'Carpool', icon: Car, path: '/carpooling' },
-    { id: 'chat', label: 'Chat', icon: MessageCircle, path: '/chat' },
     { id: 'map', label: 'Map', icon: Map, path: '/map' },
+    { id: 'chat', label: 'Chat', icon: MessageCircle, path: '/chat' },
     { id: 'profile', label: 'Profile', icon: User, path: '/profile' },
   ];
 

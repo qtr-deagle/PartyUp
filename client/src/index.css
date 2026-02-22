@@ -129,7 +129,7 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground font-sans;
+    @apply bg-background text-foreground font-sans text-sm sm:text-base;
     font-family: 'Inter', sans-serif;
   }
   button:not(:disabled),
@@ -146,24 +146,24 @@
   
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Poppins', sans-serif;
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: -0.02em;
   }
   
   h1 {
-    @apply text-4xl md:text-5xl;
+    @apply text-3xl sm:text-4xl md:text-5xl;
   }
   
   h2 {
-    @apply text-3xl md:text-4xl;
+    @apply text-2xl sm:text-3xl md:text-4xl;
   }
   
   h3 {
-    @apply text-2xl md:text-3xl;
+    @apply text-xl sm:text-2xl md:text-3xl;
   }
   
   h4 {
-    @apply text-xl md:text-2xl;
+    @apply text-lg sm:text-xl md:text-2xl;
   }
 }
 
@@ -176,8 +176,8 @@
     width: 100%;
     margin-left: auto;
     margin-right: auto;
-    padding-left: 1rem;
-    padding-right: 1rem;
+    padding-left: 0.875rem;
+    padding-right: 0.875rem;
   }
 
   .flex {

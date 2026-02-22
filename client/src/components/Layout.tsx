@@ -1,7 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Bell } from 'lucide-react';
+import { useLocation } from 'wouter';
 import MobileNavigation from './MobileNavigation';
 import DesktopSidebar from './DesktopSidebar';
 import SOSButton from './SOSButton';
+import NotificationModal from './NotificationModal';
+import { useNotifications } from '@/hooks/useNotifications';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -16,8 +20,60 @@ interface LayoutProps {
  * - Responsive breakpoint: 768px (md)
  */
 export default function Layout({ children }: LayoutProps) {
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [, setLocation] = useLocation();
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    clearAll,
+  } = useNotifications();
+
+  const handleNotificationClick = (notification: any) => {
+    if (notification.actionUrl) {
+      setLocation(notification.actionUrl);
+      setNotificationOpen(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* Mobile Top Navigation */}
+      <div className="md:hidden fixed top-0 left-0 right-0 z-40">
+        <div className="h-14 bg-background/95 backdrop-blur border-b border-border px-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-md bg-primary text-primary-foreground flex items-center justify-center font-bold text-xs">
+              P
+            </div>
+            <span className="text-sm font-semibold tracking-tight">PartyUp</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setNotificationOpen(true)}
+              className="relative h-9 w-9 rounded-lg hover:bg-secondary transition-smooth flex items-center justify-center"
+              aria-label="Notifications"
+            >
+              <Bell className="w-5 h-5 text-foreground" />
+              {unreadCount > 0 && (
+                <span className="absolute top-2 right-2 w-2 h-2 bg-destructive rounded-full" />
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Notification Modal */}
+      <NotificationModal
+        open={notificationOpen}
+        onOpenChange={setNotificationOpen}
+        notifications={notifications}
+        onMarkAsRead={markAsRead}
+        onMarkAllAsRead={markAllAsRead}
+        onClearAll={clearAll}
+        onNotificationClick={handleNotificationClick}
+      />
+
       {/* Mobile Navigation (visible only on mobile) */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-40">
         <MobileNavigation />
@@ -25,11 +81,18 @@ export default function Layout({ children }: LayoutProps) {
 
       {/* Desktop Sidebar (visible only on desktop) */}
       <div className="hidden md:block fixed left-0 top-0 h-screen z-40 hover:w-64 w-20 transition-all duration-300 ease-out group">
-        <DesktopSidebar />
+        <DesktopSidebar
+          notifications={notifications}
+          unreadCount={unreadCount}
+          onMarkAsRead={markAsRead}
+          onMarkAllAsRead={markAllAsRead}
+          onClearAll={clearAll}
+          onNotificationClick={handleNotificationClick}
+        />
       </div>
 
       {/* Main Content Area */}
-      <main className="md:ml-20 group-hover:md:ml-64 pb-20 md:pb-0 min-h-screen transition-all duration-300 ease-out">
+      <main className="pt-14 md:pt-0 md:ml-20 group-hover:md:ml-64 pb-20 md:pb-0 min-h-screen transition-all duration-300 ease-out">
         {children}
       </main>
 

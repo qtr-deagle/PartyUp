@@ -14,14 +14,14 @@ interface WeatherData {
 }
 
 const getWeatherIcon = (code: number) => {
-  if (code === 0 || code === 1) return <Sun className="w-8 h-8 text-yellow-400" />;
-  if (code === 2 || code === 3) return <Cloud className="w-8 h-8 text-gray-400" />;
-  if (code === 45 || code === 48) return <Cloud className="w-8 h-8 text-gray-400" />;
-  if (code >= 51 && code <= 67) return <CloudRain className="w-8 h-8 text-blue-400" />;
-  if (code >= 71 && code <= 85) return <CloudRain className="w-8 h-8 text-blue-400" />;
-  if (code === 80 || code === 81 || code === 82) return <CloudRain className="w-8 h-8 text-blue-500" />;
-  if (code >= 85 && code <= 99) return <CloudRain className="w-8 h-8 text-blue-500" />;
-  return <Cloud className="w-8 h-8 text-gray-400" />;
+  if (code === 0 || code === 1) return <Sun className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-400" />;
+  if (code === 2 || code === 3) return <Cloud className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" />;
+  if (code === 45 || code === 48) return <Cloud className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" />;
+  if (code >= 51 && code <= 67) return <CloudRain className="w-6 h-6 sm:w-8 sm:h-8 text-blue-400" />;
+  if (code >= 71 && code <= 85) return <CloudRain className="w-6 h-6 sm:w-8 sm:h-8 text-blue-400" />;
+  if (code === 80 || code === 81 || code === 82) return <CloudRain className="w-6 h-6 sm:w-8 sm:h-8 text-blue-500" />;
+  if (code >= 85 && code <= 99) return <CloudRain className="w-6 h-6 sm:w-8 sm:h-8 text-blue-500" />;
+  return <Cloud className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" />;
 };
 
 const getWeatherCondition = (code: number) => {
@@ -133,58 +133,58 @@ export default function Weather() {
   }
 
   return (
-    <Card className="p-6 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950 dark:to-cyan-950 text-card-foreground rounded-xl shadow-md border border-blue-200 dark:border-blue-800">
-      <div className="flex justify-between items-start mb-4">
+    <Card className="p-4 sm:p-6 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950 dark:to-cyan-950 text-card-foreground rounded-xl shadow-md border border-blue-200 dark:border-blue-800">
+      <div className="flex justify-between items-start mb-3 sm:mb-4">
         <div>
-          <h2 className="text-lg font-bold text-foreground">Weather</h2>
-          <p className="text-sm text-muted-foreground">{weather.location}</p>
+          <h2 className="text-base sm:text-lg font-semibold text-foreground">Weather</h2>
+          <p className="text-xs sm:text-sm text-muted-foreground">{weather.location}</p>
         </div>
         {getWeatherIcon(Math.floor(Math.random() * 100))}
       </div>
 
-      <div className="mb-6">
+      <div className="mb-4 sm:mb-6">
         <div className="flex items-baseline gap-2">
-          <span className="text-4xl font-bold text-foreground">{weather.temperature}°</span>
-          <span className="text-lg text-muted-foreground">F</span>
+          <span className="text-3xl sm:text-4xl font-semibold text-foreground">{weather.temperature}°</span>
+          <span className="text-sm sm:text-lg text-muted-foreground">F</span>
         </div>
-        <p className="text-sm text-muted-foreground mt-2">
+        <p className="text-xs sm:text-sm text-muted-foreground mt-1.5 sm:mt-2">
           Feels like {weather.feelsLike}° • {weather.condition}
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex items-center gap-3 p-3 rounded-lg bg-white/50 dark:bg-black/20">
-          <Droplets className="w-5 h-5 text-blue-500" />
+      <div className="grid grid-cols-2 gap-2 sm:gap-4">
+        <div className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-lg bg-white/50 dark:bg-black/20">
+          <Droplets className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
           <div className="min-w-0">
-            <p className="text-xs text-muted-foreground">Humidity</p>
-            <p className="font-semibold text-foreground">{weather.humidity}%</p>
+            <p className="text-[11px] sm:text-xs text-muted-foreground">Humidity</p>
+            <p className="text-sm sm:text-base font-medium text-foreground">{weather.humidity}%</p>
           </div>
         </div>
-        <div className="flex items-center gap-3 p-3 rounded-lg bg-white/50 dark:bg-black/20">
-          <Wind className="w-5 h-5 text-blue-500" />
+        <div className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-lg bg-white/50 dark:bg-black/20">
+          <Wind className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
           <div className="min-w-0">
-            <p className="text-xs text-muted-foreground">Wind</p>
-            <p className="font-semibold text-foreground">{weather.windSpeed} mph</p>
+            <p className="text-[11px] sm:text-xs text-muted-foreground">Wind</p>
+            <p className="text-sm sm:text-base font-medium text-foreground">{weather.windSpeed} mph</p>
           </div>
         </div>
-        <div className="flex items-center gap-3 p-3 rounded-lg bg-white/50 dark:bg-black/20">
-          <Eye className="w-5 h-5 text-blue-500" />
+        <div className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-lg bg-white/50 dark:bg-black/20">
+          <Eye className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
           <div className="min-w-0">
-            <p className="text-xs text-muted-foreground">Visibility</p>
-            <p className="font-semibold text-foreground">{weather.visibility} mi</p>
+            <p className="text-[11px] sm:text-xs text-muted-foreground">Visibility</p>
+            <p className="text-sm sm:text-base font-medium text-foreground">{weather.visibility} mi</p>
           </div>
         </div>
-        <div className="flex items-center gap-3 p-3 rounded-lg bg-white/50 dark:bg-black/20">
-          <Gauge className="w-5 h-5 text-blue-500" />
+        <div className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-lg bg-white/50 dark:bg-black/20">
+          <Gauge className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
           <div className="min-w-0">
-            <p className="text-xs text-muted-foreground">Pressure</p>
-            <p className="font-semibold text-foreground">{weather.pressure} mb</p>
+            <p className="text-[11px] sm:text-xs text-muted-foreground">Pressure</p>
+            <p className="text-sm sm:text-base font-medium text-foreground">{weather.pressure} mb</p>
           </div>
         </div>
       </div>
 
       {error && (
-        <p className="text-xs text-amber-600 dark:text-amber-400 mt-4 text-center">
+        <p className="text-[11px] sm:text-xs text-amber-600 dark:text-amber-400 mt-3 sm:mt-4 text-center">
           Using default weather data
         </p>
       )}

@@ -26,33 +26,29 @@ export default function Home() {
   return (
     <Layout>
       {/* Header Section */}
-      <div className="sticky top-0 bg-background border-b border-border z-30">
-        <div className="p-6 max-w-7xl mx-auto">
-          <div className="flex items-start justify-between mb-6">
+      <div className="md:sticky md:top-0 bg-background border-b border-border z-30">
+        <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+          <div className="flex items-start justify-between mb-4 sm:mb-6">
             <div>
-              <h1 className="text-4xl font-bold text-foreground">Hello, {/* User name */}👋</h1>
-              <p className="text-muted-foreground mt-1">Welcome back and explore the world</p>
+              <h1 className="text-2xl sm:text-4xl font-semibold text-foreground">Welcome back</h1>
+              <p className="text-sm sm:text-base text-muted-foreground mt-1">Explore the world and plan your next trip</p>
             </div>
-            <button className="relative p-2 rounded-lg hover:bg-secondary transition-smooth">
-              <Bell className="w-6 h-6 text-primary" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full"></span>
-            </button>
           </div>
 
           {/* Search Bar */}
-          <div className="flex gap-3">
+          <div className="flex gap-2 sm:gap-3">
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground" />
               <input
                 type="text"
                 placeholder="Search Destination"
-                className="w-full pl-10 pr-4 py-3 bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2.5 sm:py-3 text-sm sm:text-base bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
-            <button className="px-4 py-3 bg-primary text-primary-foreground rounded-xl font-semibold transition-smooth hover:shadow-lg active:scale-95 flex items-center gap-2">
-              <Zap className="w-5 h-5" />
+            <button className="px-3 sm:px-4 py-2.5 sm:py-3 bg-primary text-primary-foreground rounded-xl font-semibold transition-smooth hover:shadow-lg active:scale-95 flex items-center gap-2">
+              <Zap className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
-            <button className="px-6 py-3 bg-primary text-primary-foreground rounded-xl font-semibold transition-smooth hover:shadow-lg active:scale-95">
+            <button className="px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base bg-primary text-primary-foreground rounded-xl font-semibold transition-smooth hover:shadow-lg active:scale-95">
               Search
             </button>
           </div>
@@ -122,11 +118,10 @@ export default function Home() {
               <button
                 key={item.date}
                 onClick={() => setSelectedDate(item.date)}
-                className={`flex flex-col items-center justify-center p-3 rounded-lg min-w-[60px] text-sm font-medium transition-all ${
-                  selectedDate === item.date
+                className={`flex flex-col items-center justify-center p-3 rounded-lg min-w-[60px] text-sm font-medium transition-all ${selectedDate === item.date
                     ? 'bg-primary text-primary-foreground shadow-md'
                     : 'bg-card border border-border text-foreground hover:border-primary'
-                }`}
+                  }`}
               >
                 <span className="text-xs text-muted-foreground mb-1">{item.day}</span>
                 <span>{item.date}</span>

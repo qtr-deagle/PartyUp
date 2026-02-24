@@ -148,7 +148,7 @@ export default function Match() {
               }`}
             >
               {/* Top Section - Profile Image & Badges */}
-              <div className="bg-secondary relative flex flex-col items-center justify-center py-4 px-4 flex-shrink-0 border-b border-border">
+              <div className="bg-secondary relative flex flex-col items-center justify-center py-4 px-4 shrink-0 border-b border-border">
                 <div className="absolute top-3 right-4 flex flex-col gap-1.5">
                   {currentTraveler.verified && (
                     <div className="px-2 py-0.5 bg-accent/20 border border-accent/50 text-accent text-xs font-semibold rounded-full flex items-center gap-1">
@@ -162,7 +162,7 @@ export default function Match() {
 
                 {/* Profile Image */}
                 <div className="flex flex-col items-center gap-2 w-full">
-                  <div className="w-20 h-20 rounded-full bg-primary/20 border-2 border-primary/50 flex items-center justify-center flex-shrink-0">
+                  <div className="w-20 h-20 rounded-full bg-primary/20 border-2 border-primary/50 flex items-center justify-center shrink-0">
                     <span className="text-3xl font-bold text-primary">{currentTraveler.name[0]}</span>
                   </div>
                   <div className="text-center">
@@ -178,7 +178,7 @@ export default function Match() {
               </div>
 
               {/* Middle Section - Travel Info */}
-              <div className="px-4 py-3 space-y-2 border-t border-border flex-shrink-0">
+              <div className="px-4 py-3 space-y-2 border-t border-border shrink-0">
                 {/* Travel Role & Match Type */}
                 <div className="flex gap-1.5">
                   <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${
@@ -200,14 +200,14 @@ export default function Match() {
                 {/* Destination & Date */}
                 <div className="space-y-1.5 text-sm">
                   <div className="flex items-start gap-2">
-                    <MapPin className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
+                    <MapPin className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
                     <div>
                       <p className="text-xs text-muted-foreground">Destination</p>
                       <p className="font-semibold text-foreground">{currentTraveler.destination}</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
-                    <span className="text-primary flex-shrink-0 text-xs">📅</span>
+                    <span className="text-primary shrink-0 text-xs">📅</span>
                     <div>
                       <p className="text-xs text-muted-foreground">Departure</p>
                       <p className="font-semibold text-foreground">{currentTraveler.departDate}</p>
@@ -231,7 +231,7 @@ export default function Match() {
               </div>
 
               {/* Bottom Section - Interests */}
-              <div className="px-4 py-2.5 border-t border-border flex-shrink-0">
+              <div className="px-4 py-2.5 border-t border-border shrink-0">
                 <p className="text-xs text-muted-foreground mb-2 font-semibold">Interests</p>
                 <div className="flex flex-wrap gap-1.5">
                   {currentTraveler.interests.map((interest, i) => (
@@ -243,7 +243,7 @@ export default function Match() {
               </div>
 
               {/* Action Buttons */}
-              <div className="px-4 py-3 border-t border-border flex gap-2 flex-shrink-0">
+              <div className="px-4 py-3 border-t border-border flex gap-2 shrink-0">
                 <button
                   onClick={handleSkip}
                   disabled={swiping}
@@ -271,7 +271,7 @@ export default function Match() {
             </div>
 
             {/* Progress Indicator */}
-            <div className="flex gap-1 justify-center py-2 flex-shrink-0">
+            <div className="flex gap-1 justify-center py-2 shrink-0">
               {travelers.map((_, i) => (
                 <div
                     key={i}
@@ -297,7 +297,7 @@ export default function Match() {
       <div className="hidden md:block bg-background dark:bg-background min-h-screen p-8">
         <div className="max-w-7xl mx-auto">
           <div className="mb-8">
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent mb-2">Discover Travelers</h1>
+            <h1 className="text-4xl font-bold bg-linear-to-r from-primary to-primary/80 bg-clip-text text-transparent mb-2">Discover Travelers</h1>
             <p className="text-muted-foreground">Find compatible partners for your next journey</p>
           </div>
 

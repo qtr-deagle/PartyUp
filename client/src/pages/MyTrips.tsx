@@ -115,15 +115,15 @@ export default function MyTrips() {
               {/* Details */}
               <div className="space-y-3 mb-4 pb-4 border-b border-border">
                 <div className="flex items-center gap-2 text-sm">
-                  <MapPin className="w-4 h-4 text-primary flex-shrink-0" />
+                  <MapPin className="w-4 h-4 text-primary shrink-0" />
                   <span>{trip.destination}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <Calendar className="w-4 h-4 text-primary flex-shrink-0" />
+                  <Calendar className="w-4 h-4 text-primary shrink-0" />
                   <span>{trip.startDate}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <Users className="w-4 h-4 text-primary flex-shrink-0" />
+                  <Users className="w-4 h-4 text-primary shrink-0" />
                   <span>{trip.currentBuddies} of {trip.buddiesNeeded} buddies</span>
                 </div>
               </div>
@@ -160,7 +160,7 @@ export default function MyTrips() {
                 {/* Trip Info */}
                 <div className="col-span-2">
                   <div className="flex items-start gap-4 mb-6">
-                    <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-primary/20 to-accent/20 flex-shrink-0"></div>
+                    <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-primary/20 to-accent/20 shrink-0"></div>
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="text-2xl font-bold">{trip.destination}</h3>

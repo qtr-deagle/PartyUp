@@ -104,7 +104,7 @@ export default function Home() {
               {nearbyMatches.map((match) => (
                 <div key={match.id} className="p-3 bg-card dark:bg-card border border-border rounded-lg hover:border-primary dark:hover:border-primary transition-all flex items-center justify-between">
                   <div className="flex items-center gap-3 flex-1">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center flex-shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shrink-0">
                       <span className="text-sm font-bold text-primary-foreground">{match.name[0]}</span>
                     </div>
                     <div>
@@ -181,7 +181,7 @@ export default function Home() {
                 {nearbyMatches.map((match) => (
                   <div key={match.id} className="p-4 bg-secondary dark:bg-secondary border border-border rounded-xl hover:border-primary dark:hover:border-primary transition-all">
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center flex-shrink-0">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shrink-0">
                         <span className="font-bold text-primary-foreground">{match.name[0]}</span>
                       </div>
                       <div className="flex-1">

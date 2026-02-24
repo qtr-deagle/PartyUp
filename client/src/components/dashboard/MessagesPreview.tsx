@@ -85,7 +85,7 @@ export default function MessagesPreview({ messages = [] }: MessagesPreviewProps)
           <Link key={message.id} href={`/messages?userId=${message.userId}`}>
             <div className="p-3 border border-border rounded-xl hover:bg-muted/50 transition-all duration-300 hover:shadow-md cursor-pointer group">
               <div className="flex gap-3">
-                <div className="relative flex-shrink-0">
+                <div className="relative shrink-0">
                   <Avatar className="w-10 h-10 border-2 border-background">
                     <AvatarImage src={message.userAvatar} alt={message.userName} />
                     <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
@@ -102,7 +102,7 @@ export default function MessagesPreview({ messages = [] }: MessagesPreviewProps)
                     <h3 className="font-semibold text-sm text-foreground truncate group-hover:text-primary transition-colors">
                       {message.userName}
                     </h3>
-                    <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
+                    <span className="text-xs text-muted-foreground shrink-0 ml-2">
                       {formatTimestamp(message.timestamp)}
                     </span>
                   </div>

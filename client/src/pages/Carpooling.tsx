@@ -152,7 +152,7 @@ export default function Carpooling() {
                 {filteredRides.map((ride) => (
                   <div key={ride.id} className="p-6 bg-card dark:bg-card border border-border rounded-2xl hover:border-primary dark:hover:border-primary transition-all">
                     <div className="flex gap-6 items-start">
-                      <div className="w-14 h-14 rounded-full bg-primary/20 border-2 border-primary/50 flex items-center justify-center flex-shrink-0">
+                      <div className="w-14 h-14 rounded-full bg-primary/20 border-2 border-primary/50 flex items-center justify-center shrink-0">
                         <span className="text-xl font-bold text-primary">{ride.driver[0]}</span>
                       </div>
                       <div className="flex-1">
@@ -296,7 +296,7 @@ export default function Carpooling() {
               {filteredRides.map((ride) => (
                 <div key={ride.id} className="p-4 bg-card/50 dark:bg-card/50 border border-border rounded-xl">
                   <div className="flex gap-3 mb-3">
-                    <div className="w-12 h-12 rounded-full bg-primary/20 border-2 border-primary/50 flex items-center justify-center flex-shrink-0">
+                    <div className="w-12 h-12 rounded-full bg-primary/20 border-2 border-primary/50 flex items-center justify-center shrink-0">
                       <span className="text-sm font-bold text-primary">{ride.driver[0]}</span>
                     </div>
                     <div className="flex-1">

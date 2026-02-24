@@ -1,6 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from '@/components/Layout';
 import { MapPin, Eye, EyeOff, Users, Navigation } from 'lucide-react';
+import Map, { Marker, Popup } from 'react-map-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
+import { useTheme } from '@/contexts/ThemeContext';
+
+// Ensure mapbox-gl is loaded
+import mapboxgl from 'mapbox-gl';
 
 interface Traveler {
   id: number;
@@ -26,6 +32,20 @@ interface Traveler {
  * - Privacy controls
  */
 export default function MapPage() {
+  const { theme } = useTheme();
+  const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
+  
+  // Set mapbox access token
+  if (mapboxToken) {
+    mapboxgl.accessToken = mapboxToken;
+  }
+
+  // Use night mode (outdoors-v12) when in dark mode, otherwise use streets
+  // Mapbox styles: https://docs.mapbox.com/api/maps/styles/#mapbox-styles
+  const mapStyle = theme === 'dark' 
+    ? 'mapbox://styles/qtr/cmm07weof003s01r624vi188t'
+    : 'mapbox://styles/mapbox/navigation-day-v1';
+
   const [showLocation, setShowLocation] = useState(false);
   const [travelers] = useState<Traveler[]>([
     { id: 1, name: 'Sarah', distance: '2.3 km', matched: true },
@@ -36,6 +56,13 @@ export default function MapPage() {
   ]);
 
   const [selectedTraveler, setSelectedTraveler] = useState<Traveler | null>(null);
+  
+  // Generate random coordinates around user location for demo
+  const userLocation = { lng: -122.4194, lat: 37.7749 }; // San Francisco
+  const getTravelerLocation = (id: number) => ({
+    lng: userLocation.lng + (Math.random() - 0.5) * 0.05,
+    lat: userLocation.lat + (Math.random() - 0.5) * 0.05,
+  });
 
   return (
     <Layout>
@@ -88,58 +115,66 @@ export default function MapPage() {
         {/* Mobile View */}
         <div className="md:hidden space-y-4">
           {/* Map Container */}
-          <div className="card-luxury p-6 h-96 flex items-center justify-center relative overflow-hidden">
-            {/* Map Background */}
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-accent/5"></div>
-
-            {/* Traveler Dots */}
-            <div className="relative w-full h-full">
-              {/* Your Location */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
+          <div className="card-luxury h-96 rounded-lg overflow-hidden relative flex">
+            <Map
+              initialViewState={{
+                longitude: userLocation.lng,
+                latitude: userLocation.lat,
+                zoom: 13,
+              }}
+              style={{ width: '100%', height: '100%', flex: 1 }}
+              mapStyle={mapStyle}
+              mapboxAccessToken={mapboxToken}
+              attributionControl={false}
+            >
+              {/* User Location */}
+              <Marker
+                longitude={userLocation.lng}
+                latitude={userLocation.lat}
+                anchor="center"
+              >
                 <div className="w-4 h-4 bg-primary rounded-full border-2 border-primary/30 animate-pulse"></div>
-                <div className="absolute inset-0 w-4 h-4 rounded-full border-2 border-primary/20 animate-ping"></div>
-              </div>
+              </Marker>
 
-              {/* Other Travelers */}
-              {travelers.map((traveler, i) => {
-                const angle = (i / travelers.length) * Math.PI * 2;
-                const distance = 60 + (i % 3) * 20;
-                const x = Math.cos(angle) * distance;
-                const y = Math.sin(angle) * distance;
-
+              {/* Traveler Markers */}
+              {travelers.map((traveler) => {
+                const location = getTravelerLocation(traveler.id);
                 return (
-                  <button
+                  <Marker
                     key={traveler.id}
+                    longitude={location.lng}
+                    latitude={location.lat}
+                    anchor="center"
                     onClick={() => setSelectedTraveler(traveler)}
-                    className="absolute w-6 h-6 -translate-x-1/2 -translate-y-1/2 z-10 group"
-                    style={{
-                      left: `calc(50% + ${x}px)`,
-                      top: `calc(50% + ${y}px)`,
-                    }}
                   >
-                    <div
-                      className={`w-6 h-6 rounded-full border-2 transition-all ${
-                        traveler.matched
-                          ? 'bg-accent border-accent'
-                          : 'bg-primary/30 border-primary'
-                      } group-hover:scale-125`}
-                    ></div>
-                  </button>
+                    <button className="group focus:outline-none">
+                      <div
+                        className={`w-5 h-5 rounded-full border-2 transition-all ${
+                          traveler.matched
+                            ? 'bg-accent border-accent'
+                            : 'bg-primary/30 border-primary'
+                        } group-hover:scale-125`}
+                      />
+                    </button>
+                  </Marker>
                 );
               })}
-            </div>
 
-            {/* Map Legend */}
-            <div className="absolute bottom-4 left-4 right-4 bg-white/90 backdrop-blur rounded-lg p-3 space-y-2">
-              <div className="flex items-center gap-2 text-xs">
-                <div className="w-3 h-3 rounded-full bg-primary border border-primary"></div>
-                <span>Nearby travelers</span>
-              </div>
-              <div className="flex items-center gap-2 text-xs">
-                <div className="w-3 h-3 rounded-full bg-accent border border-accent"></div>
-                <span>Matched travelers</span>
-              </div>
-            </div>
+              {/* Selected Traveler Popup */}
+              {selectedTraveler && (
+                <Popup
+                  longitude={getTravelerLocation(selectedTraveler.id).lng}
+                  latitude={getTravelerLocation(selectedTraveler.id).lat}
+                  anchor="bottom"
+                  onClose={() => setSelectedTraveler(null)}
+                >
+                  <div className="p-2 text-sm">
+                    <p className="font-medium">{selectedTraveler.name}</p>
+                    <p className="text-xs text-gray-600">{selectedTraveler.distance} away</p>
+                  </div>
+                </Popup>
+              )}
+            </Map>
           </div>
 
           {/* Location Privacy Notice */}
@@ -199,58 +234,66 @@ export default function MapPage() {
         {/* Desktop View */}
         <div className="hidden md:grid grid-cols-4 gap-8">
           {/* Map */}
-          <div className="col-span-3 card-luxury p-8 h-96 flex items-center justify-center relative overflow-hidden">
-            {/* Map Background */}
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-accent/5"></div>
+          <div className="col-span-3 card-luxury h-96 rounded-lg overflow-hidden relative flex">
+            <Map
+              initialViewState={{
+                longitude: userLocation.lng,
+                latitude: userLocation.lat,
+                zoom: 13,
+              }}
+              style={{ width: '100%', height: '100%', flex: 1 }}
+              mapStyle={mapStyle}
+              mapboxAccessToken={mapboxToken}
+              attributionControl={false}
+            >
+              {/* User Location */}
+              <Marker
+                longitude={userLocation.lng}
+                latitude={userLocation.lat}
+                anchor="center"
+              >
+                <div className="w-4 h-4 bg-primary rounded-full border-2 border-primary/30 animate-pulse"></div>
+              </Marker>
 
-            {/* Traveler Dots */}
-            <div className="relative w-full h-full">
-              {/* Your Location */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
-                <div className="w-5 h-5 bg-primary rounded-full border-2 border-primary/30 animate-pulse"></div>
-                <div className="absolute inset-0 w-5 h-5 rounded-full border-2 border-primary/20 animate-ping"></div>
-              </div>
-
-              {/* Other Travelers */}
-              {travelers.map((traveler, i) => {
-                const angle = (i / travelers.length) * Math.PI * 2;
-                const distance = 80 + (i % 3) * 30;
-                const x = Math.cos(angle) * distance;
-                const y = Math.sin(angle) * distance;
-
+              {/* Traveler Markers */}
+              {travelers.map((traveler) => {
+                const location = getTravelerLocation(traveler.id);
                 return (
-                  <button
+                  <Marker
                     key={traveler.id}
+                    longitude={location.lng}
+                    latitude={location.lat}
+                    anchor="center"
                     onClick={() => setSelectedTraveler(traveler)}
-                    className="absolute w-7 h-7 -translate-x-1/2 -translate-y-1/2 z-10 group"
-                    style={{
-                      left: `calc(50% + ${x}px)`,
-                      top: `calc(50% + ${y}px)`,
-                    }}
                   >
-                    <div
-                      className={`w-7 h-7 rounded-full border-2 transition-all ${
-                        traveler.matched
-                          ? 'bg-accent border-accent'
-                          : 'bg-primary/30 border-primary'
-                      } group-hover:scale-125`}
-                    ></div>
-                  </button>
+                    <button className="group focus:outline-none">
+                      <div
+                        className={`w-6 h-6 rounded-full border-2 transition-all ${
+                          traveler.matched
+                            ? 'bg-accent border-accent'
+                            : 'bg-primary/30 border-primary'
+                        } group-hover:scale-125`}
+                      />
+                    </button>
+                  </Marker>
                 );
               })}
-            </div>
 
-            {/* Map Legend */}
-            <div className="absolute bottom-6 left-6 right-6 bg-white/90 backdrop-blur rounded-lg p-4 space-y-2">
-              <div className="flex items-center gap-2 text-sm">
-                <div className="w-3 h-3 rounded-full bg-primary border border-primary"></div>
-                <span>Nearby travelers</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <div className="w-3 h-3 rounded-full bg-accent border border-accent"></div>
-                <span>Matched travelers</span>
-              </div>
-            </div>
+              {/* Selected Traveler Popup */}
+              {selectedTraveler && (
+                <Popup
+                  longitude={getTravelerLocation(selectedTraveler.id).lng}
+                  latitude={getTravelerLocation(selectedTraveler.id).lat}
+                  anchor="bottom"
+                  onClose={() => setSelectedTraveler(null)}
+                >
+                  <div className="p-2 text-sm">
+                    <p className="font-medium">{selectedTraveler.name}</p>
+                    <p className="text-xs text-gray-600">{selectedTraveler.distance} away</p>
+                  </div>
+                </Popup>
+              )}
+            </Map>
           </div>
 
           {/* Sidebar */}

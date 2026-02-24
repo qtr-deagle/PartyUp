@@ -67,7 +67,7 @@ export default function RecentMatches({ matches = [] }: RecentMatchesProps) {
         {matches.map((match) => (
           <div
             key={match.id}
-            className="flex-shrink-0 w-40 p-4 border border-border rounded-xl hover:bg-muted/50 transition-all duration-300 hover:shadow-md group cursor-pointer"
+            className="shrink-0 w-40 p-4 border border-border rounded-xl hover:bg-muted/50 transition-all duration-300 hover:shadow-md group cursor-pointer"
           >
             <Link href={`/profile/${match.id}`}>
               <div className="flex flex-col items-center text-center mb-3">
@@ -83,7 +83,7 @@ export default function RecentMatches({ matches = [] }: RecentMatchesProps) {
                 </h3>
 
                 <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1 w-full">
-                  <MapPin className="w-3 h-3 flex-shrink-0" />
+                  <MapPin className="w-3 h-3 shrink-0" />
                   <span className="truncate">{match.destination}</span>
                 </div>
 

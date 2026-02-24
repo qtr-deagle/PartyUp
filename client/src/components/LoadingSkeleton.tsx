@@ -17,7 +17,7 @@ export default function LoadingSkeleton() {
           <div className="h-6 bg-muted rounded-lg w-3/4 animate-pulse"></div>
           <div className="h-4 bg-muted rounded-lg w-1/2 animate-pulse"></div>
         </div>
-        <div className="w-12 h-12 bg-muted rounded-lg animate-pulse flex-shrink-0"></div>
+        <div className="w-12 h-12 bg-muted rounded-lg animate-pulse shrink-0"></div>
       </div>
 
       {/* Content Skeleton */}

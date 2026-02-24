@@ -77,7 +77,7 @@ export default function NearbyTravelers({ travelers = [] }: NearbyTravelersProps
           <Link key={traveler.id} href={`/profile/${traveler.id}`}>
             <div className="p-3 border border-border rounded-xl hover:bg-muted/50 transition-all duration-300 hover:shadow-md cursor-pointer group">
               <div className="flex items-center gap-3">
-                <div className="relative flex-shrink-0">
+                <div className="relative shrink-0">
                   <Avatar className="w-12 h-12 border-2 border-background">
                     <AvatarImage src={traveler.avatar} alt={traveler.name} />
                     <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">

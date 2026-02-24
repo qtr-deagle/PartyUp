@@ -192,7 +192,7 @@ export default function Map() {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <div className="w-10 h-10 rounded-full bg-primary/30 border-primary/50 flex items-center justify-center font-bold text-primary text-sm flex-shrink-0 border-2">
+                    <div className="w-10 h-10 rounded-full bg-primary/30 border-primary/50 flex items-center justify-center font-bold text-primary text-sm shrink-0 border-2">
                       {buddy.name[0]}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -203,7 +203,7 @@ export default function Map() {
                       <p className="text-xs text-muted-foreground">{buddy.distance} km • {buddy.direction}</p>
                     </div>
                   </div>
-                  <div className="px-2 py-1 rounded bg-primary/20 text-primary text-xs font-semibold flex-shrink-0">
+                  <div className="px-2 py-1 rounded bg-primary/20 text-primary text-xs font-semibold shrink-0">
                     {buddy.matchType === 'travel-buddy' ? '🤝' : '🚗'}
                   </div>
                 </div>
@@ -403,7 +403,7 @@ export default function Map() {
                   }`}
                 >
                   <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/30 border-primary/50 flex items-center justify-center font-bold text-primary text-sm flex-shrink-0 border-2">
+                    <div className="w-10 h-10 rounded-full bg-primary/30 border-primary/50 flex items-center justify-center font-bold text-primary text-sm shrink-0 border-2">
                       {buddy.name[0]}
                     </div>
                     <div className="flex-1 min-w-0">

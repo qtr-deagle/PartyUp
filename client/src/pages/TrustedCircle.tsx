@@ -190,19 +190,19 @@ export default function TrustedCircle() {
                   <p className="text-xs text-muted-foreground mt-1">{contact.relationship}</p>
                 </div>
                 {contact.verified && (
-                  <Shield className="w-5 h-5 text-accent flex-shrink-0" />
+                  <Shield className="w-5 h-5 text-accent shrink-0" />
                 )}
               </div>
 
               {/* Contact Details */}
               <div className="space-y-2 mb-4 pb-4 border-b border-border">
                 <div className="flex items-center gap-2 text-sm">
-                  <Phone className="w-4 h-4 text-primary flex-shrink-0" />
+                  <Phone className="w-4 h-4 text-primary shrink-0" />
                   <span>{contact.phone}</span>
                 </div>
                 {contact.email && (
                   <div className="flex items-center gap-2 text-sm">
-                    <Mail className="w-4 h-4 text-primary flex-shrink-0" />
+                    <Mail className="w-4 h-4 text-primary shrink-0" />
                     <span>{contact.email}</span>
                   </div>
                 )}
@@ -240,7 +240,7 @@ export default function TrustedCircle() {
                 {/* Contact Info */}
                 <div className="col-span-2">
                   <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                       <Users className="w-6 h-6 text-primary" />
                     </div>
                     <div className="flex-1">
@@ -253,12 +253,12 @@ export default function TrustedCircle() {
                       <p className="text-sm text-muted-foreground mb-3">{contact.relationship}</p>
                       <div className="space-y-2">
                         <div className="flex items-center gap-2 text-sm">
-                          <Phone className="w-4 h-4 text-primary flex-shrink-0" />
+                          <Phone className="w-4 h-4 text-primary shrink-0" />
                           <span>{contact.phone}</span>
                         </div>
                         {contact.email && (
                           <div className="flex items-center gap-2 text-sm">
-                            <Mail className="w-4 h-4 text-primary flex-shrink-0" />
+                            <Mail className="w-4 h-4 text-primary shrink-0" />
                             <span>{contact.email}</span>
                           </div>
                         )}

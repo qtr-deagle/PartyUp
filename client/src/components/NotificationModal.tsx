@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bell, Check, X, AlertCircle, Heart, MessageCircle, MapPin, Users } from 'lucide-react';
+import { Bell, Check, X, AlertCircle, Heart, MessageCircle, MapPin } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -68,7 +68,7 @@ export default function NotificationModal({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="w-[85vw] sm:w-105 flex flex-col">
+      <SheetContent side="left" className="w-full sm:w-105 flex flex-col">
         <SheetHeader className="pb-4 border-b border-border">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -114,9 +114,9 @@ export default function NotificationModal({
         </SheetHeader>
 
         {/* Notifications List */}
-        <div className="flex-1 overflow-y-auto py-4">
+        <div className="flex-1 overflow-y-auto py-4 space-y-2 px-4">
           {notifications.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 text-center space-y-3">
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-3 px-2">
               <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
                 <Bell className="w-8 h-8 text-muted-foreground" />
               </div>
@@ -128,7 +128,7 @@ export default function NotificationModal({
               </div>
             </div>
           ) : (
-            <div className="space-y-2">
+            <>
               {notifications.map((notification) => {
                 const Icon = notificationIcons[notification.type];
                 const iconColor = notificationColors[notification.type];
@@ -178,7 +178,7 @@ export default function NotificationModal({
                   </button>
                 );
               })}
-            </div>
+            </>
           )}
         </div>
       </SheetContent>

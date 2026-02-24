@@ -110,14 +110,14 @@ export default function NotificationsPreview({ notifications = [] }: Notificatio
               }`}
             >
               <div className="flex gap-3">
-                <div className={`w-8 h-8 rounded-lg ${colorClasses} flex items-center justify-center flex-shrink-0`}>
+                <div className={`w-8 h-8 rounded-lg ${colorClasses} flex items-center justify-center shrink-0`}>
                   <Icon className="w-4 h-4" />
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between mb-1">
                     <p className="text-sm font-semibold text-foreground">{notification.title}</p>
-                    <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
+                    <span className="text-xs text-muted-foreground shrink-0 ml-2">
                       {formatTimestamp(notification.timestamp)}
                     </span>
                   </div>
@@ -125,7 +125,7 @@ export default function NotificationsPreview({ notifications = [] }: Notificatio
                 </div>
 
                 {!notification.isRead && (
-                  <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0 mt-1.5" />
+                  <div className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1.5" />
                 )}
               </div>
             </div>

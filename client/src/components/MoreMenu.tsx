@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Settings, Smartphone, Lock, Shield, Clock, LogOut, ChevronRight, Bell, AlertTriangle, Eye, EyeOff, Check, Navigation, AlertCircle } from 'lucide-react';
+import { X, User, Settings, Smartphone, Lock, Shield, Clock, LogOut, ChevronRight, Bell, AlertTriangle, Eye, EyeOff, Check, Navigation, AlertCircle, Moon, Sun } from 'lucide-react';
 import { useSafetyUI } from '@/contexts/SafetyContext';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface MenuItem {
   id: number;
@@ -51,6 +52,8 @@ export default function MoreMenu({ isOpen, onClose }: Props) {
     sosEnabled,
     setSosEnabled
   } = useSafetyUI();
+  
+  const { theme, toggleTheme } = useTheme();
 
   // Reset to main menu when drawer opens
   useEffect(() => {
@@ -96,9 +99,9 @@ export default function MoreMenu({ isOpen, onClose }: Props) {
       ></div>
 
       {/* Drawer Panel */}
-      <div className="absolute inset-y-0 right-0 w-full max-w-sm bg-gradient-to-b from-slate-800 via-slate-700 to-slate-800 slide-in-right shadow-2xl flex flex-col">
+      <div className="absolute inset-y-0 right-0 w-full max-w-sm bg-gradient-to-b from-white via-gray-50 to-white dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 slide-in-right shadow-2xl flex flex-col">
         {/* Header */}
-        <div className="sticky top-0 bg-black/50 backdrop-blur-sm border-b border-slate-600/30 p-4 flex items-center justify-between z-40">
+        <div className="sticky top-0 bg-gray-100/50 dark:bg-black/50 backdrop-blur-sm border-b border-gray-200 dark:border-slate-600/30 p-4 flex items-center justify-between z-40">
           <h2 className="text-xl font-bold bg-gradient-to-r from-blue-500 to-blue-600 bg-clip-text text-transparent">
             {activeSection === 'main' && 'More'}
             {activeSection === 'profile' && 'Profile'}
@@ -124,15 +127,15 @@ export default function MoreMenu({ isOpen, onClose }: Props) {
               {/* Profile Card */}
               <button
                 onClick={() => setActiveSection('profile')}
-                className="w-full p-4 bg-blue-600/15 border border-blue-600/30 rounded-xl hover:border-blue-600/50 transition-all text-left"
+                className="w-full p-4 bg-blue-600/15 dark:bg-blue-600/15 border border-blue-600/30 dark:border-blue-600/30 rounded-xl hover:border-blue-600/50 dark:hover:border-blue-600/50 transition-all text-left"
               >
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-slate-600 flex items-center justify-center font-bold text-black">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-slate-600 flex items-center justify-center font-bold text-black dark:text-black">
                     AJ
                   </div>
                   <div>
-                    <p className="font-bold text-white">Alex Johnson</p>
-                    <p className="text-xs text-blue-400">See profile</p>
+                    <p className="font-bold text-gray-900 dark:text-white">Alex Johnson</p>
+                    <p className="text-xs text-blue-600 dark:text-blue-400">See profile</p>
                   </div>
                 </div>
               </button>
@@ -142,70 +145,90 @@ export default function MoreMenu({ isOpen, onClose }: Props) {
                 <li>
                   <button
                     onClick={() => setActiveSection('settings')}
-                    className="w-full p-4 rounded-lg hover:bg-blue-600/10 transition-all flex items-center justify-between group"
+                    className="w-full p-4 rounded-lg hover:bg-blue-600/10 dark:hover:bg-blue-600/10 transition-all flex items-center justify-between group"
                   >
                     <span className="flex items-center gap-3">
                       <Settings className="w-5 h-5 text-blue-500" />
-                      <span className="text-white font-medium">Settings</span>
+                      <span className="text-gray-900 dark:text-white font-medium">Settings</span>
                     </span>
-                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-all" />
+                    <ChevronRight className="w-4 h-4 text-gray-400 dark:text-slate-400 group-hover:text-blue-500 transition-all" />
                   </button>
                 </li>
                 <li>
                   <button
                     onClick={() => setActiveSection('emergency')}
-                    className="w-full p-4 rounded-lg hover:bg-blue-600/10 transition-all flex items-center justify-between group"
+                    className="w-full p-4 rounded-lg hover:bg-blue-600/10 dark:hover:bg-blue-600/10 transition-all flex items-center justify-between group"
                   >
                     <span className="flex items-center gap-3">
                       <AlertTriangle className="w-5 h-5 text-amber-500" />
-                      <span className="text-white font-medium">Emergency Contacts</span>
+                      <span className="text-gray-900 dark:text-white font-medium">Emergency Contacts</span>
                     </span>
-                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-all" />
+                    <ChevronRight className="w-4 h-4 text-gray-400 dark:text-slate-400 group-hover:text-blue-500 transition-all" />
                   </button>
                 </li>
                 <li>
                   <button
                     onClick={() => setActiveSection('privacy')}
-                    className="w-full p-4 rounded-lg hover:bg-blue-600/10 transition-all flex items-center justify-between group"
+                    className="w-full p-4 rounded-lg hover:bg-blue-600/10 dark:hover:bg-blue-600/10 transition-all flex items-center justify-between group"
                   >
                     <span className="flex items-center gap-3">
                       <Lock className="w-5 h-5 text-blue-500" />
-                      <span className="text-white font-medium">Privacy Controls</span>
+                      <span className="text-gray-900 dark:text-white font-medium">Privacy Controls</span>
                     </span>
-                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-all" />
+                    <ChevronRight className="w-4 h-4 text-gray-400 dark:text-slate-400 group-hover:text-blue-500 transition-all" />
                   </button>
                 </li>
                 <li>
                   <button
                     onClick={() => setActiveSection('safety')}
-                    className="w-full p-4 rounded-lg hover:bg-blue-600/10 transition-all flex items-center justify-between group"
+                    className="w-full p-4 rounded-lg hover:bg-blue-600/10 dark:hover:bg-blue-600/10 transition-all flex items-center justify-between group"
                   >
                     <span className="flex items-center gap-3">
                       <Clock className="w-5 h-5 text-green-500" />
-                      <span className="text-white font-medium">Safety Activity</span>
+                      <span className="text-gray-900 dark:text-white font-medium">Safety Activity</span>
                     </span>
-                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-all" />
+                    <ChevronRight className="w-4 h-4 text-gray-400 dark:text-slate-400 group-hover:text-blue-500 transition-all" />
                   </button>
                 </li>
                 <li>
                   <button
                     onClick={() => setActiveSection('verification')}
-                    className="w-full p-4 rounded-lg hover:bg-blue-600/10 transition-all flex items-center justify-between group"
+                    className="w-full p-4 rounded-lg hover:bg-blue-600/10 dark:hover:bg-blue-600/10 transition-all flex items-center justify-between group"
                   >
                     <span className="flex items-center gap-3">
                       <Check className="w-5 h-5 text-blue-500" />
-                      <span className="text-white font-medium">Verification</span>
+                      <span className="text-gray-900 dark:text-white font-medium">Verification</span>
                     </span>
                     <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-all" />
                   </button>
                 </li>
+                {toggleTheme && (
+                  <li>
+                    <button
+                      onClick={toggleTheme}
+                      className="w-full p-4 rounded-lg hover:bg-blue-600/10 dark:hover:bg-blue-600/10 transition-all flex items-center justify-between group"
+                    >
+                      <span className="flex items-center gap-3">
+                        {theme === 'dark' ? (
+                          <Sun className="w-5 h-5 text-yellow-500" />
+                        ) : (
+                          <Moon className="w-5 h-5 text-blue-500" />
+                        )}
+                        <span className="text-gray-900 dark:text-white font-medium">
+                          {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                        </span>
+                      </span>
+                      <ChevronRight className="w-4 h-4 text-gray-400 dark:text-slate-400 group-hover:text-blue-500 transition-all" />
+                    </button>
+                  </li>
+                )}
               </ul>
 
               {/* Logout Button */}
-              <div className="pt-4 mt-6 border-t border-slate-600/30">
+              <div className="pt-4 mt-6 border-t border-gray-300 dark:border-slate-600/30">
                 <button
                   onClick={handleLogout}
-                  className="w-full p-4 rounded-lg bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 hover:border-red-500/50 transition-all flex items-center gap-3 text-red-400 font-semibold mt-4"
+                  className="w-full p-4 rounded-lg bg-red-500/15 dark:bg-red-500/15 hover:bg-red-500/25 dark:hover:bg-red-500/25 border border-red-500/30 dark:border-red-500/30 hover:border-red-500/50 dark:hover:border-red-500/50 transition-all flex items-center gap-3 text-red-600 dark:text-red-400 font-semibold mt-4"
                 >
                   <LogOut className="w-5 h-5" />
                   Logout
@@ -218,33 +241,33 @@ export default function MoreMenu({ isOpen, onClose }: Props) {
           {activeSection === 'profile' && (
             <div className="p-4 space-y-4">
               <div className="flex justify-center mb-4">
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-slate-600 flex items-center justify-center font-bold text-white text-2xl">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-slate-600 flex items-center justify-center font-bold text-black dark:text-white text-2xl">
                   AJ
                 </div>
               </div>
-              <div className="bg-slate-800/50 border border-teal-500/20 rounded-lg p-4 space-y-3 text-sm">
+              <div className="bg-gray-100 dark:bg-slate-800/50 border border-teal-200 dark:border-teal-500/20 rounded-lg p-4 space-y-3 text-sm">
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Name</span>
-                  <span className="text-white font-semibold">Alex Johnson</span>
+                  <span className="text-gray-600 dark:text-slate-400">Name</span>
+                  <span className="text-gray-900 dark:text-white font-semibold">Alex Johnson</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Age</span>
-                  <span className="text-white font-semibold">26</span>
+                  <span className="text-gray-600 dark:text-slate-400">Age</span>
+                  <span className="text-gray-900 dark:text-white font-semibold">26</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Member Since</span>
-                  <span className="text-white font-semibold">Jan 2024</span>
+                  <span className="text-gray-600 dark:text-slate-400">Member Since</span>
+                  <span className="text-gray-900 dark:text-white font-semibold">Jan 2024</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Rating</span>
-                  <span className="text-white font-semibold">⭐ 4.8</span>
+                  <span className="text-gray-600 dark:text-slate-400">Rating</span>
+                  <span className="text-gray-900 dark:text-white font-semibold">⭐ 4.8</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Trips Completed</span>
-                  <span className="text-white font-semibold">23</span>
+                  <span className="text-gray-600 dark:text-slate-400">Trips Completed</span>
+                  <span className="text-gray-900 dark:text-white font-semibold">23</span>
                 </div>
               </div>
-              <button className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-all">
+              <button className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all">
                 Edit Profile
               </button>
             </div>

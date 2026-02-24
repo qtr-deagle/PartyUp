@@ -117,7 +117,7 @@ export default function Chat() {
                 </button>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <div className="w-10 h-10 rounded-full bg-primary/30 border-primary/50 flex items-center justify-center font-bold text-primary text-sm flex-shrink-0 border-2">
+                    <div className="w-10 h-10 rounded-full bg-primary/30 border-primary/50 flex items-center justify-center font-bold text-primary text-sm shrink-0 border-2">
                       {selectedConversation.name[0]}
                     </div>
                     <div className="min-w-0">
@@ -247,7 +247,7 @@ export default function Chat() {
                 >
                   <div className="flex items-start gap-3">
                     <div className="relative">
-                      <div className="w-12 h-12 rounded-full bg-primary/30 border-primary/50 flex items-center justify-center font-bold text-primary text-sm flex-shrink-0 border-2">
+                      <div className="w-12 h-12 rounded-full bg-primary/30 border-primary/50 flex items-center justify-center font-bold text-primary text-sm shrink-0 border-2">
                         {conversation.name[0]}
                       </div>
                       {conversation.online && (
@@ -270,7 +270,7 @@ export default function Chat() {
                       </div>
                     </div>
                     {conversation.unread > 0 && (
-                      <div className="w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold flex-shrink-0">
+                      <div className="w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shrink-0">
                         {conversation.unread}
                       </div>
                     )}
@@ -313,7 +313,7 @@ export default function Chat() {
               >
                 <div className="flex items-start gap-3">
                   <div className="relative">
-                    <div className="w-14 h-14 rounded-full bg-primary/30 border-primary/50 flex items-center justify-center font-bold text-primary flex-shrink-0 border-2">
+                    <div className="w-14 h-14 rounded-full bg-primary/30 border-primary/50 flex items-center justify-center font-bold text-primary shrink-0 border-2">
                       {conversation.name[0]}
                     </div>
                     {conversation.online && (
@@ -336,7 +336,7 @@ export default function Chat() {
                     </div>
                   </div>
                   {conversation.unread > 0 && (
-                    <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold flex-shrink-0">
+                    <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shrink-0">
                       {conversation.unread}
                     </div>
                   )}

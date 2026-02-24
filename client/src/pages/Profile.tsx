@@ -247,7 +247,7 @@ export default function Profile() {
             <div className="card-luxury p-8">
               <div className="flex items-start gap-8 mb-8 pb-8 border-b border-border">
                 {/* Avatar */}
-                <div className="w-32 h-32 rounded-lg bg-gradient-to-br from-primary/20 to-accent/20 flex-shrink-0"></div>
+                <div className="w-32 h-32 rounded-lg bg-gradient-to-br from-primary/20 to-accent/20 shrink-0"></div>
 
                 {/* User Info */}
                 <div className="flex-1">

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home, Compass, MessageCircle, Car, MoreVertical } from 'lucide-react';
+import { Home, Compass, MessageCircle, Car, MoreVertical, Map } from 'lucide-react';
 import { Link } from 'wouter';
 import { useCurrentPage } from '@/hooks/useCurrentPage';
 import MoreMenu from '@/components/MoreMenu';
@@ -12,6 +12,7 @@ export default function MobileNavigation() {
     { id: 'home', label: 'Home', icon: Home, path: '/' },
     { id: 'match', label: 'Discover', icon: Compass, path: '/match' },
     { id: 'carpooling', label: 'Carpool', icon: Car, path: '/carpooling' },
+    { id: 'map', label: 'Map', icon: Map, path: '/map' },
     { id: 'chat', label: 'Chat', icon: MessageCircle, path: '/chat' },
   ];
 

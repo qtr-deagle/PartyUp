@@ -117,7 +117,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         {/* Logo */}
         <div className="h-20 flex items-center px-6 overflow-hidden">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm flex-shrink-0">
+            <div className="w-8 h-8 rounded bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm shrink-0">
               P
             </div>
 
@@ -140,7 +140,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                   onClick={handleSidebarItemClick}
                   className="w-full flex items-center gap-3 px-5.5 py-3 rounded-lg transition-smooth border-0 bg-transparent text-left cursor-pointer text-sidebar-foreground hover:bg-sidebar-accent/50"
                 >
-                  <Icon className="w-5 h-5 flex-shrink-0" />
+                  <Icon className="w-5 h-5 shrink-0" />
                   {isExpanded && <span className="text-sm whitespace-nowrap">{item.label}</span>}
                 </button>
               </Link>
@@ -157,7 +157,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             }}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-smooth border-0 bg-transparent text-left cursor-pointer text-sidebar-foreground hover:bg-sidebar-accent/50"
           >
-            {theme === 'dark' ? <Sun className="w-5 h-5 flex-shrink-0" /> : <Moon className="w-5 h-5 flex-shrink-0" />}
+            {theme === 'dark' ? <Sun className="w-5 h-5 shrink-0" /> : <Moon className="w-5 h-5 shrink-0" />}
             {isExpanded && <span className="text-sm whitespace-nowrap">{theme === 'dark' ? 'Light' : 'Dark'}</span>}
           </button>
           <Link href="/profile" asChild>
@@ -165,7 +165,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               onClick={handleSidebarItemClick}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-smooth border-0 bg-transparent text-left cursor-pointer text-sidebar-foreground hover:bg-sidebar-accent/50"
             >
-              <Settings className="w-5 h-5 flex-shrink-0" />
+              <Settings className="w-5 h-5 shrink-0" />
               {isExpanded && <span className="text-sm whitespace-nowrap">Settings</span>}
             </button>
           </Link>
@@ -176,7 +176,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             }}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-smooth border-0 bg-transparent text-left cursor-pointer text-sidebar-foreground hover:bg-destructive/10 hover:text-destructive"
           >
-            <LogOut className="w-5 h-5 flex-shrink-0" />
+            <LogOut className="w-5 h-5 shrink-0" />
             {isExpanded && <span className="text-sm whitespace-nowrap">Logout</span>}
           </button>
         </div>

@@ -105,14 +105,14 @@ export default function ActivityFeed({ activities = [] }: ActivityFeedProps) {
               className="flex gap-3 p-3 hover:bg-muted/50 rounded-lg transition-all duration-300 group cursor-pointer"
             >
               {activity.userAvatar ? (
-                <Avatar className="w-10 h-10 border-2 border-background flex-shrink-0">
+                <Avatar className="w-10 h-10 border-2 border-background shrink-0">
                   <AvatarImage src={activity.userAvatar} alt={activity.userName} />
                   <AvatarFallback className="bg-primary/10 text-primary text-xs">
                     {activity.userName ? getInitials(activity.userName) : "?"}
                   </AvatarFallback>
                 </Avatar>
               ) : (
-                <div className={`w-10 h-10 rounded-full ${iconColor} flex items-center justify-center flex-shrink-0`}>
+                <div className={`w-10 h-10 rounded-full ${iconColor} flex items-center justify-center shrink-0`}>
                   <Icon className="w-5 h-5" />
                 </div>
               )}

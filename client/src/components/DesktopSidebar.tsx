@@ -17,8 +17,8 @@ import { Link } from 'wouter';
 import { useCurrentPage } from '@/hooks/useCurrentPage';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import NotificationSheet from './NotificationSheet';
-import type { Notification } from './NotificationSheet';
+import NotificationModal from './NotificationModal';
+import type { Notification } from './NotificationModal';
 
 let desktopSuppressHoverUntilMove = false;
 let desktopLastClickPos: { x: number; y: number } | null = null;
@@ -272,8 +272,8 @@ export default function DesktopSidebar({
         </button>
       </div>
 
-      {/* Notification Sheet */}
-      <NotificationSheet
+      {/* Notification Modal */}
+      <NotificationModal
         open={notificationOpen}
         onOpenChange={handleNotificationSheetChange}
         notifications={notifications}

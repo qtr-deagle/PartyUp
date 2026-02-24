@@ -74,82 +74,119 @@
  * - “data-only” → Place, Geometry utilities.
  */
 
-/// <reference types="@types/google.maps" />
-
 import { useEffect, useRef } from "react";
 import { usePersistFn } from "@/hooks/usePersistFn";
 import { cn } from "@/lib/utils";
 
 declare global {
   interface Window {
-    google?: typeof google;
+    mapboxgl?: any;
   }
 }
 
-const API_KEY = import.meta.env.VITE_FRONTEND_FORGE_API_KEY;
-const FORGE_BASE_URL =
-  import.meta.env.VITE_FRONTEND_FORGE_API_URL ||
-  "https://forge.butterfly-effect.dev";
-const MAPS_PROXY_URL = `${FORGE_BASE_URL}/v1/maps/proxy`;
-
-function loadMapScript() {
-  return new Promise(resolve => {
-    const script = document.createElement("script");
-    script.src = `${MAPS_PROXY_URL}/maps/api/js?key=${API_KEY}&v=weekly&libraries=marker,places,geocoding,geometry`;
-    script.async = true;
-    script.crossOrigin = "anonymous";
-    script.onload = () => {
-      resolve(null);
-      script.remove(); // Clean up immediately
-    };
-    script.onerror = () => {
-      console.error("Failed to load Google Maps script");
-    };
-    document.head.appendChild(script);
-  });
-}
+const MAPBOX_TOKEN = 'pk.eyJ1IjoicXRyIiwiYSI6ImNtbHp1dmVsNDAyc3czZnFyaTZoNjg3dzkifQ.LQS0vY_qlC8kYHCVL63QlA';
 
 interface MapViewProps {
   className?: string;
-  initialCenter?: google.maps.LatLngLiteral;
+  initialCenter?: { lat: number; lng: number };
   initialZoom?: number;
-  onMapReady?: (map: google.maps.Map) => void;
+  onMapReady?: (map: mapboxgl.Map) => void;
 }
 
 export function MapView({
   className,
-  initialCenter = { lat: 37.7749, lng: -122.4194 },
-  initialZoom = 12,
+  initialCenter = { lat: 14.5547, lng: 121.0244 }, // Default: Makati, Manila
+  initialZoom = 13,
   onMapReady,
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<google.maps.Map | null>(null);
+  const map = useRef<mapboxgl.Map | null>(null);
 
-  const init = usePersistFn(async () => {
-    await loadMapScript();
-    if (!mapContainer.current) {
-      console.error("Map container not found");
-      return;
-    }
-    map.current = new window.google.maps.Map(mapContainer.current, {
-      zoom: initialZoom,
-      center: initialCenter,
-      mapTypeControl: true,
-      fullscreenControl: true,
-      zoomControl: true,
-      streetViewControl: true,
-      mapId: "DEMO_MAP_ID",
-    });
-    if (onMapReady) {
-      onMapReady(map.current);
-    }
+  const init = usePersistFn(() => {
+    // Wait for mapboxgl to be loaded
+    const checkMapbox = setInterval(() => {
+      if (!window.mapboxgl) {
+        console.log("Waiting for Mapbox GL JS to load...");
+        return;
+      }
+      
+      clearInterval(checkMapbox);
+
+      if (!mapContainer.current) {
+        console.error("Map container not found");
+        return;
+      }
+
+      try {
+        // Set access token
+        window.mapboxgl.accessToken = MAPBOX_TOKEN;
+        console.log("Mapbox token set successfully");
+
+        // Initialize map
+        map.current = new window.mapboxgl.Map({
+          container: mapContainer.current,
+          style: 'mapbox://styles/mapbox/streets-v12',
+          center: [initialCenter.lng, initialCenter.lat],
+          zoom: initialZoom,
+          pitch: 0,
+          bearing: 0,
+          attributionControl: true,
+        });
+
+        map.current.on('load', () => {
+          console.log("Mapbox map loaded successfully");
+        });
+
+        map.current.on('error', (e) => {
+          console.error("Mapbox error:", e);
+        });
+
+        // Add navigation controls
+        map.current.addControl(new window.mapboxgl.NavigationControl(), 'top-right');
+
+        // Add user location control with tracking
+        map.current.addControl(
+          new window.mapboxgl.GeolocateControl({
+            positionOptions: { enableHighAccuracy: true },
+            trackUserLocation: true,
+            showUserHeading: true,
+          }),
+          'top-right'
+        );
+
+        // Add fullscreen control
+        map.current.addControl(new window.mapboxgl.FullscreenControl(), 'top-right');
+
+        // Fire ready callback
+        if (onMapReady && map.current) {
+          onMapReady(map.current);
+        }
+      } catch (error) {
+        console.error("Error initializing Mapbox:", error);
+      }
+    }, 100);
   });
 
   useEffect(() => {
     init();
+
+    // Cleanup
+    return () => {
+      if (map.current) {
+        map.current.remove();
+      }
+    };
   }, [init]);
 
   return (
-    <div ref={mapContainer} className={cn("w-full h-[500px]", className)} />
+    <div 
+      ref={mapContainer} 
+      className={cn("w-full", className)}
+      style={{ 
+        minHeight: '500px',
+        height: '100%',
+        position: 'relative'
+      }}
+    />
   );
 }

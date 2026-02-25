@@ -138,7 +138,7 @@ export default function Carpooling() {
             {/* Header */}
             <div className="mb-8 flex items-start justify-between">
               <div>
-                <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent mb-2">Carpooling</h1>
+                <h1 className="text-4xl font-bold bg-linear-to-r from-primary to-primary/80 bg-clip-text text-transparent mb-2">Carpooling</h1>
                 <p className="text-muted-foreground">Share rides and split costs safely</p>
               </div>
               <button className="px-6 py-3 bg-primary dark:bg-primary text-primary-foreground rounded-xl font-semibold hover:bg-primary/90 dark:hover:bg-primary/90 transition-all flex items-center gap-2">
@@ -218,7 +218,7 @@ export default function Carpooling() {
             )}
 
             {activeTab === 'create' && (
-              <div className="p-12 bg-white dark:bg-gradient-to-br dark:from-slate-900 dark:to-slate-800 border border-slate-200 dark:border-blue-600/20 rounded-2xl text-center">
+              <div className="p-12 bg-white dark:bg-linear-to-br dark:from-slate-900 dark:to-slate-800 border border-slate-200 dark:border-blue-600/20 rounded-2xl text-center">
                 <Plus className="w-16 h-16 text-blue-400 mx-auto mb-4" />
                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Share Your Ride</h3>
                 <p className="text-slate-400 mb-6 max-w-md mx-auto">Post a ride and earn while helping other travelers</p>
@@ -231,7 +231,7 @@ export default function Carpooling() {
             {activeTab === 'active' && (
               <div className="space-y-4">
                 {activeRides.map((ride) => (
-                  <div key={ride.id} className="p-6 bg-gradient-to-br from-green-500/10 to-green-500/10 border border-green-500/30 rounded-2xl">
+                  <div key={ride.id} className="p-6 bg-linear-to-br from-green-500/10 to-green-500/10 border border-green-500/30 rounded-2xl">
                     <div className="flex items-start justify-between mb-4">
                       <div>
                         <div className="flex items-center gap-2 mb-2">

@@ -58,7 +58,7 @@ export default function MapPage() {
   const [selectedTraveler, setSelectedTraveler] = useState<Traveler | null>(null);
   
   // Generate random coordinates around user location for demo
-  const userLocation = { lng: -122.4194, lat: 37.7749 }; // San Francisco
+  const userLocation = { lng: 121.0244, lat: 14.5547 }; // Manila, Philippines
   const getTravelerLocation = (id: number) => ({
     lng: userLocation.lng + (Math.random() - 0.5) * 0.05,
     lat: userLocation.lat + (Math.random() - 0.5) * 0.05,
@@ -234,7 +234,7 @@ export default function MapPage() {
         {/* Desktop View */}
         <div className="hidden md:grid grid-cols-4 gap-8">
           {/* Map */}
-          <div className="col-span-3 card-luxury h-96 rounded-lg overflow-hidden relative flex">
+          <div className="col-span-3 card-luxury h-[70vh] rounded-lg overflow-hidden relative flex">
             <Map
               initialViewState={{
                 longitude: userLocation.lng,

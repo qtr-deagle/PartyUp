@@ -17,6 +17,7 @@ import MyTrips from "./pages/MyTrips";
 import TrustedCircle from "./pages/TrustedCircle";
 import Carpooling from "./pages/Carpooling";
 import PostRide from "./pages/PostRide";
+import Settings from "./pages/Settings";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminUsers from "./pages/AdminUsers";
 import AdminTrips from "./pages/AdminTrips";
@@ -56,6 +57,7 @@ function Router() {
       <Route path="/chat" component={() => <ProtectedRoute component={Chat} />} />
       <Route path="/map" component={() => <ProtectedRoute component={MapPage} />} />
       <Route path="/profile" component={() => <ProtectedRoute component={Profile} />} />
+      <Route path="/settings" component={() => <ProtectedRoute component={Settings} />} />
       <Route path="/my-trips" component={() => <ProtectedRoute component={MyTrips} />} />
       <Route path="/trusted-circle" component={() => <ProtectedRoute component={TrustedCircle} />} />
       <Route path="/carpooling" component={() => <ProtectedRoute component={Carpooling} />} />

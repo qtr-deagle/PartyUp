@@ -93,7 +93,7 @@ export default function Map() {
               </div>
 
               {/* User Location Path Trail */}
-              <div className="absolute w-16 h-0.5 bg-gradient-to-r from-primary to-transparent opacity-50" style={{ transform: 'rotate(-45deg)' }}></div>
+              <div className="absolute w-16 h-0.5 bg-linear-to-r from-primary to-transparent opacity-50" style={{ transform: 'rotate(-45deg)' }}></div>
             </div>
           )}
 
@@ -243,7 +243,7 @@ export default function Map() {
               <div className="absolute w-48 h-48 rounded-full border-2 border-yellow-400/20 opacity-40"></div>
 
               {/* User Location (Heart) */}
-              <div className="absolute w-6 h-6 rounded-full bg-gradient-to-b from-primary to-primary shadow-2xl shadow-primary/80 flex items-center justify-center">
+              <div className="absolute w-6 h-6 rounded-full bg-linear-to-b from-primary to-primary shadow-2xl shadow-primary/80 flex items-center justify-center">
                 <div className="w-2 h-2 bg-white rounded-full"></div>
               </div>
             </div>
@@ -340,7 +340,7 @@ export default function Map() {
         <div className="w-96 bg-card/40 backdrop-blur-sm border-l border-border flex flex-col overflow-hidden">
           {/* Header Section */}
           <div className="p-6 border-b border-border">
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary bg-clip-text text-transparent mb-1">Your Location</h2>
+            <h2 className="text-2xl font-bold bg-linear-to-r from-primary to-primary bg-clip-text text-transparent mb-1">Your Location</h2>
             <p className="text-xs text-muted-foreground">Makati CBD, Metro Manila</p>
           </div>
 
@@ -448,7 +448,7 @@ export default function Map() {
                 <Phone className="w-4 h-4" /> Call
               </button>
             </div>
-          )
+          )}
         </div>
       </div>
     </Layout>

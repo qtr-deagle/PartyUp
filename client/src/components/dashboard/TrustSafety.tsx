@@ -43,7 +43,7 @@ export default function TrustSafety({ trustData }: TrustSafetyProps) {
   };
 
   return (
-    <Card className="p-6 bg-gradient-to-br from-card to-primary/5">
+    <Card className="p-6 bg-linear-to-br from-card to-primary/5">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
           <Shield className="w-5 h-5 text-primary" />

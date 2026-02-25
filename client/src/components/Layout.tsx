@@ -47,31 +47,36 @@ export default function Layout({ children }: LayoutProps) {
     return !hiddenPaths.some(path => location.startsWith(path));
   };
 
+  // Only show mobile top navigation on home page
+  const isHomePage = location === '/';
+
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Mobile Top Navigation */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-40">
-        <div className="h-14 bg-background/95 backdrop-blur border-b border-border px-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-md bg-primary text-primary-foreground flex items-center justify-center font-bold text-xs">
-              P
+      {/* Mobile Top Navigation - Only on Home Page */}
+      {isHomePage && (
+        <div className="md:hidden fixed top-0 left-0 right-0 z-40">
+          <div className="h-14 bg-background/95 backdrop-blur border-b border-border px-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-md bg-primary text-primary-foreground flex items-center justify-center font-bold text-xs">
+                P
+              </div>
+              <span className="text-sm font-semibold tracking-tight">PartyUp</span>
             </div>
-            <span className="text-sm font-semibold tracking-tight">PartyUp</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setNotificationOpen(true)}
-              className="relative h-9 w-9 rounded-lg hover:bg-secondary transition-smooth flex items-center justify-center"
-              aria-label="Notifications"
-            >
-              <Bell className="w-5 h-5 text-foreground" />
-              {unreadCount > 0 && (
-                <span className="absolute top-2 right-2 w-2 h-2 bg-destructive rounded-full" />
-              )}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setNotificationOpen(true)}
+                className="relative h-9 w-9 rounded-lg hover:bg-secondary transition-smooth flex items-center justify-center"
+                aria-label="Notifications"
+              >
+                <Bell className="w-5 h-5 text-foreground" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-2 right-2 w-2 h-2 bg-destructive rounded-full" />
+                )}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Notification Modal */}
       <NotificationModal
@@ -102,7 +107,7 @@ export default function Layout({ children }: LayoutProps) {
       </div>
 
       {/* Main Content Area */}
-      <main className="pt-14 md:pt-0 md:ml-20 group-hover:md:ml-64 pb-20 md:pb-0 min-h-screen transition-all duration-300 ease-out">
+      <main className={`${isHomePage ? 'pt-14' : 'pt-0'} md:pt-0 md:ml-20 group-hover:md:ml-64 pb-20 md:pb-0 min-h-screen transition-all duration-300 ease-out`}>
         {children}
       </main>
 

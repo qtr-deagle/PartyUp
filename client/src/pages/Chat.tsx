@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import Layout from '@/components/Layout';
-import { Send, Search, Phone, Video, MapPin, AlertTriangle, Flag, ArrowLeft, Zap, MessageCircle } from 'lucide-react';
+import { Send, Search, Phone, Video, MapPin, AlertTriangle, Flag, ArrowLeft, Zap, MessageCircle, X } from 'lucide-react';
 
 interface Message {
   id: number;
@@ -33,6 +33,7 @@ interface Conversation {
  * - Secure messaging indicators
  */
 export default function Chat() {
+  const [showNewMessageModal, setShowNewMessageModal] = useState(false);
   const [conversations] = useState<Conversation[]>([
     {
       id: 1,
@@ -72,7 +73,7 @@ export default function Chat() {
     },
   ]);
 
-  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(conversations[0]);
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([
     { id: 1, sender: 'other', text: 'Hi! Are you ready for the trip?', timestamp: '18:47', type: 'text' },
     { id: 2, sender: 'user', text: 'Yes! See you soon 🎉', timestamp: '18:49', type: 'text' },
@@ -168,7 +169,7 @@ export default function Chat() {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 flex flex-col">
+            <div className="flex-1 overflow-y-auto p-4 pb-28 space-y-3 flex flex-col">
               {messages.map((message) => (
                 <div
                   key={message.id}
@@ -201,7 +202,7 @@ export default function Chat() {
             )}
 
             {/* Message Input */}
-            <div className="bg-card border-t border-border p-4 space-y-2">
+            <div className="bg-card border-t border-border p-4 space-y-2 sticky bottom-16 z-30">
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -224,7 +225,7 @@ export default function Chat() {
           <>
             {/* Conversations Header */}
             <div className="sticky top-0 bg-card border-b border-border z-30 p-4">
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent mb-4">Messages</h1>
+              <h1 className="text-2xl font-bold bg-linear-to-r from-primary to-primary/80 bg-clip-text text-transparent mb-4">Messages</h1>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
@@ -288,7 +289,7 @@ export default function Chat() {
         <div className="w-96 border-r border-border flex flex-col bg-card">
           {/* Header */}
           <div className="p-6 border-b border-border">
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent mb-4">Messages</h2>
+            <h2 className="text-2xl font-bold bg-linear-to-r from-primary to-primary/80 bg-clip-text text-transparent mb-4">Messages</h2>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
@@ -347,7 +348,7 @@ export default function Chat() {
         </div>
 
         {/* Chat View */}
-        {selectedConversation && (
+        {selectedConversation ? (
           <div className="flex-1 flex flex-col">
             {/* Chat Header */}
             <div className="p-6 border-b border-border flex items-center justify-between bg-card">
@@ -452,8 +453,103 @@ export default function Chat() {
               </div>
             </div>
           </div>
+        ) : (
+          // Empty State
+          <div className="flex-1 flex items-center justify-center bg-background">
+            <div className="text-center max-w-md px-6">
+              <div className="w-32 h-32 rounded-full border-4 border-primary/20 flex items-center justify-center mx-auto mb-4">
+                <MessageCircle className="w-16 h-16 text-primary" strokeWidth={1.5} />
+              </div>
+              <h2 className="text-2xl font-bold text-foreground mb-2">Your messages</h2>
+              <p className="text-muted-foreground mb-4">Send a message to start a chat.</p>
+              <button
+                onClick={() => setShowNewMessageModal(true)}
+                className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all font-semibold shadow-lg shadow-primary/20 hover:shadow-primary/30"
+              >
+                Send message
+              </button>
+            </div>
+          </div>
         )}
       </div>
+
+      {/* New Message Modal */}
+      {showNewMessageModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-border flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-foreground">New message</h2>
+              <button
+                onClick={() => setShowNewMessageModal(false)}
+                className="p-2 hover:bg-secondary rounded-full transition-all"
+              >
+                <X className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </div>
+
+            {/* Search Input */}
+            <div className="p-6 border-b border-border">
+              <label className="block text-sm font-semibold text-foreground mb-2">To:</label>
+              <input
+                type="text"
+                placeholder="Search..."
+                autoFocus
+                className="w-full px-4 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+
+            {/* Suggested Users */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <h3 className="text-sm font-semibold text-muted-foreground mb-4">Suggested</h3>
+              <div className="space-y-2">
+                {conversations.slice(0, 3).map((conv) => (
+                  <button
+                    key={conv.id}
+                    onClick={() => {
+                      setSelectedConversation(conv);
+                      setShowNewMessageModal(false);
+                    }}
+                    className="w-full flex items-center gap-3 p-3 hover:bg-secondary rounded-lg transition-all text-left group"
+                  >
+                    <div className="relative">
+                      <div className="w-12 h-12 rounded-full bg-primary/30 flex items-center justify-center font-bold text-primary">
+                        {conv.name[0]}
+                      </div>
+                      {conv.online && (
+                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-accent rounded-full border-2 border-card"></div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-semibold text-sm text-foreground">{conv.name}</h4>
+                        {conv.verified && (
+                          <span className="text-accent text-xs">✓</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">{conv.destination}</p>
+                    </div>
+                    <div className="w-8 h-8 rounded-full border-2 border-border group-hover:border-primary transition-all"></div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-6 border-t border-border">
+              <button
+                onClick={() => {
+                  // Handle chat creation logic here
+                  setShowNewMessageModal(false);
+                }}
+                className="w-full py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all font-semibold shadow-lg shadow-primary/20"
+              >
+                Chat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

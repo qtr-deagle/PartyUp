@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
-import { Home, Compass, MessageCircle, Car, MoreVertical, Map } from 'lucide-react';
+import { Home, Compass, MessageCircle, Car, Map } from 'lucide-react';
 import { Link } from 'wouter';
 import { useCurrentPage } from '@/hooks/useCurrentPage';
-import MoreMenu from '@/components/MoreMenu';
 
 export default function MobileNavigation() {
   const currentPage = useCurrentPage();
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   const navItems = [
     { id: 'home', label: 'Home', icon: Home, path: '/' },
@@ -14,6 +12,7 @@ export default function MobileNavigation() {
     { id: 'carpooling', label: 'Carpool', icon: Car, path: '/carpooling' },
     { id: 'map', label: 'Map', icon: Map, path: '/map' },
     { id: 'chat', label: 'Chat', icon: MessageCircle, path: '/chat' },
+    { id: 'profile', label: 'Profile', icon: null, path: '/profile' },
   ];
 
   return (
@@ -23,40 +22,32 @@ export default function MobileNavigation() {
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentPage === item.id;
+            const isProfile = item.id === 'profile';
 
             return (
               <Link key={item.id} href={item.path} asChild>
                 <button
-                  className={`flex-1 flex flex-col items-center justify-center py-4 px-2 transition-all border-0 bg-transparent text-center cursor-pointer ${
-                    isActive
+                  className={`flex-1 flex flex-col items-center justify-center py-4 px-2 transition-all border-0 bg-transparent text-center cursor-pointer ${isActive
                       ? 'text-primary'
                       : 'text-muted-foreground hover:text-primary'
-                  }`}
+                    }`}
                 >
-                  <Icon className="w-5 h-5 mb-1" />
+                  {isProfile ? (
+                    <div
+                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center mb-1 ${isActive ? 'border-primary bg-primary/20' : 'border-current'
+                        }`}
+                    >
+                    </div>
+                  ) : (
+                    Icon && <Icon className="w-5 h-5 mb-1" />
+                  )}
                   <span className="text-xs font-medium">{item.label}</span>
                 </button>
               </Link>
             );
           })}
-          
-          {/* More Button */}
-          <button
-            onClick={() => setShowMoreMenu(true)}
-            className={`flex-1 flex flex-col items-center justify-center py-4 px-2 transition-all border-0 bg-transparent text-center cursor-pointer ${
-              showMoreMenu
-                ? 'text-primary'
-                : 'text-muted-foreground hover:text-primary'
-            }`}
-          >
-            <MoreVertical className="w-5 h-5 mb-1" />
-            <span className="text-xs font-medium">More</span>
-          </button>
         </div>
       </nav>
-
-      {/* More Menu Drawer */}
-      <MoreMenu isOpen={showMoreMenu} onClose={() => setShowMoreMenu(false)} />
     </>
   );
 }

@@ -133,7 +133,7 @@ export default function Weather() {
   }
 
   return (
-    <Card className="p-4 sm:p-6 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950 dark:to-cyan-950 text-card-foreground rounded-xl shadow-md border border-blue-200 dark:border-blue-800">
+    <Card className="p-4 sm:p-6 bg-linear-to-br from-blue-50 to-cyan-50 dark:from-blue-950 dark:to-cyan-950 text-card-foreground rounded-xl shadow-md border border-blue-200 dark:border-blue-800">
       <div className="flex justify-between items-start mb-3 sm:mb-4">
         <div>
           <h2 className="text-base sm:text-lg font-semibold text-foreground">Weather</h2>

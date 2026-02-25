@@ -41,7 +41,7 @@ export default function UpcomingTripCard({ trip, onCreateTrip }: UpcomingTripCar
 
   if (!trip) {
     return (
-      <Card className="p-6 bg-gradient-to-br from-primary/5 to-primary/10 border-dashed border-2 border-primary/20">
+      <Card className="p-6 bg-linear-to-br from-primary/5 to-primary/10 border-dashed border-2 border-primary/20">
         <div className="text-center py-8">
           <div className="w-16 h-16 rounded-full bg-primary/10 mx-auto mb-4 flex items-center justify-center">
             <MapPin className="w-8 h-8 text-primary" />

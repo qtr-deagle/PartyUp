@@ -160,7 +160,7 @@ export default function MyTrips() {
                 {/* Trip Info */}
                 <div className="col-span-2">
                   <div className="flex items-start gap-4 mb-6">
-                    <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-primary/20 to-accent/20 shrink-0"></div>
+                    <div className="w-16 h-16 rounded-lg bg-linear-to-br from-primary/20 to-accent/20 shrink-0"></div>
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="text-2xl font-bold">{trip.destination}</h3>

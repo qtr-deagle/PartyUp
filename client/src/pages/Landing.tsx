@@ -19,7 +19,7 @@ export default function Landing() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-accent/5">
+    <div className="min-h-screen bg-linear-to-br from-background via-background to-accent/5">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
         <div className="container flex items-center justify-between h-16">
@@ -48,7 +48,7 @@ export default function Landing() {
         <div className="max-w-3xl mx-auto text-center animate-fadeIn">
           <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6 text-balance">
             Travel Together.{" "}
-            <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Safer.</span>
+            <span className="bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">Safer.</span>
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-2xl mx-auto text-balance">
             Connect with trusted travel companions, share rides, and rent vehicles from verified hosts. Your journey starts here.

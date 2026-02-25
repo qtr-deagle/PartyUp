@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import Layout from '@/components/Layout';
-import { Star, MapPin, Shield, Edit2, LogOut, Users, MessageSquare, AlertCircle } from 'lucide-react';
+import { Star, MapPin, Shield, Edit2, LogOut, Users, MessageSquare, AlertCircle, Settings } from 'lucide-react';
 import { toast } from 'sonner';
+import { useLocation } from 'wouter';
 
 /**
  * PartyUp Profile Screen
@@ -23,6 +24,7 @@ import { toast } from 'sonner';
  * - Trusted circle sidebar
  */
 export default function Profile() {
+  const [, setLocation] = useLocation();
   const [isEditing, setIsEditing] = useState(false);
   const [trustedCircle] = useState([
     { id: 1, name: 'Mom', phone: '+1 (555) 123-4567', verified: true },
@@ -61,14 +63,21 @@ export default function Profile() {
   return (
     <Layout>
       {/* Mobile Header */}
-      <div className="md:hidden sticky top-0 bg-card border-b border-border z-30 p-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-primary">Profile</h1>
-        <button
-          onClick={() => setIsEditing(!isEditing)}
-          className="p-2 rounded-lg hover:bg-secondary transition-smooth"
-        >
-          <Edit2 className="w-5 h-5 text-primary" />
-        </button>
+      <div className="md:hidden sticky top-0 bg-card border-b border-border z-30 p-4 flex items-center">
+        <div className="flex-1 flex items-center justify-start">
+          <button
+            onClick={() => setLocation('/settings')}
+            className="p-2 rounded-lg hover:bg-secondary transition-smooth"
+          >
+            <Settings className="w-5 h-5 text-primary" />
+          </button>
+
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <h1 className="text-lg font-bold text-primary whitespace-nowrap">Alex</h1>
+        </div>
+        <div className="flex-1 flex items-center justify-end">
+        </div>
       </div>
 
       {/* Desktop Header */}
@@ -79,7 +88,7 @@ export default function Profile() {
             <p className="text-sm text-muted-foreground mt-2">Manage your travel buddy profile</p>
           </div>
           <button
-            onClick={() => setIsEditing(!isEditing)}
+            onClick={() => setLocation('/settings')}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:shadow-md transition-smooth"
           >
             <Edit2 className="w-5 h-5" />
@@ -95,7 +104,7 @@ export default function Profile() {
           {/* Profile Card */}
           <div className="card-luxury p-6">
             {/* Avatar */}
-            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 mx-auto mb-4"></div>
+            <div className="w-24 h-24 rounded-full bg-linear-to-br from-primary/20 to-accent/20 mx-auto mb-4"></div>
 
             {/* User Info */}
             <div className="text-center mb-6">
@@ -247,7 +256,7 @@ export default function Profile() {
             <div className="card-luxury p-8">
               <div className="flex items-start gap-8 mb-8 pb-8 border-b border-border">
                 {/* Avatar */}
-                <div className="w-32 h-32 rounded-lg bg-gradient-to-br from-primary/20 to-accent/20 shrink-0"></div>
+                <div className="w-32 h-32 rounded-lg bg-linear-to-br from-primary/20 to-accent/20 shrink-0"></div>
 
                 {/* User Info */}
                 <div className="flex-1">

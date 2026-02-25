@@ -99,10 +99,10 @@ export default function MoreMenu({ isOpen, onClose }: Props) {
       ></div>
 
       {/* Drawer Panel */}
-      <div className="absolute inset-y-0 right-0 w-full max-w-sm bg-gradient-to-b from-white via-gray-50 to-white dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 slide-in-right shadow-2xl flex flex-col">
+      <div className="absolute inset-y-0 right-0 w-full max-w-sm bg-linear-to-b from-white via-gray-50 to-white dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 slide-in-right shadow-2xl flex flex-col">
         {/* Header */}
         <div className="sticky top-0 bg-gray-100/50 dark:bg-black/50 backdrop-blur-sm border-b border-gray-200 dark:border-slate-600/30 p-4 flex items-center justify-between z-40">
-          <h2 className="text-xl font-bold bg-gradient-to-r from-blue-500 to-blue-600 bg-clip-text text-transparent">
+          <h2 className="text-xl font-bold bg-linear-to-r from-blue-500 to-blue-600 bg-clip-text text-transparent">
             {activeSection === 'main' && 'More'}
             {activeSection === 'profile' && 'Profile'}
             {activeSection === 'settings' && 'Settings'}
@@ -130,7 +130,7 @@ export default function MoreMenu({ isOpen, onClose }: Props) {
                 className="w-full p-4 bg-blue-600/15 dark:bg-blue-600/15 border border-blue-600/30 dark:border-blue-600/30 rounded-xl hover:border-blue-600/50 dark:hover:border-blue-600/50 transition-all text-left"
               >
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-slate-600 flex items-center justify-center font-bold text-black dark:text-black">
+                  <div className="w-12 h-12 rounded-full bg-linear-to-br from-blue-500 to-slate-600 flex items-center justify-center font-bold text-black dark:text-black">
                     AJ
                   </div>
                   <div>
@@ -241,7 +241,7 @@ export default function MoreMenu({ isOpen, onClose }: Props) {
           {activeSection === 'profile' && (
             <div className="p-4 space-y-4">
               <div className="flex justify-center mb-4">
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-slate-600 flex items-center justify-center font-bold text-black dark:text-white text-2xl">
+                <div className="w-20 h-20 rounded-full bg-linear-to-br from-blue-500 to-slate-600 flex items-center justify-center font-bold text-black dark:text-white text-2xl">
                   AJ
                 </div>
               </div>

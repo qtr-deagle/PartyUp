@@ -93,10 +93,8 @@ export default function Carpooling() {
   return (
     <Layout>
       <div className="bg-background dark:bg-background min-h-screen md:pb-0 pb-24">
-        {/* Mobile Header */}
         <div className="md:hidden sticky top-0 bg-card dark:bg-card border-b border-border z-10">
           <div className="p-4">
-            <h1 className="text-2xl font-bold text-foreground mb-4">Carpool</h1>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
@@ -135,12 +133,7 @@ export default function Carpooling() {
         {/* Desktop Layout */}
         <div className="hidden md:block p-8">
           <div className="max-w-7xl mx-auto">
-            {/* Header */}
-            <div className="mb-8 flex items-start justify-between">
-              <div>
-                <h1 className="text-4xl font-bold bg-linear-to-r from-primary to-primary/80 bg-clip-text text-transparent mb-2">Carpooling</h1>
-                <p className="text-muted-foreground">Share rides and split costs safely</p>
-              </div>
+            <div className="mb-8 flex items-start justify-end">
               <button className="px-6 py-3 bg-primary dark:bg-primary text-primary-foreground rounded-xl font-semibold hover:bg-primary/90 dark:hover:bg-primary/90 transition-all flex items-center gap-2">
                 <Plus className="w-5 h-5" /> Create Ride
               </button>

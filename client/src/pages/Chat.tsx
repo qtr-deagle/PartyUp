@@ -223,9 +223,7 @@ export default function Chat() {
           </>
         ) : (
           <>
-            {/* Conversations Header */}
             <div className="sticky top-0 bg-card border-b border-border z-30 p-4">
-              <h1 className="text-2xl font-bold bg-linear-to-r from-primary to-primary/80 bg-clip-text text-transparent mb-4">Messages</h1>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
@@ -287,9 +285,7 @@ export default function Chat() {
       <div className="hidden md:flex h-screen bg-background">
         {/* Conversations Sidebar */}
         <div className="w-96 border-r border-border flex flex-col bg-card">
-          {/* Header */}
           <div className="p-6 border-b border-border">
-            <h2 className="text-2xl font-bold bg-linear-to-r from-primary to-primary/80 bg-clip-text text-transparent mb-4">Messages</h2>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input

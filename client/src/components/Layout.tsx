@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Bell } from 'lucide-react';
 import { useLocation } from 'wouter';
 import MobileNavigation from './MobileNavigation';
@@ -32,6 +32,45 @@ export default function Layout({ children }: LayoutProps) {
     markAllAsRead,
     clearAll,
   } = useNotifications();
+
+  // Mobile swipe navigation between pages
+  const touchStartX = useRef<number>(0);
+  const touchStartY = useRef<number>(0);
+  
+  // Navigation order: Home → Discover → Carpool → Map → Chat → Profile → Home
+  const navOrder = ['/', '/match', '/carpooling', '/map', '/chat', '/profile'];
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const touchEndX = e.changedTouches[0].clientX;
+    const touchEndY = e.changedTouches[0].clientY;
+    const diffX = touchStartX.current - touchEndX;
+    const diffY = touchStartY.current - touchEndY;
+
+    // Only trigger if horizontal swipe is dominant and significant
+    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
+      const currentIndex = navOrder.findIndex(path => {
+        if (path === '/') return location === '/';
+        return location.startsWith(path);
+      });
+
+      if (currentIndex !== -1) {
+        if (diffX > 0) {
+          // Swipe left = next page in order
+          const nextIndex = (currentIndex + 1) % navOrder.length;
+          setLocationPath(navOrder[nextIndex]);
+        } else {
+          // Swipe right = previous page in order
+          const prevIndex = (currentIndex - 1 + navOrder.length) % navOrder.length;
+          setLocationPath(navOrder[prevIndex]);
+        }
+      }
+    }
+  };
 
   const handleNotificationClick = (notification: any) => {
     if (notification.actionUrl) {
@@ -107,7 +146,11 @@ export default function Layout({ children }: LayoutProps) {
       </div>
 
       {/* Main Content Area */}
-      <main className={`${isHomePage ? 'pt-14' : 'pt-0'} md:pt-0 md:ml-20 group-hover:md:ml-64 pb-20 md:pb-0 min-h-screen transition-all duration-300 ease-out`}>
+      <main 
+        className={`${isHomePage ? 'pt-14' : 'pt-0'} md:pt-0 md:ml-20 group-hover:md:ml-64 pb-20 md:pb-0 min-h-screen transition-all duration-300 ease-out`}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
         {children}
       </main>
 

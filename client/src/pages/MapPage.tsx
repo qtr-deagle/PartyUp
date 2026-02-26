@@ -66,56 +66,25 @@ export default function MapPage() {
 
   return (
     <Layout>
-      {/* Mobile Header */}
-      <div className="md:hidden sticky top-0 bg-card border-b border-border z-30 p-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-primary">Map</h1>
-          <p className="text-xs text-muted-foreground mt-1">Nearby travelers</p>
-        </div>
-        <button
-          onClick={() => setShowLocation(!showLocation)}
-          className="p-2 rounded-lg hover:bg-secondary transition-smooth"
-        >
-          {showLocation ? (
-            <Eye className="w-5 h-5 text-primary" />
-          ) : (
-            <EyeOff className="w-5 h-5 text-muted-foreground" />
-          )}
-        </button>
-      </div>
-
-      {/* Desktop Header */}
-      <div className="hidden md:block sticky top-0 bg-card border-b border-border z-30">
-        <div className="p-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-primary">Nearby Travelers Map</h1>
-            <p className="text-sm text-muted-foreground mt-2">Find and connect with travelers in your area</p>
-          </div>
-          <button
-            onClick={() => setShowLocation(!showLocation)}
-            className="flex items-center gap-2 px-4 py-2 bg-secondary rounded-lg hover:bg-secondary/80 transition-smooth"
-          >
-            {showLocation ? (
-              <>
-                <Eye className="w-5 h-5" />
-                <span className="text-sm font-medium">Location Visible</span>
-              </>
-            ) : (
-              <>
-                <EyeOff className="w-5 h-5" />
-                <span className="text-sm font-medium">Location Hidden</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Main Content */}
       <div className="p-4 md:p-8">
         {/* Mobile View */}
         <div className="md:hidden space-y-4">
           {/* Map Container */}
-          <div className="card-luxury h-96 rounded-lg overflow-hidden relative flex">
+          <div 
+            className="card-luxury h-96 rounded-lg overflow-hidden relative flex"
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShowLocation(!showLocation)}
+              className="absolute top-3 right-3 z-10 p-2 rounded-lg bg-background/80 backdrop-blur border border-border"
+            >
+              {showLocation ? (
+                <Eye className="w-4 h-4 text-primary" />
+              ) : (
+                <EyeOff className="w-4 h-4 text-muted-foreground" />
+              )}
+            </button>
             <Map
               initialViewState={{
                 longitude: userLocation.lng,
@@ -234,7 +203,17 @@ export default function MapPage() {
         {/* Desktop View */}
         <div className="hidden md:grid grid-cols-4 gap-8">
           {/* Map */}
-          <div className="col-span-3 card-luxury h-[70vh] rounded-lg overflow-hidden relative flex">
+          <div 
+            className="col-span-3 card-luxury h-[70vh] rounded-lg overflow-hidden relative flex"
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShowLocation(!showLocation)}
+              className="absolute top-4 right-4 z-10 px-3 py-2 rounded-lg bg-background/90 backdrop-blur border border-border text-sm font-medium"
+            >
+              {showLocation ? 'Hide Location' : 'Show Location'}
+            </button>
             <Map
               initialViewState={{
                 longitude: userLocation.lng,

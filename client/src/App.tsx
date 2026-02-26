@@ -9,7 +9,7 @@ import { SafetyProvider } from "./contexts/SafetyContext";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import Match from "./pages/Match";
+import Discovery from "./pages/Discovery";
 import Chat from "./pages/Chat";
 import MapPage from "./pages/MapPage";
 import Profile from "./pages/Profile";
@@ -52,8 +52,8 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/" component={() => <ProtectedRoute component={Home} />} />
-      <Route path="/match" component={() => <ProtectedRoute component={Match} />} />
-      <Route path="/find-buddy" component={() => <ProtectedRoute component={Match} />} />
+      <Route path="/match" component={() => <ProtectedRoute component={Discovery} />} />
+      <Route path="/find-buddy" component={() => <ProtectedRoute component={Discovery} />} />
       <Route path="/chat" component={() => <ProtectedRoute component={Chat} />} />
       <Route path="/map" component={() => <ProtectedRoute component={MapPage} />} />
       <Route path="/profile" component={() => <ProtectedRoute component={Profile} />} />

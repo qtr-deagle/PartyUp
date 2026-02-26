@@ -74,7 +74,7 @@ export default function Profile() {
 
         </div>
         <div className="flex-1 flex items-center justify-center">
-          <h1 className="text-lg font-bold text-primary whitespace-nowrap">Alex</h1>
+          <h1 className="text-2xl font-bold text-primary whitespace-nowrap">Alex</h1>
         </div>
         <div className="flex-1 flex items-center justify-end">
         </div>

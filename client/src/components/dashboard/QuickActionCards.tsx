@@ -25,7 +25,7 @@ export default function QuickActionCards() {
       id: "find-buddy",
       title: "Find Buddy",
       icon: Search,
-      href: "/match",
+      href: "/discovery",
       color: "text-green-600 dark:text-green-400",
       bgColor: "bg-green-100 dark:bg-green-900/30",
     },

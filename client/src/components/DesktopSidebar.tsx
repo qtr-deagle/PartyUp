@@ -84,7 +84,7 @@ export default function DesktopSidebar({
 
   const navItems = [
     { id: 'home', label: 'Home', icon: Home, path: '/' },
-    { id: 'match', label: 'Find Buddy', icon: Heart, path: '/match' },
+    { id: 'match', label: 'Find Buddy', icon: Heart, path: '/discovery' },
     { id: 'carpooling', label: 'Carpooling', icon: Car, path: '/carpooling' },
     { id: 'map', label: 'Map', icon: Map, path: '/map' },
     { id: 'chat', label: 'Messages', icon: MessageCircle, path: '/chat' },

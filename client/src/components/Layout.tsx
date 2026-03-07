@@ -38,7 +38,7 @@ export default function Layout({ children }: LayoutProps) {
   const touchStartY = useRef<number>(0);
   
   // Navigation order: Home → Discover → Carpool → Map → Chat → Profile → Home
-  const navOrder = ['/', '/match', '/carpooling', '/map', '/chat', '/profile'];
+  const navOrder = ['/', '/discovery', '/carpooling', '/map', '/chat', '/profile'];
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;

@@ -56,7 +56,7 @@ export default function RecentMatches({ matches = [] }: RecentMatchesProps) {
     <Card className="p-6">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold text-foreground">Recent Matches</h2>
-        <Link href="/match">
+        <Link href="/discovery">
           <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80">
             View All
           </Button>

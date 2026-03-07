@@ -22,6 +22,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import AdminUsers from "./pages/AdminUsers";
 import AdminTrips from "./pages/AdminTrips";
 import AdminReports from "./pages/AdminReports";
+import CarRenterDashboard from "./pages/CarRenterDashboard";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -52,7 +53,7 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/" component={() => <ProtectedRoute component={Home} />} />
-      <Route path="/match" component={() => <ProtectedRoute component={Discovery} />} />
+      <Route path="/discovery" component={() => <ProtectedRoute component={Discovery} />} />
       <Route path="/find-buddy" component={() => <ProtectedRoute component={Discovery} />} />
       <Route path="/chat" component={() => <ProtectedRoute component={Chat} />} />
       <Route path="/map" component={() => <ProtectedRoute component={MapPage} />} />
@@ -62,6 +63,7 @@ function Router() {
       <Route path="/trusted-circle" component={() => <ProtectedRoute component={TrustedCircle} />} />
       <Route path="/carpooling" component={() => <ProtectedRoute component={Carpooling} />} />
       <Route path="/post-ride" component={() => <ProtectedRoute component={PostRide} />} />
+      <Route path="/car-renter-dashboard" component={() => <ProtectedRoute component={CarRenterDashboard} />} />
       <Route path="/admin" component={() => <AdminRoute component={AdminDashboard} />} />
       <Route path="/admin/dashboard" component={() => <AdminRoute component={AdminDashboard} />} />
       <Route path="/admin/users" component={() => <AdminRoute component={AdminUsers} />} />

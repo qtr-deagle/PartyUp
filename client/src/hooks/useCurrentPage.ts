@@ -10,7 +10,7 @@ export function useCurrentPage(): string {
   // Map routes to page IDs
   const pageMap: Record<string, string> = {
     '/': 'home',
-    '/match': 'match',
+    '/discovery': 'match',
     '/find-buddy': 'match',
     '/chat': 'chat',
     '/messages': 'chat',

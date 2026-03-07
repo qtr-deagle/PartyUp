@@ -8,7 +8,7 @@ export default function MobileNavigation() {
 
   const navItems = [
     { id: 'home', label: 'Home', icon: Home, path: '/' },
-    { id: 'match', label: 'Discover', icon: Compass, path: '/match' },
+    { id: 'match', label: 'Discover', icon: Compass, path: '/discovery' },
     { id: 'carpooling', label: 'Carpool', icon: Car, path: '/carpooling' },
     { id: 'map', label: 'Map', icon: Map, path: '/map' },
     { id: 'chat', label: 'Chat', icon: MessageCircle, path: '/chat' },

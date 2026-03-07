@@ -10,7 +10,7 @@ export function useNotifications() {
       message: 'Sarah wants to travel with you to Bali',
       timestamp: '5 minutes ago',
       read: false,
-      actionUrl: '/match',
+      actionUrl: '/discovery',
     },
     {
       id: '2',

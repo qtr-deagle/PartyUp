@@ -7,7 +7,7 @@
 
 ## Phase 2: Authentication & Onboarding
 - [x] Create landing page with PartyUp branding
-- [x] Build role selection flow (Traveler, Car Renter, Admin)
+- [x] Build role selection flow (Traveler, Admin)
 - [x] Implement login/register pages with email and password
 - [x] Add optional phone number field
 - [x] Create admin login hidden route (/admin)
@@ -22,21 +22,18 @@
 - [ ] Implement smooth animations (300ms ease-in-out)
 - [ ] Add floating action button for mobile (Create Trip)
 
-## Phase 4: Traveler Dashboard
+## Phase 4: Traveler Dashboard & Vehicle Management
 - [ ] Create traveler dashboard main view
-- [ ] Build feature cards (Find Travel Buddy, Car Pool, Rent a Car, Nearby Travelers)
+- [ ] Build feature cards (Find Travel Buddy, Car Pool, Nearby Travelers)
 - [ ] Implement nearby travelers section with cards
 - [ ] Build upcoming trips section
 - [ ] Add Create Trip and Join Ride buttons
 - [ ] Implement trip creation modal/flow
-
-## Phase 5: Car Renter Dashboard
-- [ ] Create car renter dashboard main view
+- [ ] Create vehicle management interface for travelers who rent cars
 - [ ] Build car listing cards with photos, model, seats, price, location
-- [ ] Implement vehicle management interface
-- [ ] Build availability calendar
-- [ ] Create booking request management
-- [ ] Add chat interface for renter-traveler communication
+- [ ] Implement availability calendar for vehicle rentals
+- [ ] Add booking request management for vehicle rentals
+- [ ] Create chat interface for traveler-renter communication
 
 ## Phase 6: Admin Panel
 - [ ] Create admin dashboard layout
@@ -132,7 +129,7 @@
 - Mobile-first responsive design
 
 ## Database Entities
-- Users (with role: traveler, car_renter, admin)
+- Users (with role: traveler, admin)
 - Trips
 - Cars
 - Bookings

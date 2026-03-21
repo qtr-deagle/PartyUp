@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Layout from '@/components/Layout';
+import AddContactModal from '@/components/AddContactModal';
 import { Users, Plus, Trash2, Shield, Phone, Mail, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -53,29 +54,25 @@ export default function TrustedCircle() {
     },
   ]);
 
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newContact, setNewContact] = useState({
-    name: '',
-    phone: '',
-    email: '',
-    relationship: '',
-  });
+  const [showAddModal, setShowAddModal] = useState(false);
 
-  const handleAddContact = () => {
-    if (newContact.name && newContact.phone) {
-      setContacts([
-        ...contacts,
-        {
-          id: contacts.length + 1,
-          ...newContact,
-          verified: false,
-          notificationEnabled: true,
-        },
-      ]);
-      setNewContact({ name: '', phone: '', email: '', relationship: '' });
-      setShowAddForm(false);
-      toast.success('Contact added! Verification email sent.');
-    }
+  const handleAddContact = (newContact: {
+    name: string;
+    phone: string;
+    email: string;
+    relationship: string;
+  }) => {
+    setContacts([
+      ...contacts,
+      {
+        id: contacts.length + 1,
+        ...newContact,
+        verified: false,
+        notificationEnabled: true,
+      },
+    ]);
+    setShowAddModal(false);
+    toast.success('Contact added! Verification email sent.');
   };
 
   const handleRemoveContact = (id: number) => {
@@ -97,7 +94,7 @@ export default function TrustedCircle() {
       <div className="md:hidden sticky top-0 bg-card border-b border-border z-30 p-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-primary">Trusted Circle</h1>
         <button
-          onClick={() => setShowAddForm(!showAddForm)}
+          onClick={() => setShowAddModal(true)}
           className="p-2 rounded-lg hover:bg-secondary transition-smooth bg-primary text-primary-foreground"
         >
           <Plus className="w-5 h-5" />
@@ -112,7 +109,7 @@ export default function TrustedCircle() {
             <p className="text-sm text-muted-foreground mt-2">Manage your emergency contacts and safety network</p>
           </div>
           <button
-            onClick={() => setShowAddForm(!showAddForm)}
+            onClick={() => setShowAddModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:shadow-md transition-smooth"
           >
             <Plus className="w-5 h-5" />
@@ -121,63 +118,15 @@ export default function TrustedCircle() {
         </div>
       </div>
 
+      {/* Add Contact Modal */}
+      <AddContactModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSubmit={handleAddContact}
+      />
+
       {/* Main Content */}
       <div className="p-4 md:p-8">
-        {/* Add Contact Form */}
-        {showAddForm && (
-          <div className="mb-6 card-luxury p-6">
-            <h3 className="font-bold text-lg mb-4">Add Emergency Contact</h3>
-            <div className="space-y-4">
-              <input
-                type="text"
-                placeholder="Full Name"
-                value={newContact.name}
-                onChange={(e) => setNewContact({ ...newContact, name: e.target.value })}
-                className="w-full px-4 py-2 bg-secondary rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              <input
-                type="tel"
-                placeholder="Phone Number"
-                value={newContact.phone}
-                onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })}
-                className="w-full px-4 py-2 bg-secondary rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              <input
-                type="email"
-                placeholder="Email Address"
-                value={newContact.email}
-                onChange={(e) => setNewContact({ ...newContact, email: e.target.value })}
-                className="w-full px-4 py-2 bg-secondary rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              <select
-                value={newContact.relationship}
-                onChange={(e) => setNewContact({ ...newContact, relationship: e.target.value })}
-                className="w-full px-4 py-2 bg-secondary rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">Select Relationship</option>
-                <option value="Parent">Parent</option>
-                <option value="Friend">Friend</option>
-                <option value="Sibling">Sibling</option>
-                <option value="Partner">Partner</option>
-                <option value="Other">Other</option>
-              </select>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowAddForm(false)}
-                  className="flex-1 py-2 border border-border rounded-lg text-sm font-medium transition-smooth hover:bg-secondary"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAddContact}
-                  className="flex-1 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-smooth hover:shadow-md"
-                >
-                  Add Contact
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Mobile View */}
         <div className="md:hidden space-y-4">
@@ -230,7 +179,32 @@ export default function TrustedCircle() {
               </button>
             </div>
           ))}
+
+          {/* Add Contact Button */}
+          {contacts.length > 0 && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="w-full py-3 border border-border text-foreground rounded-lg text-sm font-medium transition-smooth hover:bg-secondary"
+            >
+              + Add Contact
+            </button>
+          )}
         </div>
+
+        {/* Empty State */}
+        {contacts.length === 0 && (
+          <div className="text-center py-12">
+            <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-foreground mb-2">No Emergency Contacts</h3>
+            <p className="text-sm text-muted-foreground mb-4">Add your first trusted contact to get started</p>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-smooth"
+            >
+              Add Contact
+            </button>
+          </div>
+        )}
 
         {/* Desktop View */}
         <div className="hidden md:grid grid-cols-1 gap-6">

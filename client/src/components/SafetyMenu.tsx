@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Shield, X } from 'lucide-react';
+import { useSafetyUI } from '@/contexts/SafetyContext';
 import SOSButton from './SOSButton';
 import WarningButton from './WarningButton';
 
@@ -11,10 +12,14 @@ import WarningButton from './WarningButton';
  * - Expands to show both SOS and Warning buttons
  * - Less intrusive than always showing both buttons
  * - Easy to access when needed
+ * - Hidden by default, can be enabled in settings
  */
 
 export default function SafetyMenu() {
   const [isExpanded, setIsExpanded] = useState(false);
+  const { safetyMenuEnabled } = useSafetyUI();
+
+  if (!safetyMenuEnabled) return null;
 
   return (
     <div className="relative">

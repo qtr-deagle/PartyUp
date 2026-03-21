@@ -8,7 +8,7 @@ export default function AdminUsers() {
   const users = [
     { id: 1, name: 'John Doe', email: 'john@example.com', role: 'traveler', status: 'active', verified: true },
     { id: 2, name: 'Jane Smith', email: 'jane@example.com', role: 'traveler', status: 'active', verified: true },
-    { id: 3, name: 'Mike Johnson', email: 'mike@example.com', role: 'car_renter', status: 'suspended', verified: false },
+    { id: 3, name: 'Mike Johnson', email: 'mike@example.com', role: 'traveler', status: 'suspended', verified: false },
     { id: 4, name: 'Sarah Williams', email: 'sarah@example.com', role: 'traveler', status: 'active', verified: true },
     { id: 5, name: 'Tom Brown', email: 'tom@example.com', role: 'traveler', status: 'inactive', verified: false },
   ];

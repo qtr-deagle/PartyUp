@@ -29,7 +29,7 @@ export const appRouter = router({
           name: z.string().optional(),
           email: z.string().email().optional(),
           phone: z.string().optional(),
-          role: z.enum(["traveler", "car_renter", "admin"]),
+          role: z.enum(["traveler", "admin"]),
           loginMethod: z.string().optional(),
         })
       )

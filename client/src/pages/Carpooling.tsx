@@ -1,10 +1,26 @@
 import React, { useState } from 'react';
 import Layout from '@/components/Layout';
+import CreateRideModal from '@/components/CreateRideModal';
 import { MapPin, Calendar, Users, Star, Plus, Search, ArrowRight, Zap } from 'lucide-react';
 
 export default function Carpooling() {
   const [activeTab, setActiveTab] = useState<'find' | 'create' | 'active' | 'history'>('find');
   const [searchTerm, setSearchTerm] = useState('');
+  const [showCreateRide, setShowCreateRide] = useState(false);
+
+  const handleCreateRide = (ride: {
+    from: string;
+    to: string;
+    date: string;
+    time: string;
+    seats: number;
+    costPerSeat: number;
+    description: string;
+  }) => {
+    // Handle creating ride
+    console.log('Ride created:', ride);
+    setShowCreateRide(false);
+  };
 
   const availableRides = [
     {
@@ -124,7 +140,7 @@ export default function Carpooling() {
                     : 'border-transparent text-muted-foreground hover:text-foreground'
                 }`}
               >
-                <span className="mr-1">{tab.icon}</span>
+                {tab.label}
               </button>
             ))}
           </div>
@@ -134,7 +150,7 @@ export default function Carpooling() {
         <div className="hidden md:block p-8">
           <div className="max-w-7xl mx-auto">
             <div className="mb-8 flex items-start justify-end">
-              <button className="px-6 py-3 bg-primary dark:bg-primary text-primary-foreground rounded-xl font-semibold hover:bg-primary/90 dark:hover:bg-primary/90 transition-all flex items-center gap-2">
+              <button onClick={() => setShowCreateRide(true)} className="px-6 py-3 bg-primary dark:bg-primary text-primary-foreground rounded-xl font-semibold hover:bg-primary/90 dark:hover:bg-primary/90 transition-all flex items-center gap-2">
                 <Plus className="w-5 h-5" /> Create Ride
               </button>
             </div>
@@ -214,8 +230,8 @@ export default function Carpooling() {
               <div className="p-12 bg-white dark:bg-linear-to-br dark:from-slate-900 dark:to-slate-800 border border-slate-200 dark:border-blue-600/20 rounded-2xl text-center">
                 <Plus className="w-16 h-16 text-blue-400 mx-auto mb-4" />
                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Share Your Ride</h3>
-                <p className="text-slate-400 mb-6 max-w-md mx-auto">Post a ride and earn while helping other travelers</p>
-                <button className="px-8 py-3 bg-blue-600 dark:bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 dark:hover:bg-blue-700 transition-all">
+                <p className="text-slate-400 mb-6 max-w-md mx-auto">Create a carpool and help fellow travelers reach their destination together</p>
+                <button onClick={() => setShowCreateRide(true)} className="px-8 py-3 bg-blue-600 dark:bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 dark:hover:bg-blue-700 transition-all">
                   Create Ride
                 </button>
               </div>
@@ -327,8 +343,8 @@ export default function Carpooling() {
               <div className="p-12 bg-card dark:bg-card border border-border rounded-2xl text-center">
                 <Plus className="w-16 h-16 text-primary mx-auto mb-4" />
                 <h3 className="text-xl font-bold text-foreground mb-2">Share Your Ride</h3>
-                <p className="text-sm text-muted-foreground mb-4">Earn while helping others travel</p>
-                <button className="w-full py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-all">
+                <p className="text-sm text-muted-foreground mb-4">Create a carpool and help fellow travelers reach their destination together</p>
+                <button onClick={() => setShowCreateRide(true)} className="w-full py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-all">
                 Create Ride
               </button>
             </div>
@@ -367,6 +383,13 @@ export default function Carpooling() {
             </div>
           )}
         </div>
+
+        {/* Create Ride Modal */}
+        <CreateRideModal
+          isOpen={showCreateRide}
+          onClose={() => setShowCreateRide(false)}
+          onSubmit={handleCreateRide}
+        />
       </div>
     </Layout>
   );

@@ -14,7 +14,8 @@ import {
 
 /**
  * Core user table backing auth flow.
- * Extended with role-specific fields for Traveler, Car Renter, and Admin.
+ * Extended with role-specific fields for Traveler and Admin.
+ * Travelers can also manage vehicle rentals.
  */
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
@@ -23,7 +24,7 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 320 }),
   phone: varchar("phone", { length: 20 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin", "traveler", "car_renter"]).default("user").notNull(),
+  role: mysqlEnum("role", ["user", "admin", "traveler"]).default("user").notNull(),
   
   // Profile information
   profilePhotoUrl: text("profilePhotoUrl"),
@@ -39,7 +40,7 @@ export const users = mysqlTable("users", {
   travelPreferences: json("travelPreferences"), // { interests: [], budget: "", style: "" }
   travelHistory: json("travelHistory"), // Array of trip IDs
   
-  // Car Renter-specific
+  // Vehicle rental-specific (for travelers who rent vehicles)
   companyName: varchar("companyName", { length: 255 }),
   businessLicense: varchar("businessLicense", { length: 255 }),
   bankAccount: varchar("bankAccount", { length: 255 }),
@@ -237,7 +238,7 @@ export const reviews = mysqlTable("reviews", {
   comment: text("comment"),
   
   // Review type
-  reviewType: mysqlEnum("reviewType", ["traveler", "car_renter", "car"]),
+  reviewType: mysqlEnum("reviewType", ["traveler", "car"]),
   
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

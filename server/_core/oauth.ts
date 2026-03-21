@@ -31,7 +31,7 @@ export function registerOAuthRoutes(app: Express) {
       // Check if role was selected on frontend
       // The role will be sent as a query parameter or stored in session
       const selectedRole = getQueryParam(req, "role") || "user";
-      const validRoles = ["user", "admin", "traveler", "car_renter"];
+      const validRoles = ["user", "admin", "traveler"];
       const role = validRoles.includes(selectedRole) ? selectedRole : "user";
 
       await db.upsertUser({
@@ -40,7 +40,7 @@ export function registerOAuthRoutes(app: Express) {
         email: userInfo.email ?? null,
         loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
         lastSignedIn: new Date(),
-        role: role as "user" | "admin" | "traveler" | "car_renter",
+        role: role as "user" | "admin" | "traveler",
       });
 
       const sessionToken = await sdk.createSessionToken(userInfo.openId, {

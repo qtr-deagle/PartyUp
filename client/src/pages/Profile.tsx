@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import Layout from '@/components/Layout';
-import { Star, MapPin, Shield, Edit2, LogOut, Users, MessageSquare, AlertCircle, Settings } from 'lucide-react';
+import { Star, MapPin, Shield, Edit2, LogOut, Users, MessageSquare, AlertCircle, Settings, Car } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLocation } from 'wouter';
 
@@ -238,6 +238,15 @@ export default function Profile() {
               Manage Emergency Contacts
             </button>
           </div>
+
+          {/* My Vehicles */}
+          <button
+            onClick={() => setLocation('/cars')}
+            className="w-full py-3 border border-primary text-primary rounded-lg font-medium transition-smooth hover:bg-primary/5 flex items-center justify-center gap-2"
+          >
+            <Car className="w-5 h-5" />
+            My Vehicles
+          </button>
 
           {/* Logout */}
           <button

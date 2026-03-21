@@ -32,7 +32,7 @@ describe("auth.registerOrUpdate", () => {
     expect(result.user?.email).toBe("john@example.com");
   });
 
-  it("registers a new car renter user with correct role", async () => {
+  it("registers a traveler user who can manage vehicle rentals", async () => {
     const ctx: TrpcContext = {
       user: null,
       req: {
@@ -46,16 +46,16 @@ describe("auth.registerOrUpdate", () => {
 
     const result = await caller.auth.registerOrUpdate({
       openId: "test-renter-456",
-      name: "Jane Renter",
+      name: "Jane Traveler",
       email: "jane@example.com",
-      role: "car_renter",
+      role: "traveler",
       loginMethod: "oauth",
     });
 
     expect(result.success).toBe(true);
     expect(result.user).toBeDefined();
-    expect(result.user?.role).toBe("car_renter");
-    expect(result.user?.name).toBe("Jane Renter");
+    expect(result.user?.role).toBe("traveler");
+    expect(result.user?.name).toBe("Jane Traveler");
   });
 
   it("registers a new admin user with correct role", async () => {
@@ -106,17 +106,17 @@ describe("auth.registerOrUpdate", () => {
 
     expect(firstResult.user?.role).toBe("traveler");
 
-    // Update to car_renter
+    // Update to admin
     const secondResult = await caller.auth.registerOrUpdate({
       openId: "test-update-user",
       name: "Update Test",
       email: "update@example.com",
-      role: "car_renter",
+      role: "admin",
       loginMethod: "oauth",
     });
 
     expect(secondResult.success).toBe(true);
-    expect(secondResult.user?.role).toBe("car_renter");
+    expect(secondResult.user?.role).toBe("admin");
   });
 
   it("handles optional phone number", async () => {

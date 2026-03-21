@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth, UserRole } from '@/contexts/AuthContext';
 import { useLocation } from 'wouter';
-import { Mail, Lock, User, Eye, EyeOff, Loader2, Users, Car } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, Loader2, Users } from 'lucide-react';
 
 /**
  * PartyUp Registration Page
@@ -29,14 +29,8 @@ export default function Register() {
     {
       id: 'traveler',
       label: 'Traveler',
-      description: 'Find travel buddies for your adventures',
+      description: 'Find travel buddies and rent vehicles',
       icon: <Users className="w-8 h-8" />,
-    },
-    {
-      id: 'car_renter',
-      label: 'Car Renter',
-      description: 'Rent or share your vehicle',
-      icon: <Car className="w-8 h-8" />,
     },
   ];
 

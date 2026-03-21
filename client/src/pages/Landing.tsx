@@ -12,12 +12,6 @@ export default function Landing() {
     setLocation("/login");
   };
 
-  const handleRenterLogin = () => {
-    // Store role in sessionStorage and redirect to login
-    sessionStorage.setItem("selectedRole", "car_renter");
-    setLocation("/login");
-  };
-
   return (
     <div className="min-h-screen bg-linear-to-br from-background via-background to-accent/5">
       {/* Header */}
@@ -55,36 +49,20 @@ export default function Landing() {
           </p>
 
           {/* Role Selection */}
-          <div className="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto mb-12">
+          <div className="max-w-2xl mx-auto mb-12">
             {/* Traveler Card */}
-            <Card className="p-8 bg-card text-card-foreground rounded-xl shadow-md p-4 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer border-2 border-border hover:border-primary/50 transition-all">
+            <Card className="p-8 bg-card text-card-foreground rounded-xl shadow-md transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer border-2 border-border hover:border-primary/50">
               <div className="flex justify-center mb-4">
                 <div className="w-12 h-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
                   <Users className="w-6 h-6" />
                 </div>
               </div>
-              <h3 className="text-xl font-semibold text-foreground mb-2">I'm a Traveler</h3>
+              <h3 className="text-xl font-semibold text-foreground mb-2">Join PartyUp</h3>
               <p className="text-sm text-muted-foreground mb-6">
-                Find travel buddies, join carpools, and rent vehicles for your adventures.
+                Find travel buddies, share rides, and rent vehicles all in one place.
               </p>
               <Button onClick={handleTravelerLogin} className="w-full bg-primary text-primary-foreground rounded-xl font-semibold px-6 py-2.5 transition-all duration-300 hover:shadow-lg active:scale-95">
-                Continue as Traveler
-              </Button>
-            </Card>
-
-            {/* Car Renter Card */}
-            <Card className="p-8 bg-card text-card-foreground rounded-xl shadow-md p-4 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer border-2 border-border hover:border-accent/50 transition-all">
-              <div className="flex justify-center mb-4">
-                <div className="w-12 h-12 rounded-lg bg-accent/10 text-accent flex items-center justify-center">
-                  <Car className="w-6 h-6" />
-                </div>
-              </div>
-              <h3 className="text-xl font-semibold text-foreground mb-2">I'm a Car Renter</h3>
-              <p className="text-sm text-muted-foreground mb-6">
-                List your vehicles and earn by renting to verified travelers.
-              </p>
-              <Button onClick={handleRenterLogin} variant="outline" className="w-full border-2 border-primary text-primary rounded-xl font-semibold px-6 py-2.5 transition-all duration-300 hover:bg-primary hover:text-primary-foreground">
-                Continue as Car Renter
+                Get Started
               </Button>
             </Card>
           </div>
@@ -102,6 +80,46 @@ export default function Landing() {
               Access admin portal
             </button>
           </p>
+        </div>
+      </section>
+
+      {/* Two Main Uses Section */}
+      <section className="container py-20 md:py-32 border-t border-border">
+        <h2 className="text-3xl md:text-4xl font-bold text-center text-foreground mb-16">Two Ways to Travel</h2>
+        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          {/* Sharing Rides */}
+          <Card className="p-8 bg-card text-card-foreground rounded-xl shadow-md border-2 border-primary/20 hover:border-primary/50 transition-all">
+            <div className="w-12 h-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-6">
+              <Users className="w-6 h-6" />
+            </div>
+            <h3 className="text-2xl font-bold text-foreground mb-3">Share a Ride</h3>
+            <p className="text-muted-foreground mb-6">
+              Going somewhere? Create a carpool and share the journey with fellow travelers. Help others reach their destination while sharing costs and making new connections.
+            </p>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li>✓ Split costs with travel companions</li>
+              <li>✓ Meet people with shared interests</li>
+              <li>✓ Contribute to sustainable travel</li>
+              <li>✓ Build community connections</li>
+            </ul>
+          </Card>
+
+          {/* Renting Vehicles */}
+          <Card className="p-8 bg-card text-card-foreground rounded-xl shadow-md border-2 border-accent/20 hover:border-accent/50 transition-all">
+            <div className="w-12 h-12 rounded-lg bg-accent/10 text-accent flex items-center justify-center mb-6">
+              <Car className="w-6 h-6" />
+            </div>
+            <h3 className="text-2xl font-bold text-foreground mb-3">Rent a Vehicle</h3>
+            <p className="text-muted-foreground mb-6">
+              Use your vehicle to earn money by renting to verified travelers. Set your own schedule and rates while helping others explore the world.
+            </p>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li>✓ Earn passive income</li>
+              <li>✓ Control your own schedule</li>
+              <li>✓ Set competitive rates</li>
+              <li>✓ Rent to verified travelers</li>
+            </ul>
+          </Card>
         </div>
       </section>
 

@@ -136,10 +136,10 @@ export default function Chat() {
                 </div>
               </div>
               <div className="flex gap-1">
-                <button className="p-2 hover:bg-secondary rounded-full transition-all">
+                <button className="w-9 h-9 flex items-center justify-center hover:bg-secondary rounded-full transition-all">
                   <Phone className="w-4 h-4 text-primary" />
                 </button>
-                <button className="p-2 hover:bg-secondary rounded-full transition-all">
+                <button className="w-9 h-9 flex items-center justify-center hover:bg-secondary rounded-full transition-all">
                   <Video className="w-4 h-4 text-primary" />
                 </button>
               </div>
@@ -214,7 +214,7 @@ export default function Chat() {
                 />
                 <button
                   onClick={handleSendMessage}
-                  className="p-2.5 bg-primary text-primary-foreground rounded-full hover:shadow-lg hover:shadow-primary/50 transition-all hover:bg-primary/90"
+                  className="w-10 h-10 flex items-center justify-center bg-primary text-primary-foreground rounded-full hover:shadow-lg hover:shadow-primary/50 transition-all hover:bg-primary/90"
                 >
                   <Send className="w-4 h-4" />
                 </button>
@@ -373,15 +373,15 @@ export default function Chat() {
               </div>
 
               <div className="flex gap-2">
-                <button className="p-3 hover:bg-secondary rounded-full transition-all border border-border">
+                <button className="w-11 h-11 flex items-center justify-center hover:bg-secondary rounded-full transition-all border border-border">
                   <Phone className="w-5 h-5 text-primary" />
                 </button>
-                <button className="p-3 hover:bg-secondary rounded-full transition-all border border-border">
+                <button className="w-11 h-11 flex items-center justify-center hover:bg-secondary rounded-full transition-all border border-border">
                   <Video className="w-5 h-5 text-primary" />
                 </button>
                 <button
                   onClick={() => setShareLocation(!shareLocation)}
-                  className={`p-3 rounded-full transition-all border ${
+                  className={`w-11 h-11 flex items-center justify-center rounded-full transition-all border ${
                     shareLocation
                       ? 'bg-primary/20 border-primary/50 text-primary'
                       : 'hover:bg-secondary border-border text-primary'
@@ -389,7 +389,7 @@ export default function Chat() {
                 >
                   <MapPin className="w-5 h-5" />
                 </button>
-                <button className="p-3 hover:bg-destructive/10 rounded-full transition-all border border-border">
+                <button className="w-11 h-11 flex items-center justify-center hover:bg-destructive/10 rounded-full transition-all border border-border">
                   <Flag className="w-5 h-5 text-destructive" />
                 </button>
               </div>

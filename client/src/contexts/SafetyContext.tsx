@@ -7,6 +7,8 @@ interface SafetyContextType {
   setUIStyle: (style: SafetyUIStyle) => void;
   edgeTabEnabled: boolean;
   setEdgeTabEnabled: (enabled: boolean) => void;
+  safetyMenuEnabled: boolean;
+  setSafetyMenuEnabled: (enabled: boolean) => void;
   liveLocationEnabled: boolean;
   setLiveLocationEnabled: (enabled: boolean) => void;
   warningAlertEnabled: boolean;
@@ -26,7 +28,12 @@ export function SafetyProvider({ children }: { children: React.ReactNode }) {
 
   const [edgeTabEnabled, setEdgeTabEnabledState] = useState<boolean>(() => {
     const saved = localStorage.getItem('edgeTabEnabled');
-    return saved !== null ? JSON.parse(saved) : true;
+    return saved !== null ? JSON.parse(saved) : false;
+  });
+
+  const [safetyMenuEnabled, setSafetyMenuEnabledState] = useState<boolean>(() => {
+    const saved = localStorage.getItem('safetyMenuEnabled');
+    return saved !== null ? JSON.parse(saved) : false;
   });
 
   const [liveLocationEnabled, setLiveLocationEnabledState] = useState<boolean>(() => {
@@ -54,6 +61,11 @@ export function SafetyProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('edgeTabEnabled', JSON.stringify(enabled));
   };
 
+  const setSafetyMenuEnabled = (enabled: boolean) => {
+    setSafetyMenuEnabledState(enabled);
+    localStorage.setItem('safetyMenuEnabled', JSON.stringify(enabled));
+  };
+
   const setLiveLocationEnabled = (enabled: boolean) => {
     setLiveLocationEnabledState(enabled);
     localStorage.setItem('liveLocationEnabled', JSON.stringify(enabled));
@@ -75,6 +87,8 @@ export function SafetyProvider({ children }: { children: React.ReactNode }) {
       setUIStyle, 
       edgeTabEnabled, 
       setEdgeTabEnabled,
+      safetyMenuEnabled,
+      setSafetyMenuEnabled,
       liveLocationEnabled,
       setLiveLocationEnabled,
       warningAlertEnabled,

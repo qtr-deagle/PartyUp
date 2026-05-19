@@ -146,7 +146,7 @@ export default function WarningButton({ className = '' }: WarningButtonProps) {
 
       {/* Confirmation Dialog */}
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <AlertDialogContent className="max-w-md">
+        <AlertDialogContent className="w-[90vw] max-h-[85vh] overflow-y-auto p-4">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-orange-600">
               <Shield className="w-5 h-5" />

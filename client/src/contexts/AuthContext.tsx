@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-export type UserRole = 'traveler' | 'admin';
+export type UserRole = 'user' | 'staff' | 'admin';
 
 export interface User {
   id: string;
@@ -54,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         id: '1',
         email,
         name: email.split('@')[0],
-        role: 'traveler',
+        role: 'user',
         verified: true,
       };
       setUser(mockUser);
@@ -101,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         id: Math.random().toString(36).substr(2, 9),
         email: `user@${provider}.com`,
         name: `${provider} User`,
-        role: 'traveler',
+        role: 'user',
         verified: true,
       };
       setUser(mockUser);

@@ -17,9 +17,11 @@ import WarningButton from './WarningButton';
 
 export default function SafetyMenu() {
   const [isExpanded, setIsExpanded] = useState(false);
-  const { safetyMenuEnabled } = useSafetyUI();
+  const { safetyMenuEnabled, sosEnabled } = useSafetyUI();
 
-  if (!safetyMenuEnabled) return null;
+  // Always show if safety menu is enabled (default true)
+  // Can be toggled via settings
+  if (!safetyMenuEnabled || !sosEnabled) return null;
 
   return (
     <div className="relative">

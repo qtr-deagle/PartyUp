@@ -43,7 +43,6 @@ type FilterState = {
   dateFrom: string;
   dateTo: string;
   purposes: TripPurpose[];
-  budgets: BudgetRange[];
   styles: TravelStyle[];
   interests: string[];
   seatsAvailableOnly: boolean;
@@ -83,6 +82,135 @@ const getOverlapDays = (aStart: string, aEnd: string, bStart: string, bEnd: stri
   const diff = end - start;
   return diff > 0 ? Math.ceil(diff / (1000 * 60 * 60 * 24)) : 0;
 };
+
+// Detailed matching breakdown component
+interface MatchingBreakdown {
+  destinationMatch: number;
+  budgetMatch: number;
+  styleMatch: number;
+  interestMatch: number;
+  purposeMatch: number;
+  overlapDays: number;
+}
+
+const computeDetailedBreakdown = (
+  traveler: Traveler,
+  userDestination: string = '',
+  userPurpose: TripPurpose | null = null,
+  userBudget: BudgetRange | null = null,
+  userStyle: TravelStyle | null = null,
+  userInterests: string[] = [],
+  userDateStart: string = '',
+  userDateEnd: string = ''
+): MatchingBreakdown => {
+  let destinationMatch = 0;
+  let budgetMatch = 0;
+  let styleMatch = 0;
+  let interestMatch = 0;
+  let purposeMatch = 0;
+  let overlapDays = 0;
+
+  // Destination matching
+  if (userDestination && traveler.destination.toLowerCase().includes(userDestination.toLowerCase())) {
+    destinationMatch = 100;
+  } else if (userDestination && traveler.origin.toLowerCase().includes(userDestination.toLowerCase())) {
+    destinationMatch = 50;
+  }
+
+  // Budget matching - disabled
+  budgetMatch = 0;
+
+  // Travel style matching
+  if (userStyle && traveler.travelStyle === userStyle) {
+    styleMatch = 100;
+  } else if (userStyle) {
+    styleMatch = 70; // Close style match
+  }
+
+  // Purpose matching
+  if (userPurpose && traveler.purpose === userPurpose) {
+    purposeMatch = 100;
+  } else if (userPurpose) {
+    purposeMatch = 60;
+  }
+
+  // Interest matching
+  if (userInterests.length > 0) {
+    const matchedInterests = traveler.interests.filter((interest) => userInterests.includes(interest)).length;
+    interestMatch = (matchedInterests / Math.max(userInterests.length, 1)) * 100;
+  } else {
+    interestMatch = 70; // Default if no interests set
+  }
+
+  // Date overlap
+  if (userDateStart && userDateEnd) {
+    overlapDays = getOverlapDays(traveler.dateStart, traveler.dateEnd, userDateStart, userDateEnd);
+  }
+
+  return {
+    destinationMatch: Math.round(destinationMatch),
+    budgetMatch: Math.round(budgetMatch),
+    styleMatch: Math.round(styleMatch),
+    interestMatch: Math.round(interestMatch),
+    purposeMatch: Math.round(purposeMatch),
+    overlapDays: overlapDays,
+  };
+};
+
+// Component to display matching breakdown
+const MatchingBreakdownCard: React.FC<{ breakdown: MatchingBreakdown; score: number }> = ({ breakdown, score }) => (
+  <div className="space-y-2 text-xs">
+    <p className="font-semibold text-muted-foreground uppercase tracking-wide mb-3">Why we matched</p>
+    
+    {breakdown.destinationMatch > 0 && (
+      <div className="flex items-center justify-between">
+        <span className="text-muted-foreground">Destination</span>
+        <div className="flex items-center gap-2">
+          <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
+            <div className="bg-accent h-full" style={{ width: `${breakdown.destinationMatch}%` }}></div>
+          </div>
+          <span className="font-semibold text-foreground w-7 text-right">{breakdown.destinationMatch}%</span>
+        </div>
+      </div>
+    )}
+
+    {breakdown.styleMatch > 0 && (
+      <div className="flex items-center justify-between">
+        <span className="text-muted-foreground">Travel Style</span>
+        <div className="flex items-center gap-2">
+          <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
+            <div className="bg-purple-500 h-full" style={{ width: `${breakdown.styleMatch}%` }}></div>
+          </div>
+          <span className="font-semibold text-foreground w-7 text-right">{breakdown.styleMatch}%</span>
+        </div>
+      </div>
+    )}
+
+    {breakdown.interestMatch > 0 && (
+      <div className="flex items-center justify-between">
+        <span className="text-muted-foreground">Interests</span>
+        <div className="flex items-center gap-2">
+          <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
+            <div className="bg-cyan-500 h-full" style={{ width: `${breakdown.interestMatch}%` }}></div>
+          </div>
+          <span className="font-semibold text-foreground w-7 text-right">{breakdown.interestMatch}%</span>
+        </div>
+      </div>
+    )}
+
+    {breakdown.overlapDays > 0 && (
+      <div className="flex items-center justify-between">
+        <span className="text-muted-foreground">Date Overlap</span>
+        <span className="font-semibold text-foreground">{breakdown.overlapDays} days</span>
+      </div>
+    )}
+
+    <div className="pt-2 mt-3 border-t border-border flex items-center justify-between">
+      <span className="font-semibold text-foreground">Overall Match</span>
+      <span className="font-bold text-primary text-sm">{Math.round(score)}%</span>
+    </div>
+  </div>
+);
 
 export default function Discovery() {
   const [travelers] = useState<Traveler[]>([
@@ -305,10 +433,6 @@ export default function Discovery() {
       result = result.filter((traveler) => filters.purposes.includes(traveler.purpose));
     }
 
-    if (filters.budgets.length > 0) {
-      result = result.filter((traveler) => filters.budgets.includes(traveler.budget));
-    }
-
     if (filters.styles.length > 0) {
       result = result.filter((traveler) => filters.styles.includes(traveler.travelStyle));
     }
@@ -497,9 +621,6 @@ export default function Discovery() {
                         <span className="px-2.5 py-1 rounded-full text-xs font-semibold border border-primary/40 text-primary">
                           {purposeLabels[currentTraveler.purpose]}
                         </span>
-                        <span className="px-2.5 py-1 rounded-full text-xs font-semibold border border-amber/40 text-amber">
-                          {budgetLabels[currentTraveler.budget]}
-                        </span>
                         <span className="px-2.5 py-1 rounded-full text-xs font-semibold border border-purple/40 text-purple">
                           {styleLabels[currentTraveler.travelStyle]}
                         </span>
@@ -543,19 +664,14 @@ export default function Discovery() {
                       </div>
                     )}
 
+                    <div className="px-5 py-4 border-b border-border">
+                      <MatchingBreakdownCard
+                        breakdown={computeDetailedBreakdown(currentTraveler)}
+                        score={currentTraveler.compatibilityScore}
+                      />
+                    </div>
+
                     <div className="px-5 py-4 space-y-3 mt-auto">
-                      <div>
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="text-xs text-muted-foreground">Compatibility</span>
-                          <span className="text-xs font-bold text-primary">{currentTraveler.compatibilityScore}%</span>
-                        </div>
-                        <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                          <div
-                            className="bg-primary h-full transition-all duration-300"
-                            style={{ width: `${currentTraveler.compatibilityScore}%` }}
-                          ></div>
-                        </div>
-                      </div>
                       <div className="flex gap-2">
                         <Button
                           onClick={() => handleViewDetails(currentTraveler)}
@@ -711,19 +827,14 @@ export default function Discovery() {
                     </div>
                   )}
 
+                  <div className="px-5 py-3 border-b border-border">
+                    <MatchingBreakdownCard
+                      breakdown={computeDetailedBreakdown(traveler)}
+                      score={traveler.compatibilityScore}
+                    />
+                  </div>
+
                   <div className="px-5 py-4 space-y-3">
-                    <div>
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-xs text-muted-foreground">Compatibility</span>
-                        <span className="text-xs font-bold text-primary">{traveler.compatibilityScore}%</span>
-                      </div>
-                      <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                        <div
-                          className="bg-primary h-full transition-all duration-300"
-                          style={{ width: `${traveler.compatibilityScore}%` }}
-                        ></div>
-                      </div>
-                    </div>
                     <div className="flex gap-2">
                       <Button
                         onClick={() => handleViewDetails(traveler)}
@@ -767,150 +878,150 @@ export default function Discovery() {
           )}
         </div>
 
-        {/* Filter Modal */}
+        {/* Filter Modal - Modern Compact Design */}
         <Dialog open={filterOpen} onOpenChange={setFilterOpen}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Filter Travelers</DialogTitle>
+          <DialogContent className="w-[90vh] max-h-[92vh] p-4 flex flex-col">
+            <DialogHeader className="mb-2 flex-shrink-0">
+              <DialogTitle className="text-xl">Filters</DialogTitle>
             </DialogHeader>
 
-            <div className="space-y-6">
+            <div className="space-y-3 flex-1 overflow-y-auto">
+              {/* Quick Stats */}
+              <div className="flex gap-2 text-xs text-muted-foreground">
+                <span className="px-2 py-1 bg-primary/10 text-primary rounded-full">
+                  {Object.values(filters).filter(v => v && (Array.isArray(v) ? v.length > 0 : v !== false && v !== 0 && v !== 60)).length} active
+                </span>
+              </div>
+
+              {/* Destination */}
               <div>
-                <Label className="text-base font-semibold">Destination</Label>
+                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5 block">Location</Label>
                 <Input
-                  placeholder="Search destination or origin..."
+                  placeholder="Paris, Tokyo, NYC..."
                   value={filters.destination}
                   onChange={(event) => setFilters((prev) => ({ ...prev, destination: event.target.value }))}
-                  className="mt-2"
+                  className="text-sm h-8"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-semibold">From Date</Label>
+              {/* Dates - Horizontal Layout */}
+              <div>
+                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5 block">Travel Dates</Label>
+                <div className="grid grid-cols-2 gap-1.5">
                   <Input
                     type="date"
                     value={filters.dateFrom}
                     onChange={(event) => setFilters((prev) => ({ ...prev, dateFrom: event.target.value }))}
+                    className="text-xs h-8"
                   />
-                </div>
-                <div>
-                  <Label className="text-sm font-semibold">To Date</Label>
                   <Input
                     type="date"
                     value={filters.dateTo}
                     onChange={(event) => setFilters((prev) => ({ ...prev, dateTo: event.target.value }))}
+                    className="text-xs h-8"
                   />
                 </div>
               </div>
 
+              {/* Budget - Pill Style */}
               <div>
-                <Label className="text-base font-semibold mb-3">Trip Purpose</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  {Object.keys(purposeLabels).map((purpose) => (
-                    <label key={purpose} className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={filters.purposes.includes(purpose as TripPurpose)}
-                        onCheckedChange={() => toggleFilterOption('purposes', purpose as TripPurpose)}
-                      />
-                      {purposeLabels[purpose as TripPurpose]}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-base font-semibold mb-3">Budget Range</Label>
-                <div className="grid grid-cols-2 gap-3">
+                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5 block">Budget</Label>
+                <div className="flex gap-1.5">
                   {Object.keys(budgetLabels).map((budget) => (
-                    <label key={budget} className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={filters.budgets.includes(budget as BudgetRange)}
-                        onCheckedChange={() => toggleFilterOption('budgets', budget as BudgetRange)}
-                      />
+                    <button
+                      key={budget}
+                      onClick={() => toggleFilterOption('budgets', budget as BudgetRange)}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
+                        filters.budgets.includes(budget as BudgetRange)
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                      }`}
+                    >
                       {budgetLabels[budget as BudgetRange]}
-                    </label>
+                    </button>
                   ))}
                 </div>
               </div>
 
+              {/* Trip Purpose - Pill Style */}
               <div>
-                <Label className="text-base font-semibold mb-3">Travel Style</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  {Object.keys(styleLabels).map((style) => (
-                    <label key={style} className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={filters.styles.includes(style as TravelStyle)}
-                        onCheckedChange={() => toggleFilterOption('styles', style as TravelStyle)}
-                      />
-                      {styleLabels[style as TravelStyle]}
-                    </label>
+                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5 block">Purpose</Label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {Object.keys(purposeLabels).map((purpose) => (
+                    <button
+                      key={purpose}
+                      onClick={() => toggleFilterOption('purposes', purpose as TripPurpose)}
+                      className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all text-center ${
+                        filters.purposes.includes(purpose as TripPurpose)
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                      }`}
+                    >
+                      {purposeLabels[purpose as TripPurpose]}
+                    </button>
                   ))}
                 </div>
               </div>
 
+              {/* Compatibility Slider */}
               <div>
-                <Label className="text-base font-semibold mb-3">Interests</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  {allInterests.map((interest) => (
-                    <label key={interest} className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={filters.interests.includes(interest)}
-                        onCheckedChange={() => toggleFilterOption('interests', interest)}
-                      />
-                      {interest}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg border border-border">
-                <Checkbox
-                  checked={filters.seatsAvailableOnly}
-                  onCheckedChange={() =>
-                    setFilters((prev) => ({ ...prev, seatsAvailableOnly: !prev.seatsAvailableOnly }))
-                  }
-                />
-                <span className="text-sm font-medium">Seats available only</span>
-              </div>
-
-              <div>
-                <Label className="text-base font-semibold">Minimum Compatibility ({filters.minCompatibility}%)</Label>
+                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 flex justify-between">
+                  <span>Compatibility</span>
+                  <span className="text-primary font-bold">{filters.minCompatibility}%+</span>
+                </Label>
                 <Slider
                   value={[filters.minCompatibility]}
                   min={0}
                   max={100}
                   step={5}
                   onValueChange={(value) => setFilters((prev) => ({ ...prev, minCompatibility: value[0] }))}
-                  className="mt-3"
+                  className="mt-0.5"
                 />
               </div>
 
-              <div className="flex gap-3 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    setFilters({
-                      destination: '',
-                      dateFrom: '',
-                      dateTo: '',
-                      purposes: [],
-                      budgets: [],
-                      styles: [],
-                      interests: [],
-                      seatsAvailableOnly: false,
-                      minCompatibility: 60,
-                    })
+              {/* Carpool Option */}
+              <div className="flex items-center gap-3 p-2.5 bg-primary/5 rounded-lg border border-primary/10">
+                <Checkbox
+                  checked={filters.seatsAvailableOnly}
+                  onCheckedChange={() =>
+                    setFilters((prev) => ({ ...prev, seatsAvailableOnly: !prev.seatsAvailableOnly }))
                   }
-                  className="flex-1"
-                >
-                  Reset
-                </Button>
-                <Button type="button" onClick={() => setFilterOpen(false)} className="flex-1">
-                  Apply Filters
-                </Button>
+                />
+                <span className="text-xs font-medium">Carpool available</span>
               </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-2 mt-3 flex-shrink-0 border-t border-border pt-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setFilters({
+                    destination: '',
+                    dateFrom: '',
+                    dateTo: '',
+                    purposes: [],
+                    budgets: [],
+                    styles: [],
+                    interests: [],
+                    seatsAvailableOnly: false,
+                    minCompatibility: 60,
+                  })
+                }
+                className="flex-1 text-xs"
+              >
+                Reset
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setFilterOpen(false)}
+                className="flex-1 text-xs"
+              >
+                Apply
+              </Button>
             </div>
           </DialogContent>
         </Dialog>

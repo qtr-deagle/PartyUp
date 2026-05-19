@@ -28,7 +28,18 @@ export default function Login() {
 
     try {
       await login(email, password);
-      setLocation('/');
+      // Route based on role
+      const storedUser = localStorage.getItem('partyup_user');
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        if (user?.role === 'admin') {
+          setLocation('/admin/dashboard');
+        } else if (user?.role === 'staff') {
+          setLocation('/staff/dashboard');
+        } else {
+          setLocation('/');
+        }
+      }
     } catch (err) {
       setError('Invalid email or password');
     } finally {
@@ -40,7 +51,18 @@ export default function Login() {
     setIsLoading(true);
     try {
       await oauthLogin(provider);
-      setLocation('/');
+      // Route based on role
+      const storedUser = localStorage.getItem('partyup_user');
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        if (user?.role === 'admin') {
+          setLocation('/admin/dashboard');
+        } else if (user?.role === 'staff') {
+          setLocation('/staff/dashboard');
+        } else {
+          setLocation('/');
+        }
+      }
     } catch (err) {
       setError(`${provider} login failed`);
     } finally {

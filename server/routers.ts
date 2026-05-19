@@ -6,6 +6,7 @@ import { z } from "zod";
 import { getDb, upsertUser, getUserByOpenId } from "./db";
 import { eq } from "drizzle-orm";
 import { users } from "../drizzle/schema";
+import { verificationRouter } from "./routers/verification";
 
 export const appRouter = router({
   system: systemRouter,
@@ -115,8 +116,6 @@ export const appRouter = router({
           phone: z.string().optional(),
           profilePhotoUrl: z.string().optional(),
           travelPreferences: z.any().optional(),
-          companyName: z.string().optional(),
-          businessLicense: z.string().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -132,8 +131,6 @@ export const appRouter = router({
           if (input.phone !== undefined) updateData.phone = input.phone;
           if (input.profilePhotoUrl !== undefined) updateData.profilePhotoUrl = input.profilePhotoUrl;
           if (input.travelPreferences !== undefined) updateData.travelPreferences = input.travelPreferences;
-          if (input.companyName !== undefined) updateData.companyName = input.companyName;
-          if (input.businessLicense !== undefined) updateData.businessLicense = input.businessLicense;
 
           await db
             .update(users)
@@ -170,6 +167,9 @@ export const appRouter = router({
         }
       }),
   }),
+
+  // ID Verification Router
+  verification: verificationRouter,
 
   // TODO: add feature routers here
 });

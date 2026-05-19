@@ -16,6 +16,7 @@ export function useCurrentPage(): string {
     '/messages': 'chat',
     '/map': 'map',
     '/profile': 'profile',
+    '/cars': 'profile', // Vehicle browsing accessed from profile
     '/my-trips': 'my-trips',
     '/trusted-circle': 'trusted',
     '/emergency': 'emergency',

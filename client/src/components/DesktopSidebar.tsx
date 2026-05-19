@@ -12,6 +12,8 @@ import {
   Moon,
   Sun,
   Bell,
+  Briefcase,
+  ChevronDown,
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { useCurrentPage } from '@/hooks/useCurrentPage';
@@ -85,7 +87,7 @@ export default function DesktopSidebar({
   const navItems = [
     { id: 'home', label: 'Home', icon: Home, path: '/' },
     { id: 'match', label: 'Find Buddy', icon: Heart, path: '/discovery' },
-    { id: 'carpooling', label: 'Carpooling', icon: Car, path: '/carpooling' },
+    { id: 'travel', label: 'Travel', icon: Briefcase, path: '/my-trips' },
     { id: 'map', label: 'Map', icon: Map, path: '/map' },
     { id: 'chat', label: 'Messages', icon: MessageCircle, path: '/chat' },
     { id: 'profile', label: 'Profile', icon: User, path: '/profile' },
@@ -189,7 +191,7 @@ export default function DesktopSidebar({
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-2 py-6 space-y-2 overflow-hidden">
+      <nav className="flex-1 px-2 py-6 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
           const active = currentPage === item.id;

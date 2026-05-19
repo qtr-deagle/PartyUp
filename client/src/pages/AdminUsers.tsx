@@ -1,16 +1,51 @@
 import React, { useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { Search, MoreVertical, Shield, Ban, CheckCircle } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function AdminUsers() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [suspendingUserId, setSuspendingUserId] = useState<number | null>(null);
+
+  const handleSuspendUser = async (userId: number) => {
+    setSuspendingUserId(userId);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 800));
+      toast.success('User suspended successfully');
+    } catch (error) {
+      toast.error('Failed to suspend user');
+    } finally {
+      setSuspendingUserId(null);
+    }
+  };
+
+  const handleUnsuspendUser = async (userId: number) => {
+    setSuspendingUserId(userId);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 800));
+      toast.success('User unsuspended successfully');
+    } catch (error) {
+      toast.error('Failed to unsuspend user');
+    } finally {
+      setSuspendingUserId(null);
+    }
+  };
+
+  const handleVerifyUser = async (userId: number) => {
+    try {
+      await new Promise(resolve => setTimeout(resolve, 600));
+      toast.success('User verified successfully');
+    } catch (error) {
+      toast.error('Failed to verify user');
+    }
+  }
 
   const users = [
-    { id: 1, name: 'John Doe', email: 'john@example.com', role: 'traveler', status: 'active', verified: true },
-    { id: 2, name: 'Jane Smith', email: 'jane@example.com', role: 'traveler', status: 'active', verified: true },
-    { id: 3, name: 'Mike Johnson', email: 'mike@example.com', role: 'traveler', status: 'suspended', verified: false },
-    { id: 4, name: 'Sarah Williams', email: 'sarah@example.com', role: 'traveler', status: 'active', verified: true },
-    { id: 5, name: 'Tom Brown', email: 'tom@example.com', role: 'traveler', status: 'inactive', verified: false },
+    { id: 1, name: 'John Doe', email: 'john@example.com', status: 'active', verified: true },
+    { id: 2, name: 'Jane Smith', email: 'jane@example.com', status: 'active', verified: true },
+    { id: 3, name: 'Mike Johnson', email: 'mike@example.com', status: 'suspended', verified: false },
+    { id: 4, name: 'Sarah Williams', email: 'sarah@example.com', status: 'active', verified: true },
+    { id: 5, name: 'Tom Brown', email: 'tom@example.com', status: 'inactive', verified: false },
   ];
 
   const filteredUsers = users.filter(user =>
@@ -22,11 +57,8 @@ export default function AdminUsers() {
     <AdminLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div>
           <h1 className="text-3xl font-bold text-foreground">Users Management</h1>
-          <button className="px-6 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:shadow-lg transition-smooth">
-            Add User
-          </button>
         </div>
 
         {/* Search Bar */}
@@ -49,7 +81,6 @@ export default function AdminUsers() {
                 <tr className="border-b border-border bg-secondary">
                   <th className="px-6 py-4 text-left text-sm font-bold text-foreground">User</th>
                   <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Email</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Role</th>
                   <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Status</th>
                   <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Verified</th>
                   <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Actions</th>
@@ -67,11 +98,6 @@ export default function AdminUsers() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-muted-foreground">{user.email}</td>
-                    <td className="px-6 py-4">
-                      <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium capitalize">
-                        {user.role.replace('_', ' ')}
-                      </span>
-                    </td>
                     <td className="px-6 py-4">
                       <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${
                         user.status === 'active' ? 'bg-green-100 text-green-700' :
@@ -93,15 +119,34 @@ export default function AdminUsers() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <button className="p-2 hover:bg-secondary rounded-lg transition-smooth" title="Verify user">
-                          <Shield className="w-4 h-4 text-primary" />
-                        </button>
-                        <button className="p-2 hover:bg-secondary rounded-lg transition-smooth" title="Suspend user">
-                          <Ban className="w-4 h-4 text-destructive" />
-                        </button>
-                        <button className="p-2 hover:bg-secondary rounded-lg transition-smooth">
-                          <MoreVertical className="w-4 h-4 text-muted-foreground" />
-                        </button>
+                        {!user.verified && (
+                          <button
+                            onClick={() => handleVerifyUser(user.id)}
+                            className="p-2 hover:bg-blue-500/10 text-blue-600 rounded-lg transition-smooth"
+                            title="Verify user"
+                          >
+                            <Shield className="w-4 h-4" />
+                          </button>
+                        )}
+                        {user.status === 'active' ? (
+                          <button
+                            onClick={() => handleSuspendUser(user.id)}
+                            disabled={suspendingUserId === user.id}
+                            className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition-smooth disabled:opacity-50"
+                            title="Suspend user"
+                          >
+                            <Ban className="w-4 h-4" />
+                          </button>
+                        ) : user.status === 'suspended' ? (
+                          <button
+                            onClick={() => handleUnsuspendUser(user.id)}
+                            disabled={suspendingUserId === user.id}
+                            className="p-2 hover:bg-green-500/10 text-green-600 rounded-lg transition-smooth disabled:opacity-50"
+                            title="Unsuspend user"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                          </button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

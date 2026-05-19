@@ -1,12 +1,79 @@
 import React, { useState } from 'react';
 import Layout from '@/components/Layout';
 import CreateRideModal from '@/components/CreateRideModal';
-import { MapPin, Calendar, Users, Star, Plus, Search, ArrowRight, Zap } from 'lucide-react';
+import { MapPin, Calendar, Users, Star, Plus, Search, ArrowRight, Zap, CreditCard, Smartphone, Lock } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function Carpooling() {
   const [activeTab, setActiveTab] = useState<'find' | 'create' | 'active' | 'history'>('find');
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateRide, setShowCreateRide] = useState(false);
+  const [bookingRideId, setBookingRideId] = useState<number | null>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'gcash' | 'maya'>('gcash');
+  const [processingPayment, setProcessingPayment] = useState(false);
+  const [selectedRideForPayment, setSelectedRideForPayment] = useState<any>(null);
+  const [cardData, setCardData] = useState({ cardNumber: '', expiry: '', cvc: '', name: '' });
+  const [gcashNumber, setGcashNumber] = useState('');
+
+  const getDeadlineStatus = () => {
+    if (!selectedRideForPayment) return null;
+    const deadline = new Date(selectedRideForPayment.paymentDeadline);
+    const today = new Date('2026-02-11'); // Using fixed date for demo
+    const daysLeft = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
+    
+    return {
+      daysLeft,
+      isPassed: daysLeft < 0,
+      isUrgent: daysLeft <= 3,
+      isSoon: daysLeft <= 7,
+    };
+  };
+
+  const calculateRidePrice = () => {
+    return selectedRideForPayment?.costPerSeat || '0';
+  };
+
+  const handleProcessPayment = async () => {
+    if (paymentMethod === 'card') {
+      if (!cardData.cardNumber || !cardData.expiry || !cardData.cvc || !cardData.name) {
+        toast.error('Please fill in all card details');
+        return;
+      }
+    } else {
+      if (!gcashNumber) {
+        toast.error('Please enter your GCash number');
+        return;
+      }
+    }
+
+    // Check if deadline has passed
+    if (getDeadlineStatus()?.isPassed) {
+      toast.error('Payment deadline has passed. Contact the driver to join.');
+      return;
+    }
+
+    setProcessingPayment(true);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      toast.success(`Payment of ₱${calculateRidePrice()} processed successfully!`);
+      
+      // Show commitment lock message
+      setTimeout(() => {
+        toast.info('🔒 You are now committed to this trip. Non-refundable unless trip is cancelled.');
+        setShowPaymentModal(false);
+        setBookingRideId(selectedRideForPayment.id);
+        setTimeout(() => {
+          toast.success('Ride request sent! Driver will confirm shortly.');
+          setBookingRideId(null);
+        }, 800);
+      }, 500);
+    } catch (error) {
+      toast.error('Payment failed. Please try again.');
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
 
   const handleCreateRide = (ride: {
     from: string;
@@ -14,12 +81,20 @@ export default function Carpooling() {
     date: string;
     time: string;
     seats: number;
-    costPerSeat: number;
     description: string;
+    pricePerPerson: number;
   }) => {
-    // Handle creating ride
     console.log('Ride created:', ride);
     setShowCreateRide(false);
+    toast.success('Ride created successfully!');
+  };
+
+  const handleRequestRide = (rideId: number) => {
+    const ride = availableRides.find(r => r.id === rideId);
+    if (ride) {
+      setSelectedRideForPayment(ride);
+      setShowPaymentModal(true);
+    }
   };
 
   const availableRides = [
@@ -32,10 +107,12 @@ export default function Carpooling() {
       time: '08:00 AM',
       seats: 3,
       booked: 1,
-      price: 150,
       rating: 4.8,
       verified: true,
       distance: '45 km',
+      costPerSeat: 360,
+      paymentDeadline: '2026-02-18', // 1 week before departure
+      paymentDeadlineLabel: '7 days',
     },
     {
       id: 2,
@@ -46,10 +123,12 @@ export default function Carpooling() {
       time: '10:30 AM',
       seats: 2,
       booked: 0,
-      price: 200,
       rating: 4.9,
       verified: true,
       distance: '60 km',
+      costPerSeat: 480,
+      paymentDeadline: '2026-02-18',
+      paymentDeadlineLabel: '7 days',
     },
     {
       id: 3,
@@ -60,10 +139,12 @@ export default function Carpooling() {
       time: '02:00 PM',
       seats: 4,
       booked: 2,
-      price: 120,
       rating: 4.7,
       verified: true,
       distance: '35 km',
+      costPerSeat: 280,
+      paymentDeadline: '2026-02-19',
+      paymentDeadlineLabel: '8 days',
     },
   ];
 
@@ -76,7 +157,6 @@ export default function Carpooling() {
       time: '08:00 AM',
       seats: 3,
       booked: 1,
-      price: 150,
       status: 'in-progress',
       passengers: ['Maria Santos'],
     },
@@ -88,7 +168,6 @@ export default function Carpooling() {
       from: 'Makati',
       to: 'Laguna',
       date: '2026-02-20',
-      price: 150,
       status: 'completed',
     },
     {
@@ -96,7 +175,6 @@ export default function Carpooling() {
       from: 'BGC',
       to: 'Boracay',
       date: '2026-02-15',
-      price: 500,
       status: 'completed',
     },
   ];
@@ -178,8 +256,7 @@ export default function Carpooling() {
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-3xl font-bold text-primary">₱{ride.price}</p>
-                            <p className="text-xs text-slate-400">per seat</p>
+                            <span className="px-2 py-1 bg-accent/20 border border-accent/50 text-accent text-xs font-semibold rounded-full">✓ Verified</span>
                           </div>
                         </div>
 
@@ -211,12 +288,16 @@ export default function Carpooling() {
                           </div>
                         </div>
 
-                        <div className="flex gap-3">
+                          <div className="flex gap-3">
                           <button className="flex-1 py-2.5 border border-primary/30 text-primary rounded-lg hover:bg-primary/5 transition-all font-semibold text-sm">
                             View Details
                           </button>
-                          <button className="flex-1 py-2.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all font-semibold text-sm">
-                            Book Now
+                          <button 
+                            onClick={() => handleRequestRide(ride.id)}
+                            disabled={bookingRideId === ride.id}
+                            className="flex-1 py-2.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all font-semibold text-sm disabled:opacity-50"
+                          >
+                            {bookingRideId === ride.id ? 'Requesting...' : 'Request Ride'}
                           </button>
                         </div>
                       </div>
@@ -230,9 +311,9 @@ export default function Carpooling() {
               <div className="p-12 bg-white dark:bg-linear-to-br dark:from-slate-900 dark:to-slate-800 border border-slate-200 dark:border-blue-600/20 rounded-2xl text-center">
                 <Plus className="w-16 h-16 text-blue-400 mx-auto mb-4" />
                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Share Your Ride</h3>
-                <p className="text-slate-400 mb-6 max-w-md mx-auto">Create a carpool and help fellow travelers reach their destination together</p>
+                <p className="text-slate-400 mb-6 max-w-md mx-auto">Offer a carpool and help fellow travelers reach their destination together</p>
                 <button onClick={() => setShowCreateRide(true)} className="px-8 py-3 bg-blue-600 dark:bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 dark:hover:bg-blue-700 transition-all">
-                  Create Ride
+                  Offer Ride
                 </button>
               </div>
             )}
@@ -249,9 +330,8 @@ export default function Carpooling() {
                         </div>
                         <h3 className="text-xl font-bold text-white">{ride.from} → {ride.to}</h3>
                       </div>
-                      <p className="text-3xl font-bold text-blue-400">₱{ride.price}</p>
                     </div>
-                    <div className="grid grid-cols-3 gap-4 py-4 border-y border-green-500/20">
+                    <div className="grid grid-cols-2 gap-4 py-4 border-y border-green-500/20">
                       <div>
                         <p className="text-xs text-slate-400 mb-1">Date & Time</p>
                         <p className="text-white font-semibold">{ride.date} {ride.time}</p>
@@ -259,12 +339,6 @@ export default function Carpooling() {
                       <div>
                         <p className="text-xs text-slate-400 mb-1">Passengers</p>
                         <p className="text-white font-semibold">{ride.booked}/{ride.seats}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-400 mb-1">Names</p>
-                        {ride.passengers.map((p) => (
-                          <p key={p} className="text-foreground font-semibold text-sm">{p}</p>
-                        ))}
                       </div>
                     </div>
                     <div className="flex gap-3 mt-4">
@@ -287,12 +361,12 @@ export default function Carpooling() {
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
                         <h3 className="text-lg font-bold text-foreground">{ride.from} → {ride.to}</h3>
-                        <p className="text-muted-foreground text-sm">{ride.date} • ₱{ride.price}</p>
+                        <p className="text-muted-foreground text-sm">{ride.date}</p>
                       </div>
                       <span className="px-4 py-2 bg-accent/20 text-accent rounded-full text-sm font-semibold">✓ Completed</span>
                     </div>
                   </div>
-                ))}
+                ))}"
               </div>
             )}
           </div>
@@ -316,8 +390,8 @@ export default function Carpooling() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-lg font-bold text-primary">₱{ride.price}</p>
-                      <p className="text-xs text-muted-foreground">/seat</p>
+                      <p className="text-lg font-bold text-primary">Available</p>
+                      <p className="text-xs text-muted-foreground">{ride.seats - ride.booked} seats</p>
                     </div>
                   </div>
 
@@ -331,8 +405,12 @@ export default function Carpooling() {
                     </p>
                   </div>
 
-                  <button className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg font-semibold text-sm">
-                    Book Now
+                  <button 
+                    onClick={() => handleRequestRide(ride.id)}
+                    disabled={bookingRideId === ride.id}
+                    className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg font-semibold text-sm disabled:opacity-50"
+                  >
+                    {bookingRideId === ride.id ? 'Requesting...' : 'Request Ride'}
                   </button>
                 </div>
               ))}
@@ -343,9 +421,9 @@ export default function Carpooling() {
               <div className="p-12 bg-card dark:bg-card border border-border rounded-2xl text-center">
                 <Plus className="w-16 h-16 text-primary mx-auto mb-4" />
                 <h3 className="text-xl font-bold text-foreground mb-2">Share Your Ride</h3>
-                <p className="text-sm text-muted-foreground mb-4">Create a carpool and help fellow travelers reach their destination together</p>
+                <p className="text-sm text-muted-foreground mb-4">Offer a carpool and help fellow travelers reach their destination together</p>
                 <button onClick={() => setShowCreateRide(true)} className="w-full py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-all">
-                Create Ride
+                Offer Ride
               </button>
             </div>
           )}
@@ -361,9 +439,9 @@ export default function Carpooling() {
                   <h3 className="font-bold text-foreground mb-2">{ride.from} → {ride.to}</h3>
                   <div className="space-y-1 text-sm mb-3 pb-3 border-b border-accent/20">
                     <p className="text-muted-foreground">{ride.date} at {ride.time}</p>
-                    <p className="text-foreground font-semibold">₱{ride.price} • {ride.booked}/{ride.seats} passengers</p>
+                    <p className="text-foreground font-semibold">{ride.booked}/{ride.seats} passengers</p>
                   </div>
-                  <button className="w-full py-2 border border-green-500/30 text-green-400 rounded-lg font-semibold text-sm">
+                  <button className="w-full py-2 border border-green-700/30 bg-green-200 text-green-700 rounded-lg font-semibold text-sm">
                     View Details
                   </button>
                 </div>
@@ -376,7 +454,7 @@ export default function Carpooling() {
               {rideHistory.map((ride) => (
                 <div key={ride.id} className="p-4 bg-card dark:bg-card border border-border rounded-lg">
                   <h3 className="font-semibold text-foreground mb-1 text-sm">{ride.from} → {ride.to}</h3>
-                  <p className="text-xs text-muted-foreground mb-2">{ride.date} • ₱{ride.price}</p>
+                  <p className="text-xs text-muted-foreground mb-2">{ride.date}</p>
                   <span className="text-xs px-2 py-1 bg-accent/20 text-accent rounded-full font-semibold">✓ Completed</span>
                 </div>
               ))}
@@ -385,6 +463,198 @@ export default function Carpooling() {
         </div>
 
         {/* Create Ride Modal */}
+        {/* Payment Modal */}
+        {showPaymentModal && selectedRideForPayment && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-card rounded-xl w-full max-w-sm shadow-2xl">
+              {/* Modal Header */}
+              <div className="bg-linear-to-r from-primary/20 to-accent/20 p-3 border-b border-border">
+                <h2 className="text-lg font-bold text-foreground">Confirm Booking</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {selectedRideForPayment.from} → {selectedRideForPayment.to}
+                </p>
+              </div>
+
+              {/* Modal Content */}
+              <div className="p-3 space-y-2">
+                {/* Ride Summary */}
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2 space-y-1">
+                  <p className="text-xs font-semibold text-blue-700">💰 FUEL COST</p>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="flex justify-between"><span className="text-muted-foreground">Distance:</span><span className="font-semibold">{selectedRideForPayment.distance}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Seats:</span><span className="font-semibold">{selectedRideForPayment.seats}</span></div>
+                  </div>
+                  <div className="flex justify-between text-xs pt-1 border-t border-blue-500/20">
+                    <span className="font-semibold">Each passenger's share:</span>
+                    <span className="text-base font-bold text-blue-600">₱{calculateRidePrice()}</span>
+                  </div>
+                </div>
+
+                {/* Payment Deadline */}
+                {getDeadlineStatus() && (
+                  <div className={`rounded p-2 border text-xs ${
+                    getDeadlineStatus().isPassed 
+                      ? 'bg-red-500/10 border-red-500/30' 
+                      : getDeadlineStatus().isUrgent 
+                      ? 'bg-orange-500/10 border-orange-500/30'
+                      : 'bg-green-500/10 border-green-500/30'
+                  }`}>
+                    <p className="font-semibold mb-1 flex items-center gap-1">
+                      {getDeadlineStatus().isPassed ? (
+                        <span className="text-red-700">❌ Deadline Passed</span>
+                      ) : getDeadlineStatus().isUrgent ? (
+                        <span className="text-orange-700">⏰ {getDeadlineStatus().daysLeft} days left</span>
+                      ) : (
+                        <span className="text-green-700">📅 {getDeadlineStatus().daysLeft} days</span>
+                      )}
+                    </p>
+                    <p className="text-muted-foreground">Pay by <strong>{selectedRideForPayment.paymentDeadline}</strong></p>
+                    {getDeadlineStatus().isUrgent && !getDeadlineStatus().isPassed && (
+                      <p className="text-orange-700 bg-orange-500/20 p-1 rounded mt-1">
+                        🔒 After payment: ₱50 cancellation fee applies
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Payment Method Selection */}
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold text-foreground">Payment Method</p>
+                  
+                  <button
+                    onClick={() => {
+                      setPaymentMethod('maya');
+                      setGcashNumber('');
+                    }}
+                    className={`w-full p-2 rounded border-2 transition-all flex items-center gap-2 text-left text-xs ${
+                      paymentMethod === 'maya'
+                        ? 'border-purple-500 bg-purple-500/5'
+                        : 'border-border hover:border-purple-500/50'
+                    }`}
+                  >
+                    <CreditCard className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                    <div>
+                      <p className="font-semibold">Maya</p>
+                      <p className="text-xs text-muted-foreground">Digital wallet</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setPaymentMethod('gcash');
+                      setCardData({ cardNumber: '', expiry: '', cvc: '', name: '' });
+                    }}
+                    className={`w-full p-2 rounded border-2 transition-all flex items-center gap-2 text-left text-xs ${
+                      paymentMethod === 'gcash'
+                        ? 'border-blue-500 bg-blue-500/5'
+                        : 'border-border hover:border-blue-500/50'
+                    }`}
+                  >
+                    <Smartphone className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                    <div>
+                      <p className="font-semibold">GCash</p>
+                      <p className="text-xs text-muted-foreground">Mobile wallet</p>
+                    </div>
+                  </button>
+                </div>
+
+                {/* Payment Form - Compact */}
+                {paymentMethod === 'maya' ? (
+                  <div className="space-y-1.5">
+                    <input
+                      type="text"
+                      placeholder="Name"
+                      value={cardData.name}
+                      onChange={(e) => setCardData({ ...cardData, name: e.target.value })}
+                      className="w-full px-2 py-1.5 bg-secondary border border-border rounded text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Card Number"
+                      maxLength={16}
+                      value={cardData.cardNumber}
+                      onChange={(e) => setCardData({ ...cardData, cardNumber: e.target.value.replace(/\D/g, '') })}
+                      className="w-full px-2 py-1.5 bg-secondary border border-border rounded text-xs focus:outline-none focus:ring-2 focus:ring-primary font-mono"
+                    />
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        placeholder="MM/YY"
+                        maxLength={5}
+                        value={cardData.expiry}
+                        onChange={(e) => {
+                          let val = e.target.value.replace(/\D/g, '');
+                          if (val.length >= 2) val = val.slice(0, 2) + '/' + val.slice(2, 4);
+                          setCardData({ ...cardData, expiry: val });
+                        }}
+                        className="flex-1 px-2 py-1.5 bg-secondary border border-border rounded text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                      <input
+                        type="text"
+                        placeholder="CVC"
+                        maxLength={3}
+                        value={cardData.cvc}
+                        onChange={(e) => setCardData({ ...cardData, cvc: e.target.value.replace(/\D/g, '') })}
+                        className="flex-1 px-2 py-1.5 bg-secondary border border-border rounded text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Lock className="w-3 h-3" />
+                      Secure & encrypted
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <input
+                      type="text"
+                      placeholder="GCash number (09XX...)"
+                      value={gcashNumber}
+                      onChange={(e) => setGcashNumber(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-secondary border border-border rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded p-1.5 text-xs text-blue-700">
+                      You'll get a prompt on your GCash app
+                    </div>
+                  </div>
+                )}
+
+                {/* Info Text */}
+                <p className="text-xs text-muted-foreground bg-secondary/50 p-1.5 rounded">
+                  ℹ️ Your share of fuel cost split evenly. No commission. After payment you're committed to the trip.
+                </p>
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-2 p-3 border-t border-border bg-secondary/30">
+                <button
+                  onClick={() => {
+                    setShowPaymentModal(false);
+                    setCardData({ cardNumber: '', expiry: '', cvc: '', name: '' });
+                    setGcashNumber('');
+                  }}
+                  disabled={processingPayment || getDeadlineStatus()?.isPassed}
+                  className="flex-1 py-2 border border-border text-foreground rounded text-xs hover:bg-secondary transition-all font-semibold disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleProcessPayment}
+                  disabled={processingPayment || getDeadlineStatus()?.isPassed}
+                  className={`flex-1 py-2 rounded text-xs transition-all font-semibold text-primary-foreground ${
+                    getDeadlineStatus()?.isPassed 
+                      ? 'bg-red-500 hover:bg-red-600 cursor-not-allowed'
+                      : getDeadlineStatus()?.isUrgent
+                      ? 'bg-orange-500 hover:bg-orange-600'
+                      : 'bg-primary hover:bg-primary/90'
+                  } disabled:opacity-50`}
+                >
+                  {processingPayment ? 'Processing...' : getDeadlineStatus()?.isPassed ? '❌ Deadline Passed' : `Agree & Request to Join`}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <CreateRideModal
           isOpen={showCreateRide}
           onClose={() => setShowCreateRide(false)}

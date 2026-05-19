@@ -15,9 +15,9 @@ import WarningButton from './WarningButton';
 
 export default function SafetyEdgeTab() {
     const [isExpanded, setIsExpanded] = useState(false);
-    const { edgeTabEnabled } = useSafetyUI();
+    const { edgeTabEnabled, sosEnabled } = useSafetyUI();
 
-    if (!edgeTabEnabled) return null;
+    if (!edgeTabEnabled || !sosEnabled) return null;
 
     return (
         <>

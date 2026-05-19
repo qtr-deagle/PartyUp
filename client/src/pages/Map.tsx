@@ -10,6 +10,7 @@ interface NearbyBuddy {
   direction: string;
   verified: boolean;
   matchType: 'travel-buddy' | 'carpool';
+  destination: string;
 }
 
 interface SafeZone {
@@ -43,9 +44,9 @@ export default function Map() {
   const [selectedBuddy, setSelectedBuddy] = useState<NearbyBuddy | null>(null);
 
   const nearbyBuddies: NearbyBuddy[] = [
-    { id: 1, name: 'Sarah', age: 24, distance: 0.8, direction: 'NE', verified: true, matchType: 'travel-buddy' },
-    { id: 2, name: 'Mike', age: 26, distance: 1.2, direction: 'SW', verified: true, matchType: 'carpool' },
-    { id: 3, name: 'Emma', age: 23, distance: 2.1, direction: 'E', verified: true, matchType: 'travel-buddy' },
+    { id: 1, name: 'Sarah', age: 24, distance: 0.8, direction: 'NE', verified: true, matchType: 'travel-buddy', destination: 'Batangas' },
+    { id: 2, name: 'Mike', age: 26, distance: 1.2, direction: 'SW', verified: true, matchType: 'carpool', destination: 'Tagaytay' },
+    { id: 3, name: 'Emma', age: 23, distance: 2.1, direction: 'E', verified: true, matchType: 'travel-buddy', destination: 'Batangas' },
   ];
 
   const safeZones: SafeZone[] = [
@@ -162,6 +163,12 @@ export default function Map() {
             </button>
           </div>
 
+          {/* Privacy Badge */}
+          <div className="absolute bottom-4 left-4 right-4 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 flex items-start gap-2 z-20">
+            <AlertCircle className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+            <span className="text-xs text-blue-700 font-medium">✓ Your location is hidden until you match with someone</span>
+          </div>
+
           {/* Current Location Button */}
           <button className="absolute top-4 right-4 p-3 bg-primary text-primary-foreground rounded-full shadow-lg hover:shadow-xl hover:shadow-primary/50 transition-all z-30 hover:bg-primary/90">
             <Navigation className="w-5 h-5" />
@@ -190,7 +197,7 @@ export default function Map() {
                     : 'bg-secondary/40 border-border hover:border-primary/40 hover:bg-secondary/60'
                 }`}
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     <div className="w-10 h-10 rounded-full bg-primary/30 border-primary/50 flex items-center justify-center font-bold text-primary text-sm shrink-0 border-2">
                       {buddy.name[0]}
@@ -200,12 +207,16 @@ export default function Map() {
                         <p className="font-semibold text-sm text-foreground">{buddy.name}, {buddy.age}</p>
                         {buddy.verified && <span className="text-accent text-xs">✓</span>}
                       </div>
-                      <p className="text-xs text-muted-foreground">{buddy.distance} km • {buddy.direction}</p>
+                      <p className="text-xs text-muted-foreground">{buddy.distance} km away</p>
                     </div>
                   </div>
                   <div className="px-2 py-1 rounded bg-primary/20 text-primary text-xs font-semibold shrink-0">
                     {buddy.matchType === 'travel-buddy' ? '🤝' : '🚗'}
                   </div>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-primary">
+                  <MapPin className="w-3 h-3" />
+                  {buddy.destination}
                 </div>
               </button>
             ))}
@@ -411,7 +422,11 @@ export default function Map() {
                         <p className="font-semibold text-xs text-foreground">{buddy.name}, {buddy.age}</p>
                         {buddy.verified && <span className="text-accent text-xs">✓</span>}
                       </div>
-                      <p className="text-xs text-primary font-medium mb-1">{buddy.distance} km • {buddy.direction}</p>
+                      <p className="text-xs text-primary font-medium mb-1.5 flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />
+                        {buddy.destination}
+                      </p>
+                      <p className="text-xs text-muted-foreground mb-1">{buddy.distance} km away</p>
                       <span className="inline-block px-1.5 py-0.5 bg-primary/15 text-primary text-xs rounded border border-primary/20">
                         {buddy.matchType === 'travel-buddy' ? 'Travel Buddy' : 'Carpool'}
                       </span>

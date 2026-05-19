@@ -28,12 +28,12 @@ export function SafetyProvider({ children }: { children: React.ReactNode }) {
 
   const [edgeTabEnabled, setEdgeTabEnabledState] = useState<boolean>(() => {
     const saved = localStorage.getItem('edgeTabEnabled');
-    return saved !== null ? JSON.parse(saved) : false;
+    return saved !== null ? JSON.parse(saved) : true;
   });
 
   const [safetyMenuEnabled, setSafetyMenuEnabledState] = useState<boolean>(() => {
     const saved = localStorage.getItem('safetyMenuEnabled');
-    return saved !== null ? JSON.parse(saved) : false;
+    return saved !== null ? JSON.parse(saved) : true;
   });
 
   const [liveLocationEnabled, setLiveLocationEnabledState] = useState<boolean>(() => {

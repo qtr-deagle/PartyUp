@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LayoutDashboard, Users, Plane, AlertCircle, Settings, LogOut, Moon, Sun } from 'lucide-react';
+import { LayoutDashboard, Users, Plane, AlertCircle, Settings, LogOut, Moon, Sun, BarChart3, Shield, Lock } from 'lucide-react';
 import { Link } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -26,9 +26,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
   const adminNavItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/admin/dashboard' },
-    { id: 'users', label: 'Users', icon: Users, path: '/admin/users' },
+    { id: 'staff', label: 'Staff', icon: Users, path: '/admin/staff' },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3, path: '/admin/analytics' },
+    { id: 'users', label: 'Users', icon: Shield, path: '/admin/users' },
     { id: 'trips', label: 'Trips', icon: Plane, path: '/admin/trips' },
     { id: 'reports', label: 'Reports', icon: AlertCircle, path: '/admin/reports' },
+    { id: 'audit', label: 'Audit Log', icon: Lock, path: '/admin/audit' },
   ];
 
   const handleLogout = () => {
@@ -89,7 +92,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const isExpanded = hovered;
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-background overflow-hidden">
       <aside
         ref={sidebarRef}
         onMouseEnter={() => {
@@ -153,7 +156,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           <button
             onClick={(event) => {
               handleSidebarItemClick(event);
-              toggleTheme();
+              if (toggleTheme) toggleTheme();
             }}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-smooth border-0 bg-transparent text-left cursor-pointer text-sidebar-foreground hover:bg-sidebar-accent/50"
           >
@@ -183,9 +186,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       </aside>
 
       <div className="flex-1 flex flex-col overflow-hidden ml-20">
-        <div className="flex-1 overflow-auto p-8">
+        <main className="flex-1 overflow-y-auto p-8">
           {children}
-        </div>
+        </main>
       </div>
     </div>
   );

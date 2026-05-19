@@ -32,7 +32,7 @@ describe("auth.registerOrUpdate", () => {
     expect(result.user?.email).toBe("john@example.com");
   });
 
-  it("registers a traveler user who can manage vehicle rentals", async () => {
+  it("registers a traveler user successfully", async () => {
     const ctx: TrpcContext = {
       user: null,
       req: {

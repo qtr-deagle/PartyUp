@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Upload } from 'lucide-react';
+import { X } from 'lucide-react';
 
 interface AddVehicleModalProps {
   isOpen: boolean;
@@ -8,7 +8,6 @@ interface AddVehicleModalProps {
     model: string;
     year: number;
     seats: number;
-    pricePerDay: number;
     description: string;
   }) => void;
 }
@@ -18,31 +17,30 @@ export default function AddVehicleModal({ isOpen, onClose, onSubmit }: AddVehicl
     model: '',
     year: new Date().getFullYear(),
     seats: 5,
-    pricePerDay: 0,
     description: '',
   });
 
   const handleSubmit = () => {
-    if (vehicle.model && vehicle.pricePerDay > 0) {
-      onSubmit(vehicle);
-      setVehicle({
-        model: '',
-        year: new Date().getFullYear(),
-        seats: 5,
-        pricePerDay: 0,
-        description: '',
-      });
+    if (!vehicle.model) {
+      alert('Please enter vehicle model');
+      return;
     }
+    
+    onSubmit(vehicle);
+    resetForm();
   };
 
-  const handleClose = () => {
+  const resetForm = () => {
     setVehicle({
       model: '',
       year: new Date().getFullYear(),
       seats: 5,
-      pricePerDay: 0,
       description: '',
     });
+  };
+
+  const handleClose = () => {
+    resetForm();
     onClose();
   };
 
@@ -58,25 +56,28 @@ export default function AddVehicleModal({ isOpen, onClose, onSubmit }: AddVehicl
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-200">
-        <div className="bg-card border border-border rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div className="bg-card border border-border rounded-2xl shadow-xl max-w-md w-full max-h-[92vh] p-4 flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-card">
+          <div className="flex items-center justify-between mb-3 flex-shrink-0">
             <div>
-              <h2 className="text-xl font-bold text-foreground">List Your Vehicle</h2>
-              <p className="text-xs text-muted-foreground mt-1">Earn money by renting to verified travelers</p>
+              <h2 className="text-lg font-bold text-foreground">Add My Vehicle</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">Track your personal vehicle for carpooling</p>
             </div>
             <button
               onClick={handleClose}
-              className="p-1 hover:bg-secondary rounded-lg transition-smooth"
+              className="p-1 hover:bg-secondary rounded-lg transition-smooth flex-shrink-0"
             >
               <X className="w-5 h-5 text-muted-foreground" />
             </button>
           </div>
 
+          {/* Divider */}
+          <div className="border-t border-border mb-3"></div>
+
           {/* Content */}
-          <div className="p-6 space-y-4">
+          <div className="space-y-3 flex-1 overflow-y-auto">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
+              <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
                 Vehicle Model *
               </label>
               <input
@@ -84,13 +85,13 @@ export default function AddVehicleModal({ isOpen, onClose, onSubmit }: AddVehicl
                 placeholder="e.g., Toyota Camry 2023"
                 value={vehicle.model}
                 onChange={(e) => setVehicle({ ...vehicle, model: e.target.value })}
-                className="w-full px-4 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
+                <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
                   Year
                 </label>
                 <input
@@ -99,18 +100,18 @@ export default function AddVehicleModal({ isOpen, onClose, onSubmit }: AddVehicl
                   max={new Date().getFullYear()}
                   value={vehicle.year}
                   onChange={(e) => setVehicle({ ...vehicle, year: parseInt(e.target.value) })}
-                  className="w-full px-4 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
+                <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
                   Seats
                 </label>
                 <select
                   value={vehicle.seats}
                   onChange={(e) => setVehicle({ ...vehicle, seats: parseInt(e.target.value) })}
-                  className="w-full px-4 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="2">2 seats</option>
                   <option value="4">4 seats</option>
@@ -122,58 +123,31 @@ export default function AddVehicleModal({ isOpen, onClose, onSubmit }: AddVehicl
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Price per Day (₱) *
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="100"
-                placeholder="e.g., 2500"
-                value={vehicle.pricePerDay}
-                onChange={(e) => setVehicle({ ...vehicle, pricePerDay: parseInt(e.target.value) })}
-                className="w-full px-4 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
+              <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
                 Description
               </label>
               <textarea
-                placeholder="Describe your vehicle condition, features, and rental terms..."
+                placeholder="Describe your vehicle (color, features, condition)..."
                 value={vehicle.description}
                 onChange={(e) => setVehicle({ ...vehicle, description: e.target.value })}
-                className="w-full px-4 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none h-24"
+                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none h-16"
               />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Photos
-              </label>
-              <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:bg-secondary/50 transition-smooth cursor-pointer">
-                <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">Click to upload photos</p>
-                <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 10MB</p>
-              </div>
             </div>
           </div>
 
           {/* Footer */}
-          <div className="flex gap-3 p-6 border-t border-border sticky bottom-0 bg-card">
+          <div className="border-t border-border mt-3 pt-3 flex gap-2 flex-shrink-0">
             <button
               onClick={handleClose}
-              className="flex-1 py-2.5 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-secondary transition-smooth"
+              className="flex-1 py-2 px-4 bg-secondary text-foreground rounded-lg text-sm font-medium transition-smooth hover:bg-secondary/80"
             >
               Cancel
             </button>
             <button
               onClick={handleSubmit}
-              disabled={!vehicle.model || vehicle.pricePerDay <= 0}
-              className="flex-1 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-smooth"
+              className="flex-1 py-2 px-4 bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-smooth hover:bg-primary/90"
             >
-              List Vehicle
+              Add Vehicle
             </button>
           </div>
         </div>

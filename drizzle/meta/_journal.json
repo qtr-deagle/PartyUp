@@ -15,6 +15,13 @@
       "when": 1770953725679,
       "tag": "0001_breezy_black_tom",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1771094400000,
+      "tag": "0002_add_id_verifications",
+      "breakpoints": true
     }
   ]
 }

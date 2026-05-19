@@ -15,7 +15,6 @@ import {
 /**
  * Core user table backing auth flow.
  * Extended with role-specific fields for Traveler and Admin.
- * Travelers can also manage vehicle rentals.
  */
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
@@ -24,7 +23,7 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 320 }),
   phone: varchar("phone", { length: 20 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin", "traveler"]).default("user").notNull(),
+  role: mysqlEnum("role", ["user", "staff", "admin"]).default("user").notNull(),
   
   // Profile information
   profilePhotoUrl: text("profilePhotoUrl"),
@@ -39,11 +38,6 @@ export const users = mysqlTable("users", {
   // Traveler-specific
   travelPreferences: json("travelPreferences"), // { interests: [], budget: "", style: "" }
   travelHistory: json("travelHistory"), // Array of trip IDs
-  
-  // Vehicle rental-specific (for travelers who rent vehicles)
-  companyName: varchar("companyName", { length: 255 }),
-  businessLicense: varchar("businessLicense", { length: 255 }),
-  bankAccount: varchar("bankAccount", { length: 255 }),
   
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -94,17 +88,18 @@ export type Trip = typeof trips.$inferSelect;
 export type InsertTrip = typeof trips.$inferInsert;
 
 /**
- * Cars listed by car renters
+ * Personal vehicles for travelers
+ * Used for carpooling and trip tracking
  */
 export const cars = mysqlTable("cars", {
   id: int("id").autoincrement().primaryKey(),
-  renterId: int("renterId").notNull(),
+  userId: int("userId").notNull(),
   
   // Vehicle information
   make: varchar("make", { length: 100 }).notNull(),
   model: varchar("model", { length: 100 }).notNull(),
   year: int("year").notNull(),
-  licensePlate: varchar("licensePlate", { length: 50 }).notNull().unique(),
+  licensePlate: varchar("licensePlate", { length: 50 }),
   vin: varchar("vin", { length: 100 }),
   
   // Specifications
@@ -113,20 +108,21 @@ export const cars = mysqlTable("cars", {
   fuelType: mysqlEnum("fuelType", ["gasoline", "diesel", "electric", "hybrid"]),
   mileage: int("mileage"),
   
-  // Rental details
-  dailyRate: decimal("dailyRate", { precision: 10, scale: 2 }).notNull(),
-  location: varchar("location", { length: 255 }).notNull(),
-  locationCoords: json("locationCoords"), // { lat: number, lng: number }
-  
   // Media
   photos: json("photos"), // Array of S3 URLs
   
-  // Features
-  features: json("features"), // Array: AC, GPS, WiFi, etc.
+  // Description
+  description: text("description"),
+  
+  // Verification (for carpooling safety)
+  isVerified: boolean("isVerified").default(false),
+  verificationStatus: mysqlEnum("verificationStatus", ["pending", "approved", "rejected"]).default("pending"),
+  verifiedBy: int("verifiedBy"), // Staff member who verified
+  verificationNotes: text("verificationNotes"),
+  verifiedAt: timestamp("verifiedAt"),
   
   // Status
-  status: mysqlEnum("status", ["available", "unavailable", "maintenance"]).default("available"),
-  isVerified: boolean("isVerified").default(false),
+  status: mysqlEnum("status", ["active", "inactive", "maintenance"]).default("active"),
   
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -134,39 +130,6 @@ export const cars = mysqlTable("cars", {
 
 export type Car = typeof cars.$inferSelect;
 export type InsertCar = typeof cars.$inferInsert;
-
-/**
- * Bookings for car rentals
- */
-export const bookings = mysqlTable("bookings", {
-  id: int("id").autoincrement().primaryKey(),
-  carId: int("carId").notNull(),
-  travelerId: int("travelerId").notNull(),
-  renterId: int("renterId").notNull(),
-  
-  // Booking details
-  startDate: datetime("startDate").notNull(),
-  endDate: datetime("endDate").notNull(),
-  totalDays: int("totalDays").notNull(),
-  
-  // Pricing
-  dailyRate: decimal("dailyRate", { precision: 10, scale: 2 }).notNull(),
-  totalCost: decimal("totalCost", { precision: 10, scale: 2 }).notNull(),
-  depositAmount: decimal("depositAmount", { precision: 10, scale: 2 }),
-  
-  // Payment
-  paymentStatus: mysqlEnum("paymentStatus", ["pending", "completed", "refunded"]).default("pending"),
-  stripePaymentId: varchar("stripePaymentId", { length: 255 }),
-  
-  // Status
-  status: mysqlEnum("status", ["pending", "confirmed", "completed", "cancelled"]).default("pending"),
-  
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type Booking = typeof bookings.$inferSelect;
-export type InsertBooking = typeof bookings.$inferInsert;
 
 /**
  * Trip memberships - travelers joining trips
@@ -401,18 +364,65 @@ export type ReportedUser = typeof reportedUsers.$inferSelect;
 export type InsertReportedUser = typeof reportedUsers.$inferInsert;
 
 /**
- * Car availability calendar
+ * ID Verifications for user registration
+ * Stores facial recognition results and staff verification status
  */
-export const carAvailability = mysqlTable("carAvailability", {
+export const idVerifications = mysqlTable("idVerifications", {
   id: int("id").autoincrement().primaryKey(),
-  carId: int("carId").notNull(),
+  userId: int("userId").notNull().unique(), // Each user can only have one active verification
   
-  date: datetime("date").notNull(),
-  isAvailable: boolean("isAvailable").default(true),
-  bookedBy: int("bookedBy"),
+  // ID Information (encrypted in production)
+  idNumber: varchar("idNumber", { length: 255 }).notNull(),
+  dateOfBirth: varchar("dateOfBirth", { length: 10 }).notNull(), // YYYY-MM-DD
   
+  // S3 Storage URLs
+  selfieUrl: text("selfieUrl").notNull(),
+  idPhotoUrl: text("idPhotoUrl"),
+  
+  // AWS Rekognition Results
+  facialMatchScore: int("facialMatchScore").default(0), // 0-100
+  facialMatchStatus: mysqlEnum("facialMatchStatus", [
+    "high_confidence",  // 90+% match
+    "manual_review",    // 70-89% match
+    "rejected",         // <70% match
+  ]).default("rejected"),
+  
+  // ID Document Analysis
+  idTypeDetected: varchar("idTypeDetected", { length: 50 }), // passport, driver_license, etc
+  idValidityScore: int("idValidityScore").default(0), // 0-100
+  idExpirationValid: boolean("idExpirationValid").default(false),
+  
+  // Staff Review
+  staffReviewedBy: int("staffReviewedBy"), // Reference to staff member user ID
+  staffReviewNotes: text("staffReviewNotes"),
+  staffDecision: mysqlEnum("staffDecision", [
+    "approved",
+    "rejected",
+    "needs_new_selfie",
+  ]),
+  staffDecisionReason: text("staffDecisionReason"),
+  
+  // Status
+  verificationStatus: mysqlEnum("verificationStatus", [
+    "pending",
+    "approved",
+    "rejected",
+  ]).default("pending"),
+  
+  // System Flags
+  nameMatchesId: boolean("nameMatchesId").default(true),
+  dobMatchesId: boolean("dobMatchesId").default(true),
+  isIdDuplicate: boolean("isIdDuplicate").default(false),
+  
+  // Audit Trail
+  auditLog: json("auditLog"), // Array of { action, actor, timestamp, details }
+  
+  // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
+  reviewedAt: timestamp("reviewedAt"),
+  expiresAt: timestamp("expiresAt"), // For annual re-verification
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
-export type CarAvailability = typeof carAvailability.$inferSelect;
-export type InsertCarAvailability = typeof carAvailability.$inferInsert;
+export type IdVerification = typeof idVerifications.$inferSelect;
+export type InsertIdVerification = typeof idVerifications.$inferInsert;

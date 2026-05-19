@@ -88,7 +88,7 @@ export default function Profile() {
             <p className="text-sm text-muted-foreground mt-2">Manage your travel buddy profile</p>
           </div>
           <button
-            onClick={() => setLocation('/settings')}
+            onClick={() => setLocation('/profile/edit')}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:shadow-md transition-smooth"
           >
             <Edit2 className="w-5 h-5" />
@@ -199,7 +199,10 @@ export default function Profile() {
                 </div>
               ))}
             </div>
-            <button className="w-full py-2 border border-border rounded-lg text-sm font-medium transition-smooth hover:bg-secondary">
+            <button
+              onClick={() => setLocation('/trusted-circle')}
+              className="w-full py-2 border border-border rounded-lg text-sm font-medium transition-smooth hover:bg-secondary"
+            >
               Add Contact
             </button>
           </div>
@@ -386,7 +389,10 @@ export default function Profile() {
                   </div>
                 ))}
               </div>
-              <button className="w-full py-2 border border-border rounded-lg text-sm font-medium transition-smooth hover:bg-secondary">
+              <button
+                onClick={() => setLocation('/trusted-circle')}
+                className="w-full py-2 border border-border rounded-lg text-sm font-medium transition-smooth hover:bg-secondary"
+              >
                 Add Contact
               </button>
             </div>

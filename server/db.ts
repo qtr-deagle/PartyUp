@@ -5,7 +5,6 @@ import {
   users,
   trips,
   cars,
-  bookings,
   messages,
   notifications,
   reviews,
@@ -120,7 +119,7 @@ export async function getActiveTrips(limit = 50) {
   return await db.select().from(trips).where(eq(trips.status, 'active')).limit(limit);
 }
 
-// Car queries
+// Car queries (Personal vehicles)
 export async function getCarById(id: number) {
   const db = await getDb();
   if (!db) return undefined;
@@ -128,18 +127,10 @@ export async function getCarById(id: number) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function getAvailableCars(limit = 50) {
+export async function getUserCars(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(cars).where(eq(cars.status, 'available')).limit(limit);
-}
-
-// Booking queries
-export async function getBookingById(id: number) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const result = await db.select().from(bookings).where(eq(bookings.id, id)).limit(1);
-  return result.length > 0 ? result[0] : undefined;
+  return await db.select().from(cars).where(eq(cars.userId, userId));
 }
 
 // Message queries
@@ -180,4 +171,4 @@ export async function getUserReviews(userId: number) {
 
 // TODO: add more feature queries as needed
 
-export { users, trips, cars, bookings, messages, notifications, reviews };
+export { users, trips, cars, messages, notifications, reviews };

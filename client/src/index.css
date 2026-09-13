@@ -1,10 +1,13 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* Prevent scrollbar layout shift on page transitions */
 html, body {
-  scrollbar-gutter: stable;
-  overflow-y: scroll;
+  overflow-y: auto;
+  color-scheme: light;
+}
+
+html.dark, html.dark body {
+  color-scheme: dark;
 }
 
 @custom-variant dark (&:is(.dark *));

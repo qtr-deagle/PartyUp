@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import Layout from '@/components/Layout';
 import { Link } from 'wouter';
-import { MapPin, Calendar, Users, Plus, Edit2, Trash2, CheckCircle, X, Map, Phone, MessageCircle, AlertCircle, Clock, Gauge, Star, History } from 'lucide-react';
+import { MapPin, Calendar, Users, Plus, Edit2, Trash2, X, Map, Phone, MessageCircle, AlertCircle, Clock, Gauge, Star, History, Compass, Archive } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface Trip {
   id: number;
@@ -41,9 +42,35 @@ interface Trip {
  * - View matched buddies for each trip
  */
 export default function MyTrips() {
-  const [activeTab, setActiveTab] = useState<'carpool' | 'tours'>('carpool');
+  const [activeTab, setActiveTab] = useState<'ongoing' | 'upcoming' | 'history'>('ongoing');
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const [createMode, setCreateMode] = useState<'choose' | 'carpool' | 'tour'>('choose');
+  const [carpoolForm, setCarpoolForm] = useState({
+    from: '',
+    to: '',
+    date: '',
+    time: '',
+    seats: '1',
+    price: '',
+    description: '',
+    carModel: '',
+    carColor: '',
+    carPlate: '',
+    allowPets: false,
+    allowSmoking: false,
+    musicPreference: 'any',
+  });
+  const [tourForm, setTourForm] = useState({
+    title: '',
+    destination: '',
+    date: '',
+    duration: '1',
+    maxParticipants: '20',
+    price: '',
+    description: '',
+    itinerary: '',
+  });
   const [trips] = useState<Trip[]>([
     {
       id: 1,
@@ -132,18 +159,61 @@ export default function MyTrips() {
         ],
       },
     },
+    {
+      id: 4,
+      destination: 'Tagaytay Weekend Escape',
+      pickupLocation: 'BGC',
+      startDate: 'Jan 12, 2026',
+      endDate: 'Jan 13, 2026',
+      buddiesNeeded: 5,
+      currentBuddies: 5,
+      status: 'completed',
+      interests: ['Leisure', 'Food Trips', 'Relaxation'],
+      type: 'tour',
+      pricePerPerson: 2400,
+      eta: '1 hr 15 mins',
+      distance: '65 km',
+      driver: {
+        name: 'Elena Cruz',
+        rating: 4.9,
+        verified: true,
+        avatar: 'E',
+      },
+      vehicle: 'Toyota Hiace: GHI 9012',
+      passengers: {
+        current: 5,
+        max: 5,
+        list: [
+          { name: 'Nina Patel', avatar: 'N' },
+          { name: 'Mark Tan', avatar: 'M' },
+        ],
+      },
+    },
   ]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active':
-        return 'bg-accent/10 text-accent';
+        return 'bg-emerald-500/10 text-emerald-600';
       case 'upcoming':
-        return 'bg-primary/10 text-primary';
+        return 'bg-blue-500/10 text-blue-600';
       case 'completed':
-        return 'bg-secondary text-secondary-foreground';
+        return 'bg-muted text-muted-foreground';
       default:
         return 'bg-secondary text-secondary-foreground';
+    }
+  };
+
+  const getStatusLabel = (status: Trip['status']) => {
+    switch (status) {
+      case 'active':
+        return 'Ongoing';
+      case 'upcoming':
+        return 'Upcoming';
+      case 'completed':
+        return 'History';
+      default:
+        return status;
     }
   };
 
@@ -174,8 +244,85 @@ export default function MyTrips() {
     setSelectedTrip(null);
   };
 
-  // Filter trips based on active tab
-  const filteredTrips = trips.filter(trip => trip.type === activeTab);
+  const openCreateMenu = () => {
+    setCreateMode('choose');
+    setCreateMenuOpen(true);
+  };
+
+  const closeCreateMenu = () => {
+    setCreateMenuOpen(false);
+    setCreateMode('choose');
+  };
+
+  const updateCarpoolForm = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const target = event.currentTarget;
+    const isCheckbox = target instanceof HTMLInputElement && target.type === 'checkbox';
+    setCarpoolForm((previous) => ({
+      ...previous,
+      [target.name]: isCheckbox ? target.checked : target.value,
+    }));
+  };
+
+  const updateTourForm = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = event.target;
+    setTourForm((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+  };
+
+  const handleCreateSubmit = () => {
+    if (createMode === 'carpool') {
+      if (!carpoolForm.from || !carpoolForm.to || !carpoolForm.date || !carpoolForm.time || !carpoolForm.price || !carpoolForm.carModel) {
+        toast.error('Please fill in the required carpool fields');
+        return;
+      }
+
+      toast.success('Carpool draft ready');
+      closeCreateMenu();
+      return;
+    }
+
+    if (!tourForm.title || !tourForm.destination || !tourForm.date || !tourForm.price) {
+      toast.error('Please fill in the required travel fields');
+      return;
+    }
+
+    toast.success('Travel draft ready');
+    closeCreateMenu();
+  };
+
+  const filteredTrips = trips.filter((trip) => {
+    if (activeTab === 'ongoing') {
+      return trip.status === 'active';
+    }
+
+    if (activeTab === 'upcoming') {
+      return trip.status === 'upcoming';
+    }
+
+    return trip.status === 'completed';
+  });
+
+  const sectionMeta = {
+    ongoing: {
+      title: 'Ongoing Travels',
+      description: 'Trips that are currently active and need your attention.',
+      icon: Compass,
+    },
+    upcoming: {
+      title: 'Upcoming Travels',
+      description: 'Planned trips coming soon.',
+      icon: Calendar,
+    },
+    history: {
+      title: 'Travel History',
+      description: 'Completed trips you have already finished.',
+      icon: Archive,
+    },
+  }[activeTab];
+
+  const SectionIcon = sectionMeta.icon;
 
   return (
     <Layout>
@@ -183,7 +330,7 @@ export default function MyTrips() {
       <div className="md:hidden sticky top-0 bg-card border-b border-border z-30 p-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-primary">My Trips</h1>
         <button
-          onClick={() => setCreateMenuOpen(true)}
+          onClick={openCreateMenu}
           className="p-2 rounded-lg hover:bg-secondary transition-smooth bg-primary text-primary-foreground"
         >
           <Plus className="w-5 h-5" />
@@ -198,7 +345,7 @@ export default function MyTrips() {
             <p className="text-sm text-muted-foreground mt-2">Manage your travel plans and find buddies</p>
           </div>
           <button
-            onClick={() => setCreateMenuOpen(true)}
+            onClick={openCreateMenu}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:shadow-md transition-smooth"
           >
             <Plus className="w-5 h-5" />
@@ -211,24 +358,34 @@ export default function MyTrips() {
       <div className="sticky top-16 md:top-28 z-20 bg-card border-b border-border">
         <div className="p-4 md:px-8 flex gap-4">
           <button
-            onClick={() => setActiveTab('carpool')}
+            onClick={() => setActiveTab('ongoing')}
             className={`px-6 py-2 font-medium text-sm rounded-lg transition-smooth ${
-              activeTab === 'carpool'
+              activeTab === 'ongoing'
+                ? 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Ongoing
+          </button>
+          <button
+            onClick={() => setActiveTab('upcoming')}
+            className={`px-6 py-2 font-medium text-sm rounded-lg transition-smooth ${
+              activeTab === 'upcoming'
                 ? 'bg-blue-500/20 text-blue-600 border border-blue-500/30'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            🚗 Carpool
+            Upcoming
           </button>
           <button
-            onClick={() => setActiveTab('tours')}
+            onClick={() => setActiveTab('history')}
             className={`px-6 py-2 font-medium text-sm rounded-lg transition-smooth ${
-              activeTab === 'tours'
-                ? 'bg-purple-500/20 text-purple-600 border border-purple-500/30'
+              activeTab === 'history'
+                ? 'bg-muted text-foreground border border-border'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            ✈️ Tours
+            History
           </button>
         </div>
       </div>
@@ -238,20 +395,37 @@ export default function MyTrips() {
         {/* Empty State */}
         {filteredTrips.length === 0 && (
           <div className="text-center py-16">
-            <div className="text-5xl mb-4">{activeTab === 'carpool' ? '🚗' : '✈️'}</div>
-            <h3 className="text-lg font-bold text-foreground mb-2">No {activeTab} trips yet</h3>
+            <div className="text-5xl mb-4">
+              {activeTab === 'ongoing' ? '🚗' : activeTab === 'upcoming' ? '🗓️' : '📋'}
+            </div>
+            <h3 className="text-lg font-bold text-foreground mb-2">No {sectionMeta.title.toLowerCase()} yet</h3>
             <p className="text-sm text-muted-foreground mb-6">
-              {activeTab === 'carpool'
-                ? 'Create a carpool ride or join an existing one to get started'
-                : 'Join a tour or create one to get started'}
+              {activeTab === 'ongoing'
+                ? 'Start or join a trip to see it here when it is active.'
+                : activeTab === 'upcoming'
+                  ? 'Schedule a trip or join one that is coming up soon.'
+                  : 'Completed trips will appear here after they finish.'}
             </p>
             <button
-              onClick={() => setCreateMenuOpen(true)}
+              onClick={openCreateMenu}
               className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:shadow-md transition-smooth"
             >
               <Plus className="w-4 h-4" />
-              <span>Create {activeTab === 'carpool' ? 'Carpool' : 'Tour'}</span>
+              <span>Create Trip</span>
             </button>
+          </div>
+        )}
+
+        {/* Section intro */}
+        {filteredTrips.length > 0 && (
+          <div className="mb-6 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+              <SectionIcon className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-foreground">{sectionMeta.title}</h2>
+              <p className="text-sm text-muted-foreground">{sectionMeta.description}</p>
+            </div>
           </div>
         )}
 
@@ -338,7 +512,7 @@ export default function MyTrips() {
                       <div className="flex items-center gap-3 mb-2 flex-wrap">
                         <h3 className="text-2xl font-bold">{trip.destination}</h3>
                         <span className={`px-3 py-1 rounded-full text-xs font-bold ${getStatusColor(trip.status)}`}>
-                          {trip.status.charAt(0).toUpperCase() + trip.status.slice(1)}
+                          {getStatusLabel(trip.status)}
                         </span>
                         <span className={`px-3 py-1 rounded-full text-xs font-bold ${getTypeColor(trip.type)}`}>
                           {trip.type.charAt(0).toUpperCase() + trip.type.slice(1)}
@@ -531,6 +705,13 @@ export default function MyTrips() {
                 </div>
               </div>
 
+              {selectedTrip.status === 'completed' && (
+                <div className="p-4 bg-muted rounded-lg border border-border">
+                  <p className="text-xs text-muted-foreground mb-1">Status</p>
+                  <p className="font-semibold text-foreground">This trip is part of your travel history.</p>
+                </div>
+              )}
+
               {/* Passengers */}
               {selectedTrip.passengers && (
                 <div>
@@ -574,50 +755,220 @@ export default function MyTrips() {
         </div>
       )}
 
-      {/* Create Trip Menu Modal */}
+      {/* Create Trip Modal */}
       {createMenuOpen && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-4">
-          <div className="fixed inset-0 bg-black/50" onClick={() => setCreateMenuOpen(false)} />
-          <div className="relative w-full md:max-w-sm bg-card rounded-t-3xl md:rounded-2xl shadow-2xl p-6 space-y-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50" onClick={closeCreateMenu} />
+          <div className="relative w-full md:max-w-2xl bg-card rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-foreground">Create</h3>
+              <div className="p-6 pb-0">
+                <h3 className="text-lg font-bold text-foreground">
+                  {createMode === 'choose' ? 'Create a Trip' : createMode === 'carpool' ? 'Create Carpool' : 'Create Travel'}
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {createMode === 'choose'
+                    ? 'Choose the type of trip you want to set up.'
+                    : createMode === 'carpool'
+                      ? 'Fill in the ride details for your carpool.'
+                      : 'Fill in the trip details for your travel plan.'}
+                </p>
+              </div>
               <button
-                onClick={() => setCreateMenuOpen(false)}
-                className="p-1 hover:bg-secondary rounded-lg"
+                onClick={closeCreateMenu}
+                className="absolute right-4 top-4 p-2 hover:bg-secondary rounded-lg"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <Link href="/post-ride" asChild>
-              <button
-                onClick={() => setCreateMenuOpen(false)}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-smooth border-0 text-left cursor-pointer bg-accent hover:bg-accent/80 text-foreground font-medium"
-              >
-                <Plus className="w-5 h-5" />
-                <span>Create Carpool</span>
-              </button>
-            </Link>
+            <div className="p-6 pt-0 overflow-y-auto space-y-4">
+              {createMode === 'choose' && (
+                <div className="grid gap-3 md:grid-cols-2">
+                  <button
+                    onClick={() => setCreateMode('carpool')}
+                    className="rounded-2xl border border-border bg-secondary/40 p-5 text-left hover:border-primary/30 hover:bg-primary/5 transition-smooth"
+                  >
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-11 h-11 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-600">
+                        <Map className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-foreground">Carpool</p>
+                        <p className="text-xs text-muted-foreground">Ride details and vehicle info</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Best for shared drives, commuting, and seat-based trips.
+                    </p>
+                  </button>
 
-            <Link href="/tours/create" asChild>
-              <button
-                onClick={() => setCreateMenuOpen(false)}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-smooth border-0 text-left cursor-pointer bg-accent hover:bg-accent/80 text-foreground font-medium"
-              >
-                <Plus className="w-5 h-5" />
-                <span>Create Tour</span>
-              </button>
-            </Link>
+                  <button
+                    onClick={() => setCreateMode('tour')}
+                    className="rounded-2xl border border-border bg-secondary/40 p-5 text-left hover:border-primary/30 hover:bg-primary/5 transition-smooth"
+                  >
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-11 h-11 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-600">
+                        <Compass className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-foreground">Travel</p>
+                        <p className="text-xs text-muted-foreground">Tour details and itinerary</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Best for vacations, organized tours, and longer travel plans.
+                    </p>
+                  </button>
+                </div>
+              )}
 
-            <Link href="/my-participated-tours" asChild>
-              <button
-                onClick={() => setCreateMenuOpen(false)}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-smooth border-0 text-left cursor-pointer bg-secondary hover:bg-secondary/80 text-foreground font-medium"
-              >
-                <History className="w-5 h-5" />
-                <span>History</span>
-              </button>
-            </Link>
+              {createMode === 'carpool' && (
+                <div className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">From *</label>
+                      <input name="from" value={carpoolForm.from} onChange={updateCarpoolForm} className="w-full px-4 py-3 rounded-xl bg-secondary border border-border focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Departure location" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">To *</label>
+                      <input name="to" value={carpoolForm.to} onChange={updateCarpoolForm} className="w-full px-4 py-3 rounded-xl bg-secondary border border-border focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Destination" />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Date *</label>
+                      <input type="date" name="date" value={carpoolForm.date} onChange={updateCarpoolForm} className="w-full px-4 py-3 rounded-xl bg-secondary border border-border focus:outline-none focus:ring-2 focus:ring-primary" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Time *</label>
+                      <input type="time" name="time" value={carpoolForm.time} onChange={updateCarpoolForm} className="w-full px-4 py-3 rounded-xl bg-secondary border border-border focus:outline-none focus:ring-2 focus:ring-primary" />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Available Seats</label>
+                      <select name="seats" value={carpoolForm.seats} onChange={updateCarpoolForm} className="w-full px-4 py-3 rounded-xl bg-secondary border border-border focus:outline-none focus:ring-2 focus:ring-primary">
+                        <option value="1">1 Seat</option>
+                        <option value="2">2 Seats</option>
+                        <option value="3">3 Seats</option>
+                        <option value="4">4 Seats</option>
+                        <option value="5">5+ Seats</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Price per Seat *</label>
+                      <input type="number" name="price" value={carpoolForm.price} onChange={updateCarpoolForm} className="w-full px-4 py-3 rounded-xl bg-secondary border border-border focus:outline-none focus:ring-2 focus:ring-primary" placeholder="0.00" min="0" step="0.01" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">Trip Description</label>
+                    <textarea name="description" value={carpoolForm.description} onChange={updateCarpoolForm} rows={3} className="w-full px-4 py-3 rounded-xl bg-secondary border border-border focus:outline-none focus:ring-2 focus:ring-primary resize-none" placeholder="Tell passengers about your ride" />
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Car Model *</label>
+                      <input name="carModel" value={carpoolForm.carModel} onChange={updateCarpoolForm} className="w-full px-4 py-3 rounded-xl bg-secondary border border-border focus:outline-none focus:ring-2 focus:ring-primary" placeholder="e.g., Toyota Camry 2020" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Car Color</label>
+                      <input name="carColor" value={carpoolForm.carColor} onChange={updateCarpoolForm} className="w-full px-4 py-3 rounded-xl bg-secondary border border-border focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Silver" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Plate Number</label>
+                      <input name="carPlate" value={carpoolForm.carPlate} onChange={updateCarpoolForm} className="w-full px-4 py-3 rounded-xl bg-secondary border border-border focus:outline-none focus:ring-2 focus:ring-primary" placeholder="ABC1234" />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <label className="flex items-center gap-3 rounded-xl border border-border p-4">
+                      <input type="checkbox" name="allowPets" checked={carpoolForm.allowPets} onChange={updateCarpoolForm} />
+                      <span className="text-sm text-foreground">Pets allowed</span>
+                    </label>
+                    <label className="flex items-center gap-3 rounded-xl border border-border p-4">
+                      <input type="checkbox" name="allowSmoking" checked={carpoolForm.allowSmoking} onChange={updateCarpoolForm} />
+                      <span className="text-sm text-foreground">Smoking allowed</span>
+                    </label>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Music Preference</label>
+                      <select name="musicPreference" value={carpoolForm.musicPreference} onChange={updateCarpoolForm} className="w-full px-4 py-3 rounded-xl bg-secondary border border-border focus:outline-none focus:ring-2 focus:ring-primary">
+                        <option value="any">Any</option>
+                        <option value="quiet">Quiet</option>
+                        <option value="loud">Lively</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {createMode === 'tour' && (
+                <div className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Tour Title *</label>
+                      <input name="title" value={tourForm.title} onChange={updateTourForm} className="w-full px-4 py-3 rounded-xl bg-secondary border border-border focus:outline-none focus:ring-2 focus:ring-primary" placeholder="e.g., Boracay Beach Escape" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Destination *</label>
+                      <input name="destination" value={tourForm.destination} onChange={updateTourForm} className="w-full px-4 py-3 rounded-xl bg-secondary border border-border focus:outline-none focus:ring-2 focus:ring-primary" placeholder="e.g., Boracay, Aklan" />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Start Date *</label>
+                      <input type="date" name="date" value={tourForm.date} onChange={updateTourForm} className="w-full px-4 py-3 rounded-xl bg-secondary border border-border focus:outline-none focus:ring-2 focus:ring-primary" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Duration (Days)</label>
+                      <input type="number" name="duration" min="1" value={tourForm.duration} onChange={updateTourForm} className="w-full px-4 py-3 rounded-xl bg-secondary border border-border focus:outline-none focus:ring-2 focus:ring-primary" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Max Participants</label>
+                      <input type="number" name="maxParticipants" min="2" value={tourForm.maxParticipants} onChange={updateTourForm} className="w-full px-4 py-3 rounded-xl bg-secondary border border-border focus:outline-none focus:ring-2 focus:ring-primary" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">Price per Person (₱) *</label>
+                    <input type="number" name="price" value={tourForm.price} onChange={updateTourForm} className="w-full px-4 py-3 rounded-xl bg-secondary border border-border focus:outline-none focus:ring-2 focus:ring-primary" placeholder="e.g., 3500" />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">Description</label>
+                    <textarea name="description" value={tourForm.description} onChange={updateTourForm} rows={3} className="w-full px-4 py-3 rounded-xl bg-secondary border border-border focus:outline-none focus:ring-2 focus:ring-primary resize-none" placeholder="Describe the experience" />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">Itinerary Summary</label>
+                    <textarea name="itinerary" value={tourForm.itinerary} onChange={updateTourForm} rows={3} className="w-full px-4 py-3 rounded-xl bg-secondary border border-border focus:outline-none focus:ring-2 focus:ring-primary resize-none" placeholder="Short day-by-day plan" />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                {createMode !== 'choose' ? (
+                  <button
+                    type="button"
+                    onClick={() => setCreateMode('choose')}
+                    className="px-5 py-3 rounded-xl border border-border text-foreground font-medium hover:bg-secondary transition-smooth"
+                  >
+                    Back
+                  </button>
+                ) : null}
+
+                <button
+                  type="button"
+                  onClick={handleCreateSubmit}
+                  className="flex-1 px-5 py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:shadow-md transition-smooth"
+                >
+                  {createMode === 'choose' ? 'Continue' : 'Save Draft'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

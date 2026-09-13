@@ -14,6 +14,7 @@ import {
   Bell,
   Briefcase,
   ChevronDown,
+  CreditCard,
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { useCurrentPage } from '@/hooks/useCurrentPage';
@@ -88,14 +89,15 @@ export default function DesktopSidebar({
     { id: 'home', label: 'Home', icon: Home, path: '/' },
     { id: 'match', label: 'Find Buddy', icon: Heart, path: '/discovery' },
     { id: 'travel', label: 'Travel', icon: Briefcase, path: '/my-trips' },
+    { id: 'transactions', label: 'Transactions', icon: CreditCard, path: '/transactions' },
     { id: 'map', label: 'Map', icon: Map, path: '/map' },
     { id: 'chat', label: 'Messages', icon: MessageCircle, path: '/chat' },
     { id: 'profile', label: 'Profile', icon: User, path: '/profile' },
     { id: 'trusted', label: 'Trusted Circle', icon: MapPin, path: '/trusted-circle' },
   ];
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     window.location.href = '/login';
   };
 
@@ -105,6 +107,7 @@ export default function DesktopSidebar({
     desktopLastClickPos = clickPos;
     desktopSuppressHoverUntilMove = true;
     setSuppressHover(true);
+    setHovered(false);
   };
 
   useEffect(() => {
@@ -124,30 +127,12 @@ export default function DesktopSidebar({
       setSuppressHover(false);
       desktopSuppressHoverUntilMove = false;
       lastMousePos.current = { x: event.clientX, y: event.clientY };
-
-      const sidebar = sidebarRef.current;
-      if (!sidebar) {
-        return;
-      }
-
-      const rect = sidebar.getBoundingClientRect();
-      const isInside =
-        event.clientX >= rect.left &&
-        event.clientX <= rect.right &&
-        event.clientY >= rect.top &&
-        event.clientY <= rect.bottom;
-
-      if (isInside) {
-        if (!allowHoverExpand) {
-          setAllowHoverExpand(true);
-        }
-        setHovered(true);
-      }
+      setAllowHoverExpand(true);
     };
 
     window.addEventListener('mousemove', handleMouseMove);
     return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, [allowHoverExpand, suppressHover]);
+  }, [suppressHover]);
 
   return (
     <aside
@@ -191,7 +176,7 @@ export default function DesktopSidebar({
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-2 py-6 space-y-1 overflow-y-auto">
+      <nav className="flex-1 px-2 py-6 space-y-1 overflow-y-auto overflow-x-hidden">
         {navItems.map((item) => {
           const Icon = item.icon;
           const active = currentPage === item.id;
@@ -242,10 +227,7 @@ export default function DesktopSidebar({
       {/* Footer */}
       <div className="p-4 space-y-2 overflow-hidden">
         <button
-          onClick={(event) => {
-            handleSidebarItemClick(event);
-            toggleTheme?.();
-          }}
+          onClick={() => toggleTheme?.()}
           className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-smooth border-0 bg-transparent text-left cursor-pointer text-sidebar-foreground hover:bg-sidebar-accent/50"
         >
           {theme === 'dark' ? <Sun className="w-5 h-5 shrink-0" /> : <Moon className="w-5 h-5 shrink-0" />}

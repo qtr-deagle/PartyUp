@@ -37,9 +37,16 @@ import Tours from "./pages/Tours";
 import ToursCreate from "./pages/ToursCreate";
 import ToursManage from "./pages/ToursManage";
 import AdminFeedback from "./pages/AdminFeedback";
-import AdminPaymentIssues from "./pages/AdminPaymentIssues";
+import AdminPaymentManagement from "./pages/AdminPaymentManagement";
+import AdminPairingHistory from "./pages/AdminPairingHistory";
+import StaffPaymentMonitoring from "./pages/StaffPaymentMonitoring";
+import StaffPairingHistory from "./pages/StaffPairingHistory";
+import StaffFeedback from "./pages/StaffFeedback";
 import MyParticipatedTours from "./pages/MyParticipatedTours";
 import Trips from "./pages/Trips";
+import TransactionHistory from "./pages/TransactionHistory";
+import StaffIDVerificationReview from "./pages/StaffIDVerificationReview";
+import AdminIDVerificationReview from "./pages/AdminIDVerificationReview";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -61,10 +68,40 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 }
 
 function AdminRoute({ component: Component }: { component: React.ComponentType }) {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (user?.role !== 'admin') {
+    window.location.href = '/login';
+    return null;
+  }
+
   return <Component />;
 }
 
 function StaffRoute({ component: Component }: { component: React.ComponentType }) {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (user?.role !== 'staff' && user?.role !== 'admin') {
+    window.location.href = '/login';
+    return null;
+  }
+
   return <Component />;
 }
 
@@ -87,6 +124,7 @@ function Router() {
       <Route path="/tours/manage" component={() => <ProtectedRoute component={ToursManage} />} />
       <Route path="/my-trips" component={() => <ProtectedRoute component={MyTrips} />} />
       <Route path="/my-participated-tours" component={() => <ProtectedRoute component={MyParticipatedTours} />} />
+      <Route path="/transactions" component={() => <ProtectedRoute component={TransactionHistory} />} />
       <Route path="/trips/:id" component={() => <ProtectedRoute component={Trips} />} />
       <Route path="/trusted-circle" component={() => <ProtectedRoute component={TrustedCircle} />} />
       <Route path="/carpooling" component={() => <ProtectedRoute component={Carpooling} />} />
@@ -94,6 +132,7 @@ function Router() {
       <Route path="/cars" component={() => <ProtectedRoute component={Cars} />} />
       <Route path="/admin" component={() => <AdminRoute component={AdminDashboard} />} />
       <Route path="/admin/dashboard" component={() => <AdminRoute component={AdminDashboard} />} />
+      <Route path="/admin/verification" component={() => <AdminRoute component={AdminIDVerificationReview} />} />
       <Route path="/admin/staff" component={() => <AdminRoute component={AdminStaff} />} />
       <Route path="/admin/analytics" component={() => <AdminRoute component={AdminAnalytics} />} />
       <Route path="/admin/users" component={() => <AdminRoute component={AdminUsers} />} />
@@ -102,12 +141,18 @@ function Router() {
       <Route path="/admin/audit" component={() => <AdminRoute component={AdminAudit} />} />
       <Route path="/admin/settings" component={() => <AdminRoute component={AdminSettings} />} />
       <Route path="/admin/feedback" component={() => <AdminRoute component={AdminFeedback} />} />
-      <Route path="/admin/payment-issues" component={() => <AdminRoute component={AdminPaymentIssues} />} />
+      <Route path="/admin/payment-issues" component={() => <AdminRoute component={AdminPaymentManagement} />} />
+      <Route path="/admin/payments" component={() => <AdminRoute component={AdminPaymentManagement} />} />
+      <Route path="/admin/pairing" component={() => <AdminRoute component={AdminPairingHistory} />} />
       <Route path="/staff" component={() => <StaffRoute component={StaffDashboard} />} />
       <Route path="/staff/dashboard" component={() => <StaffRoute component={StaffDashboard} />} />
+      <Route path="/staff/verification" component={() => <StaffRoute component={StaffIDVerificationReview} />} />
       <Route path="/staff/disputes" component={() => <StaffRoute component={StaffDisputes} />} />
       <Route path="/staff/vehicles" component={() => <StaffRoute component={StaffVehicles} />} />
       <Route path="/staff/trips" component={() => <StaffRoute component={StaffTrips} />} />
+      <Route path="/staff/payments" component={() => <StaffRoute component={StaffPaymentMonitoring} />} />
+      <Route path="/staff/pairing" component={() => <StaffRoute component={StaffPairingHistory} />} />
+      <Route path="/staff/feedback" component={() => <StaffRoute component={StaffFeedback} />} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

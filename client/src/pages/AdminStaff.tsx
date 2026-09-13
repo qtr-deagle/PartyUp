@@ -17,18 +17,18 @@ export default function AdminStaff() {
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingStaffId, setDeletingStaffId] = useState<number | null>(null);
   const [showAddStaffForm, setShowAddStaffForm] = useState(false);
-  const [newStaff, setNewStaff] = useState({ name: '', email: '', role: 'moderator' });
+  const [newStaff, setNewStaff] = useState({ name: '', email: '' });
 
   const handleAddStaff = async () => {
     if (!newStaff.name || !newStaff.email) {
       toast.error('Please fill in all fields');
       return;
     }
-    
+
     try {
       await new Promise(resolve => setTimeout(resolve, 800));
       toast.success(`Staff member ${newStaff.name} added successfully!`);
-      setNewStaff({ name: '', email: '', role: 'moderator' });
+      setNewStaff({ name: '', email: '' });
       setShowAddStaffForm(false);
     } catch (error) {
       toast.error('Failed to add staff member');
@@ -95,15 +95,6 @@ export default function AdminStaff() {
                   onChange={(e) => setNewStaff({ ...newStaff, email: e.target.value })}
                   className="w-full px-4 py-2.5 bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-smooth"
                 />
-                <select
-                  value={newStaff.role}
-                  onChange={(e) => setNewStaff({ ...newStaff, role: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-smooth"
-                >
-                  <option value="moderator">Moderator</option>
-                  <option value="verifier">Vehicle Verifier</option>
-                  <option value="admin">Administrator</option>
-                </select>
                 <div className="flex gap-3">
                   <button
                     onClick={handleAddStaff}

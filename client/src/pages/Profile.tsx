@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Layout from '@/components/Layout';
 import { Star, MapPin, Shield, Edit2, LogOut, Users, MessageSquare, AlertCircle, Settings, Car } from 'lucide-react';
+import { IDVerificationCard, IDVerificationStatus } from '@/components/IDVerificationCard';
 import { toast } from 'sonner';
 import { useLocation } from 'wouter';
+import { useAuth } from '@/contexts/AuthContext';
+import { getMyVerification, submitIdVerificationWeb } from '@/lib/verification';
 
 /**
  * PartyUp Profile Screen
@@ -25,7 +28,26 @@ import { useLocation } from 'wouter';
  */
 export default function Profile() {
   const [, setLocation] = useLocation();
+  const { user, logout } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
+  const [idVerification, setIdVerification] = useState<IDVerificationStatus>({
+    status: 'unverified'
+  });
+
+  useEffect(() => {
+    if (!user) return;
+    setIdVerification((prev) => ({ ...prev, status: user.verificationStatus }));
+    void getMyVerification().then(({ data }) => {
+      if (data) {
+        const status = data.status === 'pending' || data.status === 'resubmitted' ? 'pending' : user.verificationStatus;
+        setIdVerification({
+          status,
+          submittedAt: data.submitted_at,
+          rejectionReason: status === 'rejected' ? (data.reviewer_notes ?? undefined) : undefined,
+        });
+      }
+    });
+  }, [user]);
   const [trustedCircle] = useState([
     { id: 1, name: 'Mom', phone: '+1 (555) 123-4567', verified: true },
     { id: 2, name: 'Best Friend Sarah', phone: '+1 (555) 987-6543', verified: true },
@@ -56,8 +78,30 @@ export default function Profile() {
     },
   ]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await logout();
     toast.success('Logged out successfully');
+    window.location.href = '/login';
+  };
+
+  const handleIDVerificationSubmit = async (data: { idImage: File; selfieImage: File }) => {
+    const { error } = await submitIdVerificationWeb({
+      documentType: 'other',
+      front: data.idImage,
+      selfie: data.selfieImage,
+    });
+
+    if (error) {
+      toast.error(error.message || 'Failed to submit verification');
+      throw error;
+    }
+
+    setIdVerification({
+      status: 'pending',
+      submittedAt: new Date().toISOString(),
+    });
+
+    toast.success('Verification submitted! We\'ll review it within 1-2 hours.');
   };
 
   return (
@@ -163,11 +207,17 @@ export default function Profile() {
             </div>
           </div>
 
-          {/* Verification Status */}
+          {/* ID Verification */}
+          <IDVerificationCard 
+            verification={idVerification}
+            onSubmit={handleIDVerificationSubmit}
+          />
+
+          {/* Other Verifications */}
           <div className="card-luxury p-6">
             <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
               <Shield className="w-5 h-5 text-accent" />
-              Verification Status
+              Other Verifications
             </h3>
             <div className="space-y-3">
               <div className="flex items-center justify-between p-3 bg-accent/5 rounded-lg">
@@ -176,10 +226,6 @@ export default function Profile() {
               </div>
               <div className="flex items-center justify-between p-3 bg-accent/5 rounded-lg">
                 <span className="text-sm">Phone Verified</span>
-                <span className="text-xs font-bold text-accent">✓</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-accent/5 rounded-lg">
-                <span className="text-sm">ID Verified</span>
                 <span className="text-xs font-bold text-accent">✓</span>
               </div>
             </div>
@@ -353,27 +399,29 @@ export default function Profile() {
 
           {/* Sidebar */}
           <div className="col-span-1 space-y-8">
-            {/* Verification Status */}
-            <div className="card-luxury p-6">
-              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                <Shield className="w-5 h-5 text-accent" />
-                Verification
-              </h3>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 bg-accent/5 rounded-lg">
-                  <span className="text-sm">Email</span>
-                  <span className="text-xs font-bold text-accent">✓</span>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-accent/5 rounded-lg">
-                  <span className="text-sm">Phone</span>
-                  <span className="text-xs font-bold text-accent">✓</span>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-accent/5 rounded-lg">
-                  <span className="text-sm">ID</span>
-                  <span className="text-xs font-bold text-accent">✓</span>
-                </div>
+          {/* ID Verification Card */}
+          <IDVerificationCard 
+            verification={idVerification}
+            onSubmit={handleIDVerificationSubmit}
+          />
+
+          {/* Other Verifications */}
+          <div className="card-luxury p-6">
+            <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+              <Shield className="w-5 h-5 text-accent" />
+              Other Verifications
+            </h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 bg-accent/5 rounded-lg">
+                <span className="text-sm">Email</span>
+                <span className="text-xs font-bold text-accent">✓</span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-accent/5 rounded-lg">
+                <span className="text-sm">Phone</span>
+                <span className="text-xs font-bold text-accent">✓</span>
               </div>
             </div>
+          </div>
 
             {/* Trusted Circle */}
             <div className="card-luxury p-6">

@@ -1,7 +1,13 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocation } from 'wouter';
-import { Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Loader2, Info } from 'lucide-react';
+
+const SHOW_DEMO_LOGIN = import.meta.env.VITE_SHOW_DEMO_LOGIN === 'true';
+const DEMO_STAFF_EMAIL = import.meta.env.VITE_DEMO_STAFF_EMAIL;
+const DEMO_STAFF_PASSWORD = import.meta.env.VITE_DEMO_STAFF_PASSWORD;
+const DEMO_ADMIN_EMAIL = import.meta.env.VITE_DEMO_ADMIN_EMAIL;
+const DEMO_ADMIN_PASSWORD = import.meta.env.VITE_DEMO_ADMIN_PASSWORD;
 
 /**
  * PartyUp Login Page
@@ -27,18 +33,13 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      await login(email, password);
-      // Route based on role
-      const storedUser = localStorage.getItem('partyup_user');
-      if (storedUser) {
-        const user = JSON.parse(storedUser);
-        if (user?.role === 'admin') {
-          setLocation('/admin/dashboard');
-        } else if (user?.role === 'staff') {
-          setLocation('/staff/dashboard');
-        } else {
-          setLocation('/');
-        }
+      const loggedInUser = await login(email, password);
+      if (loggedInUser?.role === 'admin') {
+        setLocation('/admin/dashboard');
+      } else if (loggedInUser?.role === 'staff') {
+        setLocation('/staff/dashboard');
+      } else {
+        setLocation('/');
       }
     } catch (err) {
       setError('Invalid email or password');
@@ -47,22 +48,10 @@ export default function Login() {
     }
   };
 
-  const handleOAuthLogin = async (provider: string) => {
+  const handleOAuthLogin = async (provider: 'google' | 'github') => {
     setIsLoading(true);
     try {
       await oauthLogin(provider);
-      // Route based on role
-      const storedUser = localStorage.getItem('partyup_user');
-      if (storedUser) {
-        const user = JSON.parse(storedUser);
-        if (user?.role === 'admin') {
-          setLocation('/admin/dashboard');
-        } else if (user?.role === 'staff') {
-          setLocation('/staff/dashboard');
-        } else {
-          setLocation('/');
-        }
-      }
     } catch (err) {
       setError(`${provider} login failed`);
     } finally {
@@ -78,6 +67,21 @@ export default function Login() {
           <h1 className="text-4xl font-bold text-primary mb-2">PartyUp</h1>
           <p className="text-muted-foreground">Travel Buddy Matching Platform</p>
         </div>
+
+        {/* Demo Access Hint */}
+        {SHOW_DEMO_LOGIN && (DEMO_STAFF_EMAIL || DEMO_ADMIN_EMAIL) && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900 space-y-1">
+            <p className="flex items-center gap-2 font-medium">
+              <Info className="w-4 h-4" /> Demo access — for review only
+            </p>
+            {DEMO_STAFF_EMAIL && (
+              <p>Staff: {DEMO_STAFF_EMAIL} / {DEMO_STAFF_PASSWORD}</p>
+            )}
+            {DEMO_ADMIN_EMAIL && (
+              <p>Admin: {DEMO_ADMIN_EMAIL} / {DEMO_ADMIN_PASSWORD}</p>
+            )}
+          </div>
+        )}
 
         {/* Login Card */}
         <div className="bg-card rounded-2xl shadow-elevation-3 p-8 space-y-6">

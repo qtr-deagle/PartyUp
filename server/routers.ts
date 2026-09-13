@@ -6,7 +6,6 @@ import { z } from "zod";
 import { getDb, upsertUser, getUserByOpenId } from "./db";
 import { eq } from "drizzle-orm";
 import { users } from "../drizzle/schema";
-import { verificationRouter } from "./routers/verification";
 
 export const appRouter = router({
   system: systemRouter,
@@ -168,8 +167,7 @@ export const appRouter = router({
       }),
   }),
 
-  // ID Verification Router
-  verification: verificationRouter,
+  // ID verification is handled directly against Supabase from the client (see client/src/lib/verification.ts)
 
   // TODO: add feature routers here
 });

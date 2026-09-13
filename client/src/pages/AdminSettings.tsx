@@ -30,7 +30,7 @@ export default function AdminSettings() {
 
   return (
     <AdminLayout>
-      <div className="min-h-screen bg-background p-8">
+      <div className="bg-background">
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Header */}
           <div>

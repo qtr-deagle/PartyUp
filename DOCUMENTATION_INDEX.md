@@ -4,7 +4,7 @@
 
 ---
 
-## 📚 Documentation Files (6 Total)
+## 📚 Documentation Files (7 Total)
 
 ### **0. METHODOLOGY.md** 
 **Purpose**: Technical stack & architecture rationale  
@@ -109,6 +109,26 @@
 
 ---
 
+### **6. SOFTWARE_VERSIONS.md** 🆕
+**Purpose**: Complete software stack & version inventory  
+**Length**: ~2,500 words  
+**Best For**: Technical reference & deployment
+
+**Covers:**
+- Development environment (Windows, VS Code, Node.js, TypeScript)
+- Mobile stack (React Native, Expo, NativeWind, Mapbox)
+- Web frontend (React 19.2.1, Tailwind CSS 4.1.14, Vite)
+- Backend stack (Express.js 5.2.1, TypeScript, tRPC, Socket.IO)
+- Database (MySQL 9.6.0, Drizzle ORM)
+- Payment integration (PayMongo - to be added)
+- Development tools (pnpm, Prettier, Vitest)
+- Infrastructure (AWS Rekognition, Mapbox)
+- Dependency tree & production checklist
+
+**Action**: Reference for deployment, documentation, and technical specification
+
+---
+
 ## 🎯 Quick Start Guide
 
 ### **If you have 5 minutes:**
@@ -128,10 +148,11 @@
 4. Skim **ARCHITECTURE_OVERVIEW.md** (architecture + safety)
 
 ### **If you have 2+ hours:**
-1. Read all 5 documents sequentially
+1. Read all 6 documents sequentially
 2. Study the flowcharts & diagrams
 3. Review PAGE_DIRECTORY.md for detailed features
-4. Practice the 6-minute demo flow
+4. Review SOFTWARE_VERSIONS.md for technical specification
+5. Practice the 6-minute demo flow
 
 ---
 

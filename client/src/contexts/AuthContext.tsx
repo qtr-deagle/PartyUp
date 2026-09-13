@@ -1,123 +1,156 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { supabase } from '@/lib/supabase';
+import type { Session } from '@supabase/supabase-js';
 
-export type UserRole = 'user' | 'staff' | 'admin';
+export type UserRole = 'traveler' | 'staff' | 'admin';
+export type VerificationStatus = 'unverified' | 'pending' | 'approved' | 'rejected';
 
 export interface User {
   id: string;
   email: string;
   name: string;
   role: UserRole;
-  avatar?: string;
-  verified?: boolean;
+  avatar?: string | null;
+  verified: boolean;
+  verificationStatus: VerificationStatus;
 }
 
 interface AuthContextType {
   user: User | null;
+  session: Session | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string, role: UserRole) => Promise<void>;
-  logout: () => void;
-  oauthLogin: (provider: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User | null>;
+  register: (email: string, password: string, name: string, interests?: string[]) => Promise<void>;
+  logout: () => Promise<void>;
+  oauthLogin: (provider: 'google' | 'github') => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+async function loadUser(session: Session): Promise<User | null> {
+  const { data: profile, error } = await supabase
+    .from('profiles')
+    .select('display_name, avatar_url, role, verification_status')
+    .eq('id', session.user.id)
+    .maybeSingle();
+
+  if (error || !profile) {
+    return null;
+  }
+
+  return {
+    id: session.user.id,
+    email: session.user.email ?? '',
+    name: profile.display_name,
+    role: profile.role as UserRole,
+    avatar: profile.avatar_url,
+    verified: profile.verification_status === 'approved',
+    verificationStatus: profile.verification_status as VerificationStatus,
+  };
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check if user is already logged in on mount
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        // Simulate checking stored auth token
-        const storedUser = localStorage.getItem('partyup_user');
-        if (storedUser) {
-          setUser(JSON.parse(storedUser));
-        }
-      } catch (error) {
-        console.error('Auth check failed:', error);
-      } finally {
+    let isMounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!isMounted) return;
+      setSession(data.session);
+      if (!data.session) {
         setIsLoading(false);
       }
-    };
+    });
 
-    checkAuth();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (isMounted) {
+        setSession(nextSession);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
-  const login = async (email: string, password: string) => {
-    setIsLoading(true);
-    try {
-      // Simulate API call
-      const mockUser: User = {
-        id: '1',
-        email,
-        name: email.split('@')[0],
-        role: 'user',
-        verified: true,
-      };
-      setUser(mockUser);
-      localStorage.setItem('partyup_user', JSON.stringify(mockUser));
-    } catch (error) {
-      console.error('Login failed:', error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  useEffect(() => {
+    let isMounted = true;
 
-  const register = async (email: string, password: string, name: string, role: UserRole) => {
-    setIsLoading(true);
-    try {
-      // Simulate API call
-      const newUser: User = {
-        id: Math.random().toString(36).substr(2, 9),
-        email,
-        name,
-        role,
-        verified: false,
-      };
-      setUser(newUser);
-      localStorage.setItem('partyup_user', JSON.stringify(newUser));
-    } catch (error) {
-      console.error('Registration failed:', error);
-      throw error;
-    } finally {
-      setIsLoading(false);
+    if (!session) {
+      setUser(null);
+      return;
     }
-  };
 
-  const logout = () => {
+    setIsLoading(true);
+    loadUser(session).then((nextUser) => {
+      if (isMounted) {
+        setUser(nextUser);
+        setIsLoading(false);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [session]);
+
+  const login = useCallback(async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error || !data.session) {
+      throw error ?? new Error('Login failed');
+    }
+    setSession(data.session);
+    return loadUser(data.session);
+  }, []);
+
+  const register = useCallback(async (email: string, password: string, name: string, interests?: string[]) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { display_name: name } },
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    if (data.session) {
+      setSession(data.session);
+
+      if (interests?.length) {
+        await supabase.from('profiles').update({ interests }).eq('id', data.session.user.id);
+      }
+    }
+  }, []);
+
+  const logout = useCallback(async () => {
+    await supabase.auth.signOut();
+    setSession(null);
     setUser(null);
-    localStorage.removeItem('partyup_user');
-  };
+  }, []);
 
-  const oauthLogin = async (provider: string) => {
-    setIsLoading(true);
-    try {
-      // Simulate OAuth login
-      const mockUser: User = {
-        id: Math.random().toString(36).substr(2, 9),
-        email: `user@${provider}.com`,
-        name: `${provider} User`,
-        role: 'user',
-        verified: true,
-      };
-      setUser(mockUser);
-      localStorage.setItem('partyup_user', JSON.stringify(mockUser));
-    } catch (error) {
-      console.error('OAuth login failed:', error);
+  const oauthLogin = useCallback(async (provider: 'google' | 'github') => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) {
       throw error;
-    } finally {
-      setIsLoading(false);
     }
-  };
+  }, []);
 
   return (
     <AuthContext.Provider
       value={{
         user,
+        session,
         isLoading,
         isAuthenticated: !!user,
         login,

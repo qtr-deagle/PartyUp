@@ -6,6 +6,63 @@ This diagram shows the complete PartyUp system with all three user roles (Travel
 
 ---
 
+## 📊 UPDATED USE CASE DIAGRAM (All Features)
+
+```mermaid
+flowchart TB
+ subgraph TravelerUseCases["<br>"]
+        T1["Register & Login"]
+        T2["Create Profile"]
+        T3["Discovery"]
+        T4["My Trips"]
+        T5["Chat"]
+        T6["Map Tracking"]
+        T8["Carpooling"]
+        T9["Touring"]
+        T10["Manage Vehicles"]
+        T11["Trusted Circle"]
+        T12["View Home Dashboard"]
+        T13["Settings"]
+        T14["Payment History"]
+        T15["Report/Feedback/Ratings"]
+  end
+ subgraph StaffUseCases["<br>"]
+        S1["Staff Dashboard"]
+        S2["Moderation Queue"]
+        S3["Disputes Report"]
+        S4["Verify Vehicles"]
+        S5["Trip Monitoring"]
+        S6["Feedback Review"]
+        S7["Payment Monitoring"]
+        S8["Pairing History"]
+  end
+ subgraph AdminUseCases["<br>"]
+        A1["Dashboard - View KPIs"]
+        A2["Analytics"]
+        A3["Feedback Management"]
+        A4["Staff Management"]
+        A5["User Management"]
+        A6["Trip Management"]
+        A7["Reports"]
+        A8["Settings - System Config"]
+        A9["Audit Log"]
+        A10["Payment Management"]
+        A11["Pairing History"]
+  end
+    Traveler["👤 Traveler/User"] --> T1 & T2 & T3 & T4 & T5 & T6 & T8 & T9 & T10 & T11 & T12 & T13 & T14 & T15
+    Staff["👨‍💼 Staff/Moderator"] --> S1 & S2 & S3 & S4 & S5 & S6 & S7 & S8
+    Admin["⚙️ Admin"] --> A1 & A2 & A3 & A4 & A5 & A6 & A7 & A8 & A9 & A10 & A11
+
+    style Traveler fill:#4F46E5,color:#fff
+    style Staff fill:#F59E0B,color:#fff
+    style Admin fill:#EF4444,color:#fff
+    style TravelerUseCases fill:#E0E7FF
+    style StaffUseCases fill:#FEF3C7
+    style AdminUseCases fill:#FEE2E2
+```
+
+---
+
 ## 📊 MAIN SYSTEM FLOWCHART (Swimlane View)
 
 ```mermaid
@@ -32,11 +89,11 @@ graph TB
     
     AdminDash --> AdminFlow["<b>ADMIN WORKFLOW</b><br/>───────────────<br/>1️⃣ Analytics → Monitor KPIs<br/>2️⃣ Staff → Manage Moderators<br/>3️⃣ Users → Monitor Accounts<br/>4️⃣ Audit → Track Actions"]
     
-    TravelerFlow --> TravelerInteraction["🔄 User Actions:<br/>- Create/Post Trip<br/>- Send Match Request<br/>- Chat & Coordinate<br/>- Rate & Review<br/>- Report Bad Users"]
+    TravelerFlow --> TravelerInteraction["🔄 User Actions:<br/>- Send Match Request<br/>- Chat & Coordinate<br/>- Rate & Review<br/>- Report Bad Users<br/>- Book Carpool Rides"]
     
-    StaffFlow --> StaffInteraction["🔄 Staff Actions:<br/>- Review Reports<br/>- Investigate Users<br/>- Suspend/Ban Users<br/>- Approve Vehicles<br/>- Resolve Disputes"]
+    StaffFlow --> StaffInteraction["🔄 Staff Actions:<br/>- Review Reports<br/>- Investigate Users<br/>- Suspend/Ban Users<br/>- Approve Vehicles<br/>- Review Feedback"]
     
-    AdminFlow --> AdminInteraction["🔄 Admin Actions:<br/>- View Analytics<br/>- Hire Staff<br/>- Configure System<br/>- View Audit Logs<br/>- Make Decisions"]
+    AdminFlow --> AdminInteraction["🔄 Admin Actions:<br/>- View Analytics<br/>- Hire Staff<br/>- Manage Feedback<br/>- View Audit Logs<br/>- Configure System"]
     
     TravelerInteraction -->|Reports| StaffInteraction
     StaffInteraction -->|Escalate| AdminInteraction
@@ -69,7 +126,7 @@ flowchart TD
     TDash --> Decision1{"Next<br/>Action?"}
     
     Decision1 -->|Discover Buddies| Discovery["🔍 Discovery Page<br/>- Filter by destination<br/>- Filter by dates/budget<br/>- View compatibility score<br/>- See traveler ratings"]
-    Decision1 -->|Post Trip| PostTrip["📝 Create Trip<br/>- Set origin/destination<br/>- Set dates<br/>- Set budget<br/>- Set travel style"]
+    Decision1 -->|Book Carpool| Carpooling["🚗 Carpool Rides<br/>- Browse available rides<br/>- View driver ratings<br/>- Book seats<br/>- Track ride"]
     Decision1 -->|My Trips| MyTrips["📋 My Trips Page<br/>- View upcoming trips<br/>- View past trips<br/>- Track buddies<br/>- Cancel/reschedule"]
     
     Discovery --> Filter["⚙️ Apply Filters<br/>Destination • Dates<br/>Budget • Travel Style"]
@@ -77,10 +134,7 @@ flowchart TD
     Results -->|No| Filter
     Results -->|Yes| SendRequest["📤 Send Match Request"]
     
-    PostTrip --> TripCreated["✅ Trip Created<br/>- System notifies<br/>matching travelers<br/>- Wait for requests"]
-    
     SendRequest --> MatchResponse["⏳ Await Response<br/>or<br/>Receive Match Requests"]
-    TripCreated --> MatchResponse
     
     MatchResponse --> ReviewRequest["👀 Review Requests<br/>- View buddy profile<br/>- Check ratings<br/>- Check compatibility"]
     
@@ -252,24 +306,66 @@ flowchart TD
 
 ---
 
+## ⚙️ DETAILED ADMIN FLOW (Management & Oversight)
+
+```mermaid
+flowchart TD
+    AStart(["⚙️ Admin Dashboard"]) --> AQueue["📊 Queue Overview<br/>- Analytics Dashboard<br/>- Key Metrics<br/>- System Health<br/>- Recent Actions"]
+    
+    AQueue --> ADecision1{"Select<br/>Task?"}
+    
+    ADecision1 -->|Analytics| Analytics["📈 Analytics & BI<br/>- User growth trends<br/>- Trip statistics<br/>- Revenue metrics<br/>- Safety incidents<br/>- Platform KPIs"]
+    ADecision1 -->|Feedback| FeedbackMgmt["💬 Feedback Management<br/>- Review user feedback<br/>- Filter by type/rating<br/>- Respond to feedback<br/>- Track trends"]
+    ADecision1 -->|Users| UserMgmt["👥 User Management<br/>- Monitor user accounts<br/>- Verify users<br/>- Suspend/Ban users<br/>- View profiles"]
+    ADecision1 -->|Staff| StaffMgmt["👨‍💼 Staff Management<br/>- Hire staff<br/>- Manage permissions<br/>- Track performance<br/>- Assign tasks"]
+    ADecision1 -->|Audit| Audit["📋 Audit Logs<br/>- View system actions<br/>- Track changes<br/>- Compliance reports<br/>- Export data"]
+    
+    FeedbackMgmt --> SelectFeedback["🎯 Select Feedback<br/>- View feedback details<br/>- See traveler info<br/>- Check feedback type<br/>- Review rating"]
+    
+    SelectFeedback --> AnalyzeFeedback["📊 Analyze Feedback<br/>- Read full message<br/>- Check traveler history<br/>- Identify patterns<br/>- Determine action"]
+    
+    AnalyzeFeedback --> FeedbackType{"Feedback<br/>Type?"}
+    
+    FeedbackType -->|Positive| Positive["✅ Positive Feedback<br/>- Log satisfaction<br/>- Thank traveler<br/>- Recognize staff (if applicable)<br/>- Update metrics"]
+    
+    FeedbackType -->|Issue| Issue["⚠️ Issue Feedback<br/>- Identify problem<br/>- Escalate to staff<br/>- Create ticket<br/>- Set follow-up"]
+    
+    FeedbackType -->|Bug Report| BugReport["🐛 Bug Report<br/>- Log technical issue<br/>- Assign to dev team<br/>- Track resolution<br/>- Notify traveler"]
+    
+    Positive --> RespondFeedback["💌 Respond to Feedback<br/>- Send acknowledgment<br/>- Thank for input<br/>- Offer support if needed"]
+    Issue --> RespondFeedback
+    BugReport --> RespondFeedback
+    
+    RespondFeedback --> MarkResolved["✔️ Mark as Resolved<br/>- Update status<br/>- Log resolution<br/>- Archive feedback"]
+    
+    MarkResolved --> AEnd(["✅ Feedback<br/>Processed"])
+    
+    style AStart fill:#ab47bc,color:#fff,stroke:#6a1b9a,stroke-width:2px
+    style AEnd fill:#6a1b9a,color:#fff,stroke:#4a148c,stroke-width:2px
+    style FeedbackMgmt fill:#ce93d8,color:#000,stroke:#8e24aa,stroke-width:3px
+    style RespondFeedback fill:#ba68c8,color:#fff,stroke:#7b1fa2,stroke-width:2px
+```
+
+---
+
 ## 🔄 CROSS-FUNCTIONAL INTERACTIONS
 
 ```mermaid
 flowchart LR
     Traveler["👤 TRAVELER<br/>━━━━━━━━<br/>User Journey:<br/>- Discovery<br/>- Matching<br/>- Chat<br/>- Tracking<br/>- Rating"]
     
-    Staff["👨‍💼 STAFF<br/>━━━━━━━━<br/>Operations:<br/>- Moderation<br/>- Disputes<br/>- Verification<br/>- Monitoring"]
+    Staff["👨‍💼 STAFF<br/>━━━━━━━━<br/>Operations:<br/>- Moderation<br/>- Disputes<br/>- Verification<br/>- Feedback"]
     
-    Admin["⚙️ ADMIN<br/>━━━━━━━━<br/>Strategy:<br/>- Analytics<br/>- Management<br/>- Configuration<br/>- Compliance"]
+    Admin["⚙️ ADMIN<br/>━━━━━━━━<br/>Strategy:<br/>- Analytics<br/>- Feedback Mgmt<br/>- Management<br/>- Compliance"]
     
     Traveler -->|Reports User| Staff
     Staff -->|Takes Action| Traveler
     
-    Traveler -->|Verifies Vehicle| Staff
-    Staff -->|Approves| Traveler
+    Traveler -->|Submits Feedback| Admin
+    Staff -->|Reviews Feedback| Admin
     
-    Staff -->|Sends Reports| Admin
-    Admin -->|Escalations| Staff
+    Staff -->|Escalates| Admin
+    Admin -->|Decisions| Staff
     
     Admin -->|Configures| Traveler
     Admin -->|Manages| Staff
@@ -289,6 +385,7 @@ flowchart LR
 ✅ Comprehensive moderation system  
 ✅ Audit logging for compliance  
 ✅ Real-time safety features (GPS, geofencing)  
+✅ Feedback management for admin oversight
 
 ### **Suggested Optimizations:**
 
@@ -402,3 +499,338 @@ Batch Actions:
 - 🟡 **Yellow (#ffb74d):** Active/In-progress states
 - 🔴 **Red (warning colors):** Critical actions (ban, suspend, escalate)
 - ⚫ **Dark:** Final/completed states
+
+---
+
+## 📐 DATABASE ENTITY RELATIONSHIP DIAGRAM (ERD)
+
+```mermaid
+erDiagram
+    %% ============================================
+    %% CENTRAL ENTITY: USERS
+    %% ============================================
+    USERS ||--o{ TRIPS : creates
+    USERS ||--o{ CARS : owns
+    USERS ||--o{ TRIPMEMBERS : joins
+    USERS ||--o{ MESSAGES : sends
+    USERS ||--o{ REVIEWS : writes
+    USERS ||--o{ REVIEWS : receives
+    USERS ||--o{ FEEDBACK : submits
+    USERS ||--o{ NOTIFICATIONS : receives
+    USERS ||--o{ PAYMENT_METHODS : registers
+    USERS ||--o{ PAYMENTS : makes
+
+    %% ============================================
+    %% TRIPS DOMAIN (Carpooling + Touring)
+    %% ============================================
+    TRIPS ||--o{ TRIPMEMBERS : includes
+    TRIPS ||--o{ MESSAGES : context
+    TRIPS ||--o{ REVIEWS : context
+    TRIPS ||--o{ PAYMENTS : settles
+    TRIPS ||--o{ GEOFENCE_EVENTS : tracks
+    CARS ||--o{ TRIPS : used_in
+
+    %% ============================================
+    %% PAYMENTS DOMAIN
+    %% ============================================
+    PAYMENT_METHODS ||--o{ PAYMENTS : processed_via
+    PAYMENTS ||--o{ PAYMENT_RECEIPTS : generates
+
+    %% ============================================
+    %% VERIFICATION & TRUST
+    %% ============================================
+    USERS ||--o{ VERIFICATION_DOCUMENTS : submits
+    USERS ||--o{ TRUSTED_CIRCLE : maintains
+
+    %% ============================================
+    %% ENTITIES
+    %% ============================================
+
+    USERS {
+        int id PK
+        string openId UK
+        string name
+        string email
+        string phone
+        string loginMethod
+        enum role "traveler|staff|admin"
+        string profilePhotoUrl
+        text bio
+        boolean isVerified
+        enum verificationBadge "gold|silver|bronze|none"
+        decimal averageRating
+        int totalReviews
+        json travelPreferences
+        json travelHistory
+        string companyName
+        string businessLicense
+        string bankAccount
+        timestamp createdAt
+        timestamp updatedAt
+        timestamp lastSignedIn
+    }
+
+    TRIPS {
+        int id PK
+        int creatorId FK
+        enum tripType "carpooling|touring"
+        string title
+        text description
+        string origin
+        string destination
+        json originCoords
+        json destinationCoords
+        datetime departureDate
+        datetime returnDate
+        json interests "travel styles, activities"
+        string budget "budget_range"
+        int seatsAvailable
+        decimal costPerSeat
+        enum status "planning|active|completed|cancelled"
+        boolean isGeofenced
+        int geofenceRadius
+        timestamp createdAt
+        timestamp updatedAt
+    }
+
+    CARS {
+        int id PK
+        int driverId FK
+        string make
+        string model
+        int year
+        string licensePlate UK
+        string vin UK
+        int seats
+        enum transmission "manual|automatic"
+        enum fuelType "petrol|diesel|hybrid|electric"
+        int mileage
+        json photos
+        json features
+        enum status "available|in_trip|unavailable"
+        boolean isVerified
+        timestamp createdAt
+        timestamp updatedAt
+    }
+
+    TRIPMEMBERS {
+        int id PK
+        int tripId FK
+        int userId FK
+        enum status "requested|accepted|declined|left"
+        decimal costShare
+        timestamp createdAt
+        timestamp updatedAt
+    }
+
+    MESSAGES {
+        int id PK
+        int senderId FK
+        int recipientId FK
+        int tripId FK "optional"
+        text content
+        enum messageType "text|image|location|file"
+        boolean isRead
+        timestamp readAt
+        timestamp createdAt
+        timestamp updatedAt
+    }
+
+    REVIEWS {
+        int id PK
+        int reviewerId FK
+        int revieweeId FK
+        int tripId FK
+        tinyint rating "1-5 stars"
+        string title
+        text comment
+        enum reviewType "trip|user"
+        timestamp createdAt
+        timestamp updatedAt
+    }
+
+    FEEDBACK {
+        int id PK
+        int userId FK
+        enum feedbackType "trip|car|platform"
+        string subject
+        text message
+        tinyint rating "1-5 stars"
+        enum status "unreviewed|reviewed|responded"
+        text adminResponse
+        timestamp responseDate
+        timestamp createdAt
+        timestamp updatedAt
+    }
+
+    PAYMENT_METHODS {
+        int id PK
+        int userId FK
+        enum methodType "credit_card|debit_card|gcash|paymaya|bank_transfer"
+        string lastFour "last 4 digits"
+        json methodDetails "encrypted"
+        enum status "active|inactive|expired"
+        boolean isDefault
+        timestamp createdAt
+        timestamp updatedAt
+    }
+
+    PAYMENTS {
+        int id PK
+        int userId FK "payer"
+        int paymentMethodId FK
+        int tripId FK
+        decimal amount
+        enum currency "PHP"
+        enum paymentType "trip_cost|deposit|refund"
+        enum status "pending|completed|failed|refunded"
+        string transactionId UK
+        string referenceId "GCash/PayMaya ref"
+        text failureReason
+        timestamp createdAt
+        timestamp updatedAt
+    }
+
+    PAYMENT_RECEIPTS {
+        int id PK
+        int paymentId FK
+        string receiptUrl
+        json receiptData
+        timestamp issuedAt
+    }
+
+    NOTIFICATIONS {
+        int id PK
+        int userId FK
+        enum notificationType "trip_update|message|payment|feedback|system"
+        text content
+        boolean isRead
+        timestamp readAt
+        string relatedEntityId "trip/message ID"
+        timestamp createdAt
+        timestamp updatedAt
+    }
+
+    VERIFICATION_DOCUMENTS {
+        int id PK
+        int userId FK
+        enum documentType "id|license|insurance|proof_of_address"
+        string documentUrl
+        enum status "pending|approved|rejected"
+        text rejectionReason
+        timestamp approvedAt
+        int approvedBy FK "staff member"
+        timestamp createdAt
+        timestamp updatedAt
+    }
+
+    GEOFENCE_EVENTS {
+        int id PK
+        int tripId FK
+        int userId FK
+        json location
+        enum eventType "entered|exited|alert"
+        timestamp eventAt
+        timestamp recordedAt
+    }
+
+    TRUSTED_CIRCLE {
+        int id PK
+        int userId FK
+        int trustedUserId FK
+        text notes
+        timestamp createdAt
+        timestamp updatedAt
+    }
+
+    AUDIT_LOG {
+        int id PK
+        int staffUserId FK
+        enum actionType "ban|suspend|verify|warning"
+        int targetUserId FK
+        text reason
+        text notes
+        timestamp actionAt
+    }
+```
+
+---
+
+## 📊 Database Schema Notes
+
+### **Key Features Implemented:**
+
+#### **1. Trip Types (Carpooling + Touring)**
+- `TRIPS.tripType`: Distinguishes between carpooling rides and touring adventures
+- Both share same entity but have different properties/behaviors
+- Carpooling: shorter rides, shared costs, focused on transportation with driver vehicle
+- Touring: longer trips, shared experiences, activities-based group travel
+
+#### **2. Carpooling Vehicles**
+- `CARS`: Only for carpooling context (driver's vehicle)
+- Fields: make, model, year, seats, transmission, fuel type, license plate, VIN
+- Status: available | in_trip | unavailable
+- Linked to trips, not a separate rental marketplace
+- Driver (creator) can use their car for carpooling trips
+
+#### **3. Payment System**
+- `PAYMENT_METHODS`: Stores user payment methods (GCash, PayMaya, cards, bank transfer)
+- `PAYMENTS`: Records all transactions with status tracking (trip payments only)
+- `PAYMENT_RECEIPTS`: Generates receipts for compliance
+- Supports trip cost payments, deposits, and refunds
+- Integration with Stripe and local payment providers
+
+#### **4. Trip Members & Cost Sharing**
+- `TRIPMEMBERS`: Tracks trip participants and their cost shares
+- Statuses: requested | accepted | declined | left
+- `costShare`: Each member's portion of trip costs
+
+#### **5. Feedback Management**
+- `FEEDBACK`: User feedback about trips/cars/platform
+- Separate from reviews (peer ratings)
+- Tracks feedback type (trip/car/platform), status (unreviewed/reviewed/responded)
+- Admin can respond to feedback and track follow-up
+
+#### **6. Verification System**
+- `VERIFICATION_DOCUMENTS`: Document upload and verification workflow
+- Staff can approve/reject with reasons
+- Tracks verification badge awards
+- Document types: id | license | insurance | proof_of_address
+
+#### **7. Trust & Safety**
+- `GEOFENCE_EVENTS`: Real-time location tracking for active trips
+- `TRUSTED_CIRCLE`: Users can save trusted travel buddies
+- `AUDIT_LOG`: Staff actions logged for compliance
+
+#### **8. Communication**
+- `MESSAGES`: Trip context only (no booking messages)
+- Can handle text, images, locations, files
+- Read/unread status tracking
+
+#### **9. Reviews vs Feedback**
+- `REVIEWS`: User-to-user ratings after trips (1-5 stars) - trip & user types only
+- `FEEDBACK`: User feedback about platform/features/cars (separate system for admin)
+
+### **Foreign Key Relationships:**
+- Users are the central hub connecting to all domains
+- Trips are the main entity (carpooling or touring)
+- Cars are optional for trips (only used in carpooling trips)
+- Payments connect to trips for cost tracking
+- Messages are contextual to trips only
+- Reviews are tied to trips and reviewees
+
+### **Removed Entities:**
+- ❌ BOOKINGS (car rental bookings)
+- ❌ Rental marketplace features
+- ❌ Booking-related payment types
+
+### **Enums Used:**
+- `tripType`: carpooling | touring
+- `role`: traveler | staff | admin
+- `status`: planning | active | completed | cancelled (trips)
+- `methodType`: credit_card | debit_card | gcash | paymaya | bank_transfer
+- `paymentType`: trip_cost | deposit | refund
+- `feedbackType`: trip | car | platform
+- `notificationType`: trip_update | message | payment | feedback | system
+
+---

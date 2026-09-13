@@ -4,12 +4,13 @@ import { Search, AlertCircle, CheckCircle, Clock, Send, Eye } from 'lucide-react
 import { toast } from 'sonner';
 
 /**
- * Staff Payment Issue Reporting & Management
+ * Admin Payment Issue Management
  * 
- * Staff can:
- * - View payment-related issues reported by users
- * - Document and track payment problems
- * - Forward issues to admin with notes
+ * Admin can:
+ * - View all payment-related issues with payment channel details
+ * - See GCash/PayMaya reference IDs
+ * - Track payment problems and disputes
+ * - Forward critical issues to payment team
  * - Track resolution status
  */
 export default function AdminPaymentIssues() {
@@ -27,6 +28,8 @@ export default function AdminPaymentIssues() {
       date: '2 hours ago',
       severity: 'high',
       relatedTransactionId: 'TXN001',
+      paymentChannel: 'GCash',
+      referenceId: 'GCH-2026-03-15-9872564',
     },
     {
       id: 2,
@@ -38,6 +41,8 @@ export default function AdminPaymentIssues() {
       date: '5 hours ago',
       severity: 'high',
       relatedTransactionId: 'TXN045',
+      paymentChannel: 'PayMaya',
+      referenceId: 'PMY-2026-03-05-1254847',
     },
     {
       id: 3,
@@ -49,6 +54,8 @@ export default function AdminPaymentIssues() {
       date: '1 day ago',
       severity: 'medium',
       relatedTransactionId: 'TXN034',
+      paymentChannel: 'GCash',
+      referenceId: 'GCH-2026-03-18-5632841',
     },
     {
       id: 4,
@@ -60,6 +67,8 @@ export default function AdminPaymentIssues() {
       date: '2 days ago',
       severity: 'high',
       relatedTransactionId: 'TXN089',
+      paymentChannel: 'PayMaya',
+      referenceId: 'PMY-2026-03-17-7845621',
     },
     {
       id: 5,
@@ -71,6 +80,8 @@ export default function AdminPaymentIssues() {
       date: '3 days ago',
       severity: 'high',
       relatedTransactionId: 'TXN078',
+      paymentChannel: 'GCash',
+      referenceId: 'GCH-2026-03-16-4521369',
     },
     {
       id: 6,
@@ -82,6 +93,8 @@ export default function AdminPaymentIssues() {
       date: '4 days ago',
       severity: 'low',
       relatedTransactionId: 'TXN067',
+      paymentChannel: 'PayMaya',
+      referenceId: 'PMY-2026-03-15-9634521',
     },
   ];
 
@@ -134,7 +147,7 @@ export default function AdminPaymentIssues() {
     toast.promise(
       new Promise(resolve => setTimeout(resolve, 800)),
       {
-        success: 'Issue forwarded to admin successfully',
+        success: 'Issue forwarded to Payment Ops Team - escalation ticket created',
         error: 'Failed to forward issue',
       }
     );
@@ -148,8 +161,8 @@ export default function AdminPaymentIssues() {
     <AdminLayout>
       <div className="space-y-2">
         {/* Header */}
-        <div className="sticky top-0 bg-card border-b border-border z-30 px-4 md:px-6 py-2">
-          <h1 className="text-base font-bold text-foreground">Payment Issues</h1>
+        <div className="sticky top-0 bg-card border-b border-border z-30 px-4 md:px-6 py-4">
+          <h1 className="text-3xl font-bold text-foreground">Payment Management</h1>
         </div>
 
         {/* Stats */}
@@ -234,23 +247,33 @@ export default function AdminPaymentIssues() {
                 </div>
 
                 {/* Transaction Info */}
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 py-4 border-y border-border mb-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-4 border-y border-border mb-4">
                   <div>
                     <p className="text-xs text-muted-foreground">Transaction ID</p>
                     <p className="font-mono text-sm font-semibold text-foreground mt-1">{issue.relatedTransactionId}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Amount Involved</p>
-                    <p className="text-lg font-bold text-foreground mt-1">₱{issue.amount.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">Payment Channel</p>
+                    <p className={`text-sm font-semibold mt-1 px-2 py-1 rounded-full inline-block ${
+                      issue.paymentChannel === 'GCash' 
+                        ? 'bg-blue-500/20 text-blue-700' 
+                        : 'bg-purple-500/20 text-purple-700'
+                    }`}>
+                      {issue.paymentChannel}
+                    </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Status</p>
-                    <p className="text-sm font-semibold text-foreground mt-1 capitalize">{issue.status}</p>
+                    <p className="text-xs text-muted-foreground">Reference ID</p>
+                    <p className="font-mono text-xs font-semibold text-foreground mt-1 break-all">{issue.referenceId}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Amount Involved</p>
+                    <p className="text-lg font-bold text-foreground mt-1">₱{issue.amount.toLocaleString()}</p>
                   </div>
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-3 flex-wrap">
+                <div className="flex gap-3 flex-wrap items-center">
                   <button
                     onClick={() => handleViewDetails(issue.id)}
                     className="flex items-center gap-2 px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/5 transition-smooth font-medium text-sm"
@@ -263,13 +286,6 @@ export default function AdminPaymentIssues() {
                     className="flex items-center gap-2 px-4 py-2 border border-border text-foreground rounded-lg hover:bg-secondary transition-smooth font-medium text-sm"
                   >
                     Add Note
-                  </button>
-                  <button
-                    onClick={() => handleForwardToAdmin(issue.id)}
-                    className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:shadow-lg transition-smooth font-medium text-sm"
-                  >
-                    <Send className="w-4 h-4" />
-                    Forward to Admin
                   </button>
                 </div>
               </div>

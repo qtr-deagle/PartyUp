@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocation } from 'wouter';
-import { Mail, Lock, User, Eye, EyeOff, Loader2, Calendar, FileText } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, Loader2, Calendar } from 'lucide-react';
 
 /**
  * PartyUp Registration Page
@@ -9,10 +9,10 @@ import { Mail, Lock, User, Eye, EyeOff, Loader2, Calendar, FileText } from 'luci
  * Design: Minimalist Luxury (Matches Login)
  * - Three-step registration for better UX & data collection
  * - Step 1: Email & Password (credentials)
- * - Step 2: Name & Date of Birth & ID Verification (profile/safety)
+ * - Step 2: Name & Date of Birth (profile/safety)
  * - Step 3: Travel Interests (matching algorithm optimization)
  * - Date of birth for age verification (18+ only requirement)
- * - ID verification for safety and compliance
+ * - ID verification deferred to post-signup for reduced friction
  * - Interests for data-driven matching and user tracking
  * - OAuth integration options
  */
@@ -25,8 +25,6 @@ export default function Register() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [name, setName] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
-  const [idNumber, setIdNumber] = useState('');
-  const [idFile, setIdFile] = useState<File | null>(null);
   const [interests, setInterests] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -114,11 +112,6 @@ export default function Register() {
       return;
     }
 
-    if (!idNumber) {
-      setError('ID number is required for verification');
-      return;
-    }
-
     setStep('interests');
     setError('');
   };
@@ -137,7 +130,7 @@ export default function Register() {
 
     try {
       // Pass interests to register function (backend will store them)
-      await register(email, password, name, 'user', interests);
+      await register(email, password, name, interests);
       setLocation('/');
     } catch (err) {
       setError('Registration failed. Please try again.');
@@ -146,22 +139,10 @@ export default function Register() {
     }
   };
 
-  const handleOAuthLogin = async (provider: string) => {
+  const handleOAuthLogin = async (provider: 'google' | 'github') => {
     setIsLoading(true);
     try {
       await oauthLogin(provider);
-      // Route based on role
-      const storedUser = localStorage.getItem('partyup_user');
-      if (storedUser) {
-        const user = JSON.parse(storedUser);
-        if (user?.role === 'admin') {
-          setLocation('/admin/dashboard');
-        } else if (user?.role === 'staff') {
-          setLocation('/staff/dashboard');
-        } else {
-          setLocation('/');
-        }
-      }
     } catch (err) {
       setError(`${provider} login failed`);
     } finally {
@@ -319,25 +300,6 @@ export default function Register() {
                   />
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">⚠️ PartyUp is 18+ only. Age will be verified.</p>
-              </div>
-
-              {/* ID Number Input */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Government ID Number
-                </label>
-                <div className="relative">
-                  <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <input
-                    type="text"
-                    value={idNumber}
-                    onChange={(e) => setIdNumber(e.target.value.toUpperCase())}
-                    placeholder="Passport, License, or ID Number"
-                    className="w-full pl-10 pr-4 py-3 bg-secondary rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary transition-smooth"
-                    required
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">Required for identity verification and safety compliance</p>
               </div>
 
               {/* Buttons */}

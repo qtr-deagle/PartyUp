@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LayoutDashboard, CheckSquare, Car, Plane, LogOut, Moon, Sun } from 'lucide-react';
-import { Link } from 'wouter';
+import { LayoutDashboard, CheckSquare, Car, Plane, LogOut, Moon, Sun, DollarSign, Link2, MessageSquare, Shield } from 'lucide-react';
+import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 
@@ -17,18 +17,24 @@ export default function StaffLayout({ children }: StaffLayoutProps) {
   const [suppressHover, setSuppressHover] = useState(staffSuppressHoverUntilMove);
   const lastMousePos = useRef<{ x: number; y: number } | null>(staffLastClickPos);
   const sidebarRef = useRef<HTMLElement | null>(null);
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const [location] = useLocation();
+  const isActive = (path: string) => location === path || location.startsWith(`${path}/`);
 
   const staffNavItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/staff/dashboard' },
+    { id: 'verification', label: 'ID Verification', icon: Shield, path: '/staff/verification' },
     { id: 'disputes', label: 'User Reports', icon: CheckSquare, path: '/staff/disputes' },
     { id: 'vehicles', label: 'Verify Vehicles', icon: Car, path: '/staff/vehicles' },
     { id: 'trips', label: 'Trip Monitor', icon: Plane, path: '/staff/trips' },
+    { id: 'payment', label: 'Payments', icon: DollarSign, path: '/staff/payments' },
+    { id: 'pairing', label: 'Pairing History', icon: Link2, path: '/staff/pairing' },
+    { id: 'feedback', label: 'Feedback', icon: MessageSquare, path: '/staff/feedback' },
   ];
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     window.location.href = '/login';
   };
 
@@ -38,6 +44,7 @@ export default function StaffLayout({ children }: StaffLayoutProps) {
     staffLastClickPos = clickPos;
     staffSuppressHoverUntilMove = true;
     setSuppressHover(true);
+    setHovered(false);
   };
 
   useEffect(() => {
@@ -51,26 +58,12 @@ export default function StaffLayout({ children }: StaffLayoutProps) {
       setSuppressHover(false);
       staffSuppressHoverUntilMove = false;
       lastMousePos.current = { x: event.clientX, y: event.clientY };
-
-      const sidebar = sidebarRef.current;
-      if (!sidebar) return;
-
-      const rect = sidebar.getBoundingClientRect();
-      const isInside =
-        event.clientX >= rect.left &&
-        event.clientX <= rect.right &&
-        event.clientY >= rect.top &&
-        event.clientY <= rect.bottom;
-
-      if (isInside && !allowHoverExpand) {
-        setAllowHoverExpand(true);
-      }
-      setHovered(isInside);
+      setAllowHoverExpand(true);
     };
 
     window.addEventListener('mousemove', handleMouseMove);
     return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, [allowHoverExpand, suppressHover]);
+  }, [suppressHover]);
 
   const isExpanded = hovered;
 
@@ -79,69 +72,104 @@ export default function StaffLayout({ children }: StaffLayoutProps) {
       <aside
         ref={sidebarRef}
         onMouseEnter={() => {
-          if (!suppressHover && allowHoverExpand) {
+          if (!suppressHover) {
+            if (allowHoverExpand) {
+              setHovered(true);
+            }
+          }
+        }}
+        onMouseMove={() => {
+          if (!allowHoverExpand) {
+            setAllowHoverExpand(true);
+          }
+          if (!suppressHover) {
             setHovered(true);
           }
         }}
         onMouseLeave={() => setHovered(false)}
-        className={`fixed left-0 top-0 h-screen bg-card border-r border-border transition-all duration-300 ${
+        className={`fixed left-0 top-0 h-screen bg-sidebar border-r border-sidebar-border shadow-elevation-2 flex flex-col transition-all duration-300 z-50 overflow-hidden ${
           isExpanded ? 'w-64' : 'w-20'
-        } shadow-elevation-2 z-40 flex flex-col`}
+        }`}
       >
         {/* Logo */}
-        <div className="flex items-center justify-center h-20 border-b border-border">
-          <Link href="/staff/dashboard">
-            <a className="text-2xl font-bold text-primary hover:opacity-80">
-              {isExpanded ? 'Staff' : 'S'}
-            </a>
-          </Link>
+        <div className="h-20 flex items-center px-6 overflow-hidden">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-md bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm shrink-0">
+              P
+            </div>
+
+            {isExpanded && (
+              <div>
+                <h1 className="text-lg font-bold text-primary">PartyUp</h1>
+                <p className="text-xs text-muted-foreground whitespace-nowrap">Staff</p>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Navigation Items */}
-        <nav className="space-y-2 p-4">
+        <nav className="flex-1 px-2 py-6 space-y-1 overflow-y-auto overflow-x-hidden">
           {staffNavItems.map((item) => {
             const Icon = item.icon;
+            const active = isActive(item.path);
             return (
-              <Link key={item.id} href={item.path}>
-                <a
+              <Link key={item.id} href={item.path} asChild>
+                <button
                   onClick={handleSidebarItemClick}
-                  className="flex items-center gap-4 px-4 py-3 text-foreground hover:bg-secondary rounded-lg transition-colors"
+                  className={`w-full flex items-center gap-3 px-5.5 py-3 rounded-lg transition-smooth border-0 text-left cursor-pointer ${
+                    active
+                      ? 'bg-primary text-primary-foreground font-semibold shadow-md'
+                      : 'text-sidebar-foreground hover:bg-sidebar-accent'
+                  }`}
                 >
-                  <Icon className="w-5 h-5 flex-shrink-0" />
-                  {isExpanded && <span className="text-sm font-medium">{item.label}</span>}
-                </a>
+                  <Icon className="w-5 h-5 shrink-0" />
+                  {isExpanded && <span className="text-sm whitespace-nowrap">{item.label}</span>}
+                </button>
               </Link>
             );
           })}
         </nav>
 
-        {/* Bottom Actions */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-border space-y-2">
+        {/* Footer */}
+        <div className="p-4 space-y-2 overflow-hidden">
+          {user && (
+            <div className="flex items-center gap-3 px-2.5 py-2 mb-1">
+              <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-sm leading-none shrink-0">
+                {user.name?.charAt(0).toUpperCase() ?? 'S'}
+              </div>
+              {isExpanded && (
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-sidebar-foreground truncate">{user.name}</p>
+                  <p className="text-xs text-muted-foreground truncate capitalize">{user.role}</p>
+                </div>
+              )}
+            </div>
+          )}
           <button
-            onClick={toggleTheme}
-            className="w-full flex items-center gap-4 px-4 py-3 text-foreground hover:bg-secondary rounded-lg transition-colors"
+            onClick={() => toggleTheme?.()}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-smooth border-0 bg-transparent text-left cursor-pointer text-sidebar-foreground hover:bg-sidebar-accent/50"
           >
-            {theme === 'dark' ? (
-              <Sun className="w-5 h-5 flex-shrink-0" />
-            ) : (
-              <Moon className="w-5 h-5 flex-shrink-0" />
-            )}
-            {isExpanded && <span className="text-sm font-medium">Theme</span>}
+            {theme === 'dark' ? <Sun className="w-5 h-5 shrink-0" /> : <Moon className="w-5 h-5 shrink-0" />}
+            {isExpanded && <span className="text-sm whitespace-nowrap">{theme === 'dark' ? 'Light' : 'Dark'}</span>}
           </button>
           <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-4 px-4 py-3 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+            onClick={(event) => {
+              handleSidebarItemClick(event);
+              handleLogout();
+            }}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-smooth border-0 bg-transparent text-left cursor-pointer text-sidebar-foreground hover:bg-destructive/10 hover:text-destructive"
           >
-            <LogOut className="w-5 h-5 flex-shrink-0" />
-            {isExpanded && <span className="text-sm font-medium">Logout</span>}
+            <LogOut className="w-5 h-5 shrink-0" />
+            {isExpanded && <span className="text-sm whitespace-nowrap">Logout</span>}
           </button>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className={`flex-1 transition-all duration-300 ${isExpanded ? 'ml-64' : 'ml-20'} overflow-y-auto`}>
-        {children}
-      </main>
+      <div className="flex-1 flex flex-col overflow-hidden ml-20 min-h-0">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

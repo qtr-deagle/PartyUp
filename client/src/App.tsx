@@ -47,24 +47,16 @@ import Trips from "./pages/Trips";
 import TransactionHistory from "./pages/TransactionHistory";
 import StaffIDVerificationReview from "./pages/StaffIDVerificationReview";
 import AdminIDVerificationReview from "./pages/AdminIDVerificationReview";
+import MobileOnlyNotice from "./pages/MobileOnlyNotice";
 
-function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    window.location.href = '/login';
-    return null;
-  }
-
-  return <Component />;
+// The traveler dashboard (Home, Discovery, Chat, Map, Profile, Tours,
+// Carpooling, etc.) lives in the PartyUp mobile app, not this website --
+// this codebase is staff/admin tooling only. These routes stay defined
+// (rather than deleted) so the mobile-parity page components don't need to
+// be ripped out, but ProtectedRoute always shows a static notice instead of
+// ever rendering them, regardless of auth state.
+function ProtectedRoute({ component: _Component }: { component: React.ComponentType }) {
+  return <MobileOnlyNotice />;
 }
 
 function AdminRoute({ component: Component }: { component: React.ComponentType }) {

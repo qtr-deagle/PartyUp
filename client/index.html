@@ -20,14 +20,24 @@
   <div id="root" style="width: 100%; height: 100vh;"></div>
   <script type="module" src="/src/main.tsx"></script>
   <script>
-    // Conditionally load analytics only if endpoint is configured
-    if ('%VITE_ANALYTICS_ENDPOINT%' && '%VITE_ANALYTICS_ENDPOINT%' !== '') {
+    // Conditionally load analytics only if endpoint is configured.
+    // Vite leaves the literal "%VITE_..%" placeholder in place when the env var
+    // isn't set at build time, so guard against that in addition to an empty string.
+    (function () {
+      var endpoint = '%VITE_ANALYTICS_ENDPOINT%';
+      var websiteId = '%VITE_ANALYTICS_WEBSITE_ID%';
+      var isUnresolved = function (value) {
+        return !value || value.indexOf('%') !== -1;
+      };
+      if (isUnresolved(endpoint) || isUnresolved(websiteId)) {
+        return;
+      }
       const script = document.createElement('script');
-      script.src = '%VITE_ANALYTICS_ENDPOINT%/umami';
+      script.src = endpoint + '/umami';
       script.defer = true;
-      script.setAttribute('data-website-id', '%VITE_ANALYTICS_WEBSITE_ID%');
+      script.setAttribute('data-website-id', websiteId);
       document.body.appendChild(script);
-    }
+    })();
   </script>
 </body>
 

@@ -186,26 +186,26 @@ export default function StaffPaymentMonitoring() {
   const getSeverityColor = (severity: string) => {
     switch (severity) {
       case 'high':
-        return 'bg-destructive/20 text-destructive';
+        return 'bg-destructive/20 text-destructive dark:text-red-400';
       case 'medium':
-        return 'bg-orange-500/20 text-orange-700';
+        return 'bg-orange-500/20 text-orange-700 dark:text-orange-400';
       case 'low':
-        return 'bg-blue-500/20 text-blue-700';
+        return 'bg-blue-500/20 text-blue-700 dark:text-blue-400';
       default:
-        return 'bg-gray-500/20 text-gray-700';
+        return 'bg-gray-500/20 text-gray-700 dark:text-gray-300';
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending':
-        return 'bg-yellow-500/20 text-yellow-700';
+        return 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400';
       case 'investigating':
-        return 'bg-blue-500/20 text-blue-700';
+        return 'bg-blue-500/20 text-blue-700 dark:text-blue-400';
       case 'resolved':
-        return 'bg-green-500/20 text-green-700';
+        return 'bg-green-500/20 text-green-700 dark:text-green-400';
       default:
-        return 'bg-gray-500/20 text-gray-700';
+        return 'bg-gray-500/20 text-gray-700 dark:text-gray-300';
     }
   };
 
@@ -432,9 +432,9 @@ export default function StaffPaymentMonitoring() {
                         </td>
                         <td className="px-6 py-4">
                           <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            transaction.status === 'completed' ? 'bg-green-500/20 text-green-700' :
-                            transaction.status === 'pending' ? 'bg-yellow-500/20 text-yellow-700' :
-                            'bg-destructive/20 text-destructive'
+                            transaction.status === 'completed' ? 'bg-green-500/20 text-green-700 dark:text-green-400' :
+                            transaction.status === 'pending' ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400' :
+                            'bg-destructive/20 text-destructive dark:text-red-400'
                           }`}>
                             {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
                           </span>

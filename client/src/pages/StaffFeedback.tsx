@@ -117,13 +117,13 @@ export default function StaffFeedback() {
   const getFeedbackTypeColor = (type: string) => {
     switch (type) {
       case 'trip':
-        return 'bg-blue-500/20 text-blue-700';
+        return 'bg-blue-500/20 text-blue-700 dark:text-blue-400';
       case 'car':
-        return 'bg-purple-500/20 text-purple-700';
+        return 'bg-purple-500/20 text-purple-700 dark:text-purple-400';
       case 'user':
-        return 'bg-green-500/20 text-green-700';
+        return 'bg-green-500/20 text-green-700 dark:text-green-400';
       default:
-        return 'bg-gray-500/20 text-gray-700';
+        return 'bg-gray-500/20 text-gray-700 dark:text-gray-300';
     }
   };
 

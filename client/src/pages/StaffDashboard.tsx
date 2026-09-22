@@ -1,40 +1,56 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import StaffLayout from '@/components/StaffLayout';
-import { AlertCircle, CheckSquare, Car, Plane, Activity, Bell, Phone, MapPin } from 'lucide-react';
+import { AlertCircle, CheckSquare, ShieldCheck, Plane } from 'lucide-react';
+import { toast } from 'sonner';
+import { listReports, type ReportRow } from '@/lib/reports';
+import { getDashboardCounts } from '@/lib/adminStats';
 
 /**
  * Staff Dashboard
- * 
+ *
  * Staff can:
  * - Monitor pending reports and disputes
- * - Review vehicle listings
  * - Monitor active trips
  * - Access quick actions for common tasks
  */
 export default function StaffDashboard() {
+  const [openReports, setOpenReports] = useState<ReportRow[]>([]);
+  const [reviewingCount, setReviewingCount] = useState(0);
+  const [activeTrips, setActiveTrips] = useState(0);
+  const [pendingVerifications, setPendingVerifications] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      setIsLoading(true);
+      const [openResult, reviewingResult, countsResult] = await Promise.all([
+        listReports('open'),
+        listReports('reviewing'),
+        getDashboardCounts(),
+      ]);
+      const error = openResult.error ?? reviewingResult.error ?? countsResult.error;
+      if (error) {
+        setLoadError(error.message);
+        toast.error('Failed to load dashboard data');
+      } else {
+        setLoadError(null);
+        setOpenReports(openResult.data);
+        setReviewingCount(reviewingResult.data.length);
+        setActiveTrips(countsResult.data.activeTrips);
+        setPendingVerifications(countsResult.data.pendingVerifications);
+      }
+      setIsLoading(false);
+    })();
+  }, []);
+
+  const safetyReports = openReports.filter((report) => report.report_type === 'safety');
+
   const stats = [
-    { label: 'Pending Reports', value: '23', icon: AlertCircle, color: 'bg-destructive/10', textColor: 'text-destructive' },
-    { label: 'Open Disputes', value: '8', icon: CheckSquare, color: 'bg-orange-500/10', textColor: 'text-orange-500' },
-    { label: 'Vehicles to Verify', value: '12', icon: Car, color: 'bg-primary/10', textColor: 'text-primary' },
-    { label: 'Active Trips', value: '456', icon: Plane, color: 'bg-accent/10', textColor: 'text-accent' },
-  ];
-
-  const sosAlerts = [
-    { id: 1, trip: 'Trip #489 - Boston to NYC', user: 'Sarah Johnson', location: 'Highway 95, MA', time: '2 mins ago', severity: 'P1' },
-    { id: 2, trip: 'Trip #487 - Miami to Key West', user: 'Mark Davis', location: 'Route 1, FL', time: '15 mins ago', severity: 'P1' },
-  ];
-
-  const moderationQueue = [
-    { id: 1, report: 'Harassment report - John said racist slur', user: 'Jane Smith', severity: 'P2', time: '10 mins ago' },
-    { id: 2, report: 'Safety concern - User without ID verification', user: 'Bob Wilson', severity: 'P2', time: '25 mins ago' },
-    { id: 3, report: 'Policy violation - Sharing payment info in chat', user: 'Lisa Chen', severity: 'P3', time: '45 mins ago' },
-  ];
-
-  const dailyStats = [
-    { label: 'Trips Monitored', value: '234', icon: '👁️' },
-    { label: 'SOS Calls Handled', value: '8', icon: '📞' },
-    { label: 'Violations Flagged', value: '42', icon: '🚩' },
-    { label: 'Users Banned', value: '3', icon: '🔒' },
+    { label: 'Pending Reports', value: openReports.length.toLocaleString(), icon: AlertCircle, color: 'bg-destructive/10', textColor: 'text-destructive' },
+    { label: 'Open Disputes', value: reviewingCount.toLocaleString(), icon: CheckSquare, color: 'bg-orange-500/10', textColor: 'text-orange-500' },
+    { label: 'Pending ID Verifications', value: pendingVerifications.toLocaleString(), icon: ShieldCheck, color: 'bg-primary/10', textColor: 'text-primary' },
+    { label: 'Active Trips', value: activeTrips.toLocaleString(), icon: Plane, color: 'bg-accent/10', textColor: 'text-accent' },
   ];
 
   return (
@@ -46,116 +62,97 @@ export default function StaffDashboard() {
           <p className="text-sm text-muted-foreground mt-2">Real-time safety monitoring and moderation</p>
         </div>
 
-        {/* SOS ALERTS - Prominent Red Section */}
-        {sosAlerts.length > 0 && (
-          <div className="bg-destructive/10 border-2 border-destructive rounded-2xl p-6 shadow-elevation-2">
-            <div className="flex items-center gap-2 mb-4">
-              <Bell className="w-6 h-6 text-destructive animate-pulse" />
-              <h2 className="text-lg font-bold text-destructive">URGENT SOS ALERTS</h2>
-            </div>
-            <div className="space-y-3">
-              {sosAlerts.map((alert) => (
-                <div key={alert.id} className="bg-destructive/5 border border-destructive/30 rounded-lg p-4 flex items-start justify-between">
-                  <div className="flex-1">
-                    <p className="font-bold text-destructive">{alert.trip}</p>
-                    <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                      <span>{alert.user}</span>
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-3.5 h-3.5" /> {alert.location}
-                      </span>
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading dashboard...</p>
+        ) : loadError ? (
+          <p className="text-sm text-destructive">Failed to load dashboard data: {loadError}</p>
+        ) : (
+          <>
+            {/* SAFETY REPORTS - Prominent Red Section */}
+            {safetyReports.length > 0 && (
+              <div className="bg-destructive/10 border-2 border-destructive rounded-2xl p-6 shadow-elevation-2">
+                <div className="flex items-center gap-2 mb-4">
+                  <AlertCircle className="w-6 h-6 text-destructive" />
+                  <h2 className="text-lg font-bold text-destructive">OPEN SAFETY REPORTS</h2>
+                </div>
+                <div className="space-y-3">
+                  {safetyReports.map((report) => (
+                    <div key={report.id} className="bg-destructive/5 border border-destructive/30 rounded-lg p-4 flex items-start justify-between">
+                      <div className="flex-1">
+                        <p className="font-bold text-destructive">{report.reported_user?.display_name ?? 'Unknown user'}</p>
+                        <p className="text-sm text-muted-foreground mt-1">{report.details}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground mt-2">{new Date(report.created_at).toLocaleString()}</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-bold text-destructive bg-destructive/20 px-2 py-1 rounded">{alert.severity}</p>
-                    <p className="text-xs text-muted-foreground mt-2">{alert.time}</p>
-                  </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+            )}
+
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {stats.map((stat, index) => {
+                const Icon = stat.icon;
+                return (
+                  <div key={index} className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className={`${stat.color} p-3 rounded-lg`}>
+                        <Icon className={`${stat.textColor} w-6 h-6`} />
+                      </div>
+                    </div>
+                    <p className="text-muted-foreground text-sm mb-1">{stat.label}</p>
+                    <p className="text-3xl font-bold text-foreground">{stat.value}</p>
+                  </div>
+                );
+              })}
             </div>
-            <button className="w-full mt-4 py-2 bg-destructive text-destructive-foreground rounded-lg font-semibold hover:shadow-lg transition-smooth">
-              <Phone className="w-4 h-4 inline mr-2" /> Respond to SOS
-            </button>
-          </div>
+
+            {/* Moderation Queue */}
+            <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
+              <div className="flex items-center gap-2 mb-6">
+                <AlertCircle className="w-5 h-5 text-primary" />
+                <h3 className="text-lg font-bold text-foreground">Moderation Queue</h3>
+              </div>
+              <div className="space-y-3">
+                {openReports.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No open reports</p>
+                ) : (
+                  openReports.slice(0, 10).map((report) => (
+                    <div key={report.id} className="flex items-start justify-between p-4 bg-secondary rounded-lg border border-border">
+                      <div className="flex-1">
+                        <p className="font-medium text-foreground capitalize">
+                          {report.report_type} — {report.details}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">Reported by: {report.reporter?.display_name ?? 'Unknown'}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground mt-2">{new Date(report.created_at).toLocaleString()}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
+              <h3 className="text-lg font-bold text-foreground mb-6">Quick Actions</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <button className="w-full py-3 px-4 bg-destructive text-destructive-foreground rounded-lg font-medium hover:shadow-lg transition-smooth">
+                  Review Reports
+                </button>
+                <button className="w-full py-3 px-4 bg-primary text-primary-foreground rounded-lg font-medium hover:shadow-lg transition-smooth">
+                  Handle Disputes
+                </button>
+                <button className="w-full py-3 px-4 bg-secondary text-foreground rounded-lg font-medium hover:bg-secondary/80 transition-smooth border border-border">
+                  Monitor Trips
+                </button>
+              </div>
+            </div>
+          </>
         )}
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {stats.map((stat, index) => {
-            const Icon = stat.icon;
-            return (
-              <div key={index} className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-                <div className="flex items-center justify-between mb-4">
-                  <div className={`${stat.color} p-3 rounded-lg`}>
-                    <Icon className={`${stat.textColor} w-6 h-6`} />
-                  </div>
-                </div>
-                <p className="text-muted-foreground text-sm mb-1">{stat.label}</p>
-                <p className="text-3xl font-bold text-foreground">{stat.value}</p>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Prioritized Moderation Queue */}
-        <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-          <div className="flex items-center gap-2 mb-6">
-            <AlertCircle className="w-5 h-5 text-primary" />
-            <h3 className="text-lg font-bold text-foreground">Moderation Queue (Prioritized)</h3>
-          </div>
-          <div className="space-y-3">
-            {moderationQueue.map((item) => {
-              const severityColor = 
-                item.severity === 'P1' ? 'bg-destructive/20 text-destructive' :
-                item.severity === 'P2' ? 'bg-orange-500/20 text-orange-600' : 
-                'bg-yellow-500/20 text-yellow-700';
-              return (
-                <div key={item.id} className="flex items-start justify-between p-4 bg-secondary rounded-lg border border-border">
-                  <div className="flex-1">
-                    <p className="font-medium text-foreground">{item.report}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Reported by: {item.user}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className={`text-xs font-bold px-2 py-1 rounded ${severityColor}`}>{item.severity}</p>
-                    <p className="text-xs text-muted-foreground mt-2">{item.time}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Daily Statistics */}
-          <div className="lg:col-span-2 grid grid-cols-2 gap-4">
-            {dailyStats.map((stat, idx) => (
-              <div key={idx} className="bg-card rounded-xl p-4 shadow-elevation-2 border border-border">
-                <div className="text-3xl mb-2">{stat.icon}</div>
-                <p className="text-xs text-muted-foreground mb-1">{stat.label}</p>
-                <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Quick Actions */}
-          <div className="lg:col-span-1 bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-            <h3 className="text-lg font-bold text-foreground mb-6">Quick Actions</h3>
-            <div className="space-y-3">
-              <button className="w-full py-3 px-4 bg-destructive text-destructive-foreground rounded-lg font-medium hover:shadow-lg transition-smooth">
-                Review Reports
-              </button>
-              <button className="w-full py-3 px-4 bg-primary text-primary-foreground rounded-lg font-medium hover:shadow-lg transition-smooth">
-                Handle Disputes
-              </button>
-              <button className="w-full py-3 px-4 bg-secondary text-foreground rounded-lg font-medium hover:bg-secondary/80 transition-smooth border border-border">
-                Verify Vehicles
-              </button>
-              <button className="w-full py-3 px-4 bg-secondary text-foreground rounded-lg font-medium hover:bg-secondary/80 transition-smooth border border-border">
-                Monitor Trips
-              </button>
-            </div>
-          </div>
-        </div>
       </div>
     </StaffLayout>
   );

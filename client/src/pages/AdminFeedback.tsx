@@ -180,10 +180,10 @@ export default function AdminFeedback() {
 
   const getTypeColor = (type: string) => {
     switch(type) {
-      case 'trip': return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'car': return 'bg-purple-100 text-purple-700 border-purple-200';
-      case 'platform': return 'bg-slate-100 text-slate-700 border-slate-200';
-      default: return 'bg-gray-100 text-gray-700';
+      case 'trip': return 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-500/20 dark:text-blue-400 dark:border-blue-500/30';
+      case 'car': return 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-500/20 dark:text-purple-400 dark:border-purple-500/30';
+      case 'platform': return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-500/20 dark:text-slate-300 dark:border-slate-500/30';
+      default: return 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300';
     }
   };
 

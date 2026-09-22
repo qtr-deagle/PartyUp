@@ -1,28 +1,60 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import StaffLayout from '@/components/StaffLayout';
-import { Search, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { Search, CheckCircle, XCircle } from 'lucide-react';
+import { toast } from 'sonner';
+import { listReports, updateReportStatus, type ReportRow } from '@/lib/reports';
 
 /**
  * Staff Moderation - Reports Queue
- * 
+ *
  * Staff can:
  * - Review pending user reports
  * - Take action on violations
- * - Add notes and justifications
  */
 export default function StaffModeration() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [reports, setReports] = useState<ReportRow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actioningReportId, setActioningReportId] = useState<string | null>(null);
 
-  const reports = [
-    { id: 1, user: 'Jane Smith', reason: 'Inappropriate behavior', status: 'pending', time: '2 hours ago' },
-    { id: 2, user: 'Mike Johnson', reason: 'Safety concern - violated trust', status: 'pending', time: '4 hours ago' },
-    { id: 3, user: 'Sarah Williams', reason: 'Payment fraud attempt', status: 'pending', time: '6 hours ago' },
-  ];
+  const loadReports = useCallback(async () => {
+    setIsLoading(true);
+    const { data, error } = await listReports('open');
+    if (error) {
+      setLoadError(error.message);
+      toast.error('Failed to load reports');
+    } else {
+      setLoadError(null);
+      setReports(data);
+    }
+    setIsLoading(false);
+  }, []);
 
-  const filteredReports = reports.filter(report =>
-    report.user.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    report.reason.toLowerCase().includes(searchTerm.toLowerCase())
+  useEffect(() => {
+    void loadReports();
+  }, [loadReports]);
+
+  const filteredReports = useMemo(
+    () =>
+      reports.filter(
+        (report) =>
+          (report.reported_user?.display_name ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          report.details.toLowerCase().includes(searchTerm.toLowerCase())
+      ),
+    [reports, searchTerm]
   );
+
+  const handleAction = async (report: ReportRow, status: 'resolved' | 'dismissed') => {
+    setActioningReportId(report.id);
+    const { error } = await updateReportStatus(report.id, status);
+    setActioningReportId(null);
+    if (error) {
+      toast.error('Failed to update report');
+    } else {
+      await loadReports();
+    }
+  };
 
   return (
     <StaffLayout>
@@ -58,21 +90,53 @@ export default function StaffModeration() {
                 </tr>
               </thead>
               <tbody>
-                {filteredReports.map((report) => (
-                  <tr key={report.id} className="border-b border-border hover:bg-secondary/50 transition-colors">
-                    <td className="px-6 py-4 text-sm text-foreground">{report.user}</td>
-                    <td className="px-6 py-4 text-sm text-muted-foreground">{report.reason}</td>
-                    <td className="px-6 py-4 text-sm text-muted-foreground">{report.time}</td>
-                    <td className="px-6 py-4 text-sm space-x-2 flex">
-                      <button className="p-2 hover:bg-primary/10 rounded-lg text-primary transition-colors" title="Approve">
-                        <CheckCircle className="w-5 h-5" />
-                      </button>
-                      <button className="p-2 hover:bg-destructive/10 rounded-lg text-destructive transition-colors" title="Reject">
-                        <XCircle className="w-5 h-5" />
-                      </button>
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-8 text-center text-sm text-muted-foreground">
+                      Loading...
                     </td>
                   </tr>
-                ))}
+                ) : loadError ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-8 text-center text-sm text-destructive">
+                      Failed to load reports: {loadError}
+                    </td>
+                  </tr>
+                ) : filteredReports.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-8 text-center text-sm text-muted-foreground">
+                      No open reports
+                    </td>
+                  </tr>
+                ) : (
+                  filteredReports.map((report) => (
+                    <tr key={report.id} className="border-b border-border hover:bg-secondary/50 transition-colors">
+                      <td className="px-6 py-4 text-sm text-foreground">{report.reported_user?.display_name ?? '—'}</td>
+                      <td className="px-6 py-4 text-sm text-muted-foreground">
+                        <span className="capitalize font-medium text-foreground">{report.report_type}</span> — {report.details}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-muted-foreground">{new Date(report.created_at).toLocaleString()}</td>
+                      <td className="px-6 py-4 text-sm space-x-2 flex">
+                        <button
+                          onClick={() => handleAction(report, 'resolved')}
+                          disabled={actioningReportId === report.id}
+                          className="p-2 hover:bg-primary/10 rounded-lg text-primary transition-colors disabled:opacity-50"
+                          title="Approve"
+                        >
+                          <CheckCircle className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => handleAction(report, 'dismissed')}
+                          disabled={actioningReportId === report.id}
+                          className="p-2 hover:bg-destructive/10 rounded-lg text-destructive transition-colors disabled:opacity-50"
+                          title="Reject"
+                        >
+                          <XCircle className="w-5 h-5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

@@ -1,57 +1,52 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
-import { Search, MoreVertical, Shield, Ban, CheckCircle } from 'lucide-react';
+import { Search, Shield, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { listUsers, setUserVerificationStatus, type UserRow } from '@/lib/adminUsers';
 
 export default function AdminUsers() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [suspendingUserId, setSuspendingUserId] = useState<number | null>(null);
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [verifyingUserId, setVerifyingUserId] = useState<string | null>(null);
 
-  const handleSuspendUser = async (userId: number) => {
-    setSuspendingUserId(userId);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 800));
-      toast.success('User suspended successfully');
-    } catch (error) {
-      toast.error('Failed to suspend user');
-    } finally {
-      setSuspendingUserId(null);
+  const loadUsers = useCallback(async (search: string) => {
+    setIsLoading(true);
+    const { data, error } = await listUsers(search);
+    if (error) {
+      setLoadError(error.message);
+      toast.error('Failed to load users');
+    } else {
+      setLoadError(null);
+      setUsers(data);
     }
-  };
+    setIsLoading(false);
+  }, []);
 
-  const handleUnsuspendUser = async (userId: number) => {
-    setSuspendingUserId(userId);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 800));
-      toast.success('User unsuspended successfully');
-    } catch (error) {
-      toast.error('Failed to unsuspend user');
-    } finally {
-      setSuspendingUserId(null);
-    }
-  };
+  useEffect(() => {
+    const timeout = setTimeout(() => void loadUsers(searchTerm), 300);
+    return () => clearTimeout(timeout);
+  }, [searchTerm, loadUsers]);
 
-  const handleVerifyUser = async (userId: number) => {
-    try {
-      await new Promise(resolve => setTimeout(resolve, 600));
-      toast.success('User verified successfully');
-    } catch (error) {
+  const handleVerifyUser = async (userId: string) => {
+    setVerifyingUserId(userId);
+    const { error } = await setUserVerificationStatus(userId, 'approved');
+    setVerifyingUserId(null);
+    if (error) {
       toast.error('Failed to verify user');
+    } else {
+      toast.success('User verified successfully');
+      await loadUsers(searchTerm);
     }
-  }
+  };
 
-  const users = [
-    { id: 1, name: 'John Doe', email: 'john@example.com', status: 'active', verified: true },
-    { id: 2, name: 'Jane Smith', email: 'jane@example.com', status: 'active', verified: true },
-    { id: 3, name: 'Mike Johnson', email: 'mike@example.com', status: 'suspended', verified: false },
-    { id: 4, name: 'Sarah Williams', email: 'sarah@example.com', status: 'active', verified: true },
-    { id: 5, name: 'Tom Brown', email: 'tom@example.com', status: 'inactive', verified: false },
-  ];
-
-  const filteredUsers = users.filter(user =>
-    user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Suspend/unsuspend has no backing column on `profiles` yet -- there is no
+  // account-status/ban schema anywhere in this codebase to wire this to, so
+  // this action is intentionally left unimplemented rather than faking it.
+  const handleSuspendUser = () => {
+    toast.info('Suspending users is not available yet');
+  };
 
   return (
     <AdminLayout>
@@ -81,76 +76,82 @@ export default function AdminUsers() {
                 <tr className="border-b border-border bg-secondary">
                   <th className="px-6 py-4 text-left text-sm font-bold text-foreground">User</th>
                   <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Email</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Status</th>
+                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Role</th>
                   <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Verified</th>
                   <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredUsers.map((user) => (
-                  <tr key={user.id} className="border-b border-border hover:bg-secondary/50 transition-smooth">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                          <span className="text-primary font-bold">{user.name.charAt(0)}</span>
-                        </div>
-                        <span className="font-medium text-foreground">{user.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-muted-foreground">{user.email}</td>
-                    <td className="px-6 py-4">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${
-                        user.status === 'active' ? 'bg-green-100 text-green-700' :
-                        user.status === 'suspended' ? 'bg-red-100 text-red-700' :
-                        'bg-gray-100 text-gray-700'
-                      }`}>
-                        {user.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      {user.verified ? (
-                        <div className="flex items-center gap-1 text-green-600">
-                          <CheckCircle className="w-4 h-4" />
-                          <span className="text-xs font-medium">Verified</span>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Pending</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        {!user.verified && (
-                          <button
-                            onClick={() => handleVerifyUser(user.id)}
-                            className="p-2 hover:bg-blue-500/10 text-blue-600 rounded-lg transition-smooth"
-                            title="Verify user"
-                          >
-                            <Shield className="w-4 h-4" />
-                          </button>
-                        )}
-                        {user.status === 'active' ? (
-                          <button
-                            onClick={() => handleSuspendUser(user.id)}
-                            disabled={suspendingUserId === user.id}
-                            className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition-smooth disabled:opacity-50"
-                            title="Suspend user"
-                          >
-                            <Ban className="w-4 h-4" />
-                          </button>
-                        ) : user.status === 'suspended' ? (
-                          <button
-                            onClick={() => handleUnsuspendUser(user.id)}
-                            disabled={suspendingUserId === user.id}
-                            className="p-2 hover:bg-green-500/10 text-green-600 rounded-lg transition-smooth disabled:opacity-50"
-                            title="Unsuspend user"
-                          >
-                            <CheckCircle className="w-4 h-4" />
-                          </button>
-                        ) : null}
-                      </div>
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-sm text-muted-foreground">
+                      Loading...
                     </td>
                   </tr>
-                ))}
+                ) : loadError ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-sm text-destructive">
+                      Failed to load users: {loadError}
+                    </td>
+                  </tr>
+                ) : users.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-sm text-muted-foreground">
+                      No users found
+                    </td>
+                  </tr>
+                ) : (
+                  users.map((user) => (
+                    <tr key={user.id} className="border-b border-border hover:bg-secondary/50 transition-smooth">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                            <span className="text-primary font-bold">{user.display_name?.charAt(0) ?? '?'}</span>
+                          </div>
+                          <span className="font-medium text-foreground">{user.display_name}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-muted-foreground">{user.email ?? '—'}</td>
+                      <td className="px-6 py-4">
+                        <span className="px-3 py-1 rounded-full text-xs font-medium capitalize bg-secondary text-foreground">
+                          {user.role}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        {user.verification_status === 'approved' ? (
+                          <div className="flex items-center gap-1 text-green-600">
+                            <CheckCircle className="w-4 h-4" />
+                            <span className="text-xs font-medium">Verified</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground capitalize">{user.verification_status ?? 'Not submitted'}</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          {user.verification_status !== 'approved' && (
+                            <button
+                              onClick={() => handleVerifyUser(user.id)}
+                              disabled={verifyingUserId === user.id}
+                              className="p-2 hover:bg-blue-500/10 text-blue-600 rounded-lg transition-smooth disabled:opacity-50"
+                              title="Verify user"
+                            >
+                              <Shield className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button
+                            onClick={handleSuspendUser}
+                            className="p-2 hover:bg-secondary rounded-lg text-muted-foreground transition-smooth"
+                            title="Suspend user (not available yet)"
+                          >
+                            <span className="sr-only">Suspend user</span>
+                            &mdash;
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

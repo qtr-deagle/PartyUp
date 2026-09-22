@@ -232,8 +232,8 @@ export default function AdminPairingHistory() {
                       <span
                         className={`px-3 py-1 rounded-full text-xs font-medium ${
                           pairing.status === 'completed'
-                            ? 'bg-green-500/20 text-green-700'
-                            : 'bg-blue-500/20 text-blue-700'
+                            ? 'bg-green-500/20 text-green-700 dark:text-green-400'
+                            : 'bg-blue-500/20 text-blue-700 dark:text-blue-400'
                         }`}
                       >
                         {pairing.status.charAt(0).toUpperCase() + pairing.status.slice(1)}

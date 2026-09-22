@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { logAuditAction } from '@/lib/auditLog';
 
 export type DocumentType = 'passport' | 'driver_license' | 'national_id' | 'other';
 export type VerificationStatus = 'pending' | 'approved' | 'rejected' | 'resubmitted';
@@ -57,6 +58,11 @@ export async function reviewIdVerification(verificationId: string, decision: 'ap
     p_decision: decision,
     p_notes: notes,
   });
+  if (!error) {
+    logAuditAction(decision === 'approved' ? 'Approved ID verification' : 'Rejected ID verification', 'id_verification', verificationId, {
+      notes,
+    });
+  }
   return { error };
 }
 

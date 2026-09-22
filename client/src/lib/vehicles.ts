@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { logAuditAction } from '@/lib/auditLog';
 
 export type VehicleVerificationStatus = 'unverified' | 'pending' | 'approved' | 'rejected';
 
@@ -52,5 +53,10 @@ export async function reviewVehicleVerification(vehicleId: string, decision: 'ap
     p_decision: decision,
     p_notes: notes,
   });
+  if (!error) {
+    logAuditAction(decision === 'approved' ? 'Approved vehicle verification' : 'Rejected vehicle verification', 'vehicle', vehicleId, {
+      notes,
+    });
+  }
   return { error };
 }

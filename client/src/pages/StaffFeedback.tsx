@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import StaffLayout from '@/components/StaffLayout';
 import { Search, Star, MessageSquare, Filter } from 'lucide-react';
+import { listFeedback, type FeedbackRow, type FeedbackType } from '@/lib/feedback';
 
 /**
  * Staff Feedback Monitoring (View Only)
- * 
+ *
  * Staff can:
  * - View all user feedback and reviews
  * - Monitor feedback trends
@@ -12,99 +13,75 @@ import { Search, Star, MessageSquare, Filter } from 'lucide-react';
  * - Track user satisfaction
  */
 export default function StaffFeedback() {
+  const [feedback, setFeedback] = useState<FeedbackRow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRating, setFilterRating] = useState('');
 
-  const feedback = [
-    {
-      id: 1,
-      author: 'Sarah Johnson',
-      type: 'trip',
-      subject: 'Amazing experience with John',
-      message: 'Had a wonderful time on the Boracay trip. John was an excellent travel buddy, very responsible and fun!',
-      rating: 5,
-      date: '2 hours ago',
-    },
-    {
-      id: 2,
-      author: 'Mike Chen',
-      type: 'car',
-      subject: 'Great rental car condition',
-      message: 'The Honda CR-V was in excellent condition. Smooth ride and very clean. Would rent again!',
-      rating: 5,
-      date: '5 hours ago',
-    },
-    {
-      id: 3,
-      author: 'Lisa Rodriguez',
-      type: 'trip',
-      subject: 'Service issue during trip',
-      message: 'The carpool ride was late by 20 minutes. Otherwise good experience.',
-      rating: 3,
-      date: '1 day ago',
-    },
-    {
-      id: 4,
-      author: 'James Wilson',
-      type: 'user',
-      subject: 'Great platform overall',
-      message: 'Love using PartyUp! The matching algorithm works great and I meet awesome people.',
-      rating: 5,
-      date: '2 days ago',
-    },
-    {
-      id: 5,
-      author: 'Emma Davis',
-      type: 'trip',
-      subject: 'Needs improvement',
-      message: 'App crashed twice during booking. Please fix these bugs.',
-      rating: 2,
-      date: '3 days ago',
-    },
-  ];
+  const loadFeedback = useCallback(async () => {
+    setIsLoading(true);
+    const { data } = await listFeedback();
+    setFeedback(data);
+    setIsLoading(false);
+  }, []);
 
-  const filteredFeedback = feedback.filter(item => {
-    const searchLower = searchTerm.toLowerCase();
-    const matchesSearch =
-      item.author.toLowerCase().includes(searchLower) ||
-      item.subject.toLowerCase().includes(searchLower) ||
-      item.message.toLowerCase().includes(searchLower);
+  useEffect(() => {
+    void loadFeedback();
+  }, [loadFeedback]);
 
-    const matchesRating = !filterRating || item.rating.toString() === filterRating;
+  const filteredFeedback = useMemo(
+    () =>
+      feedback.filter((item) => {
+        const searchLower = searchTerm.toLowerCase();
+        const matchesSearch =
+          !searchLower ||
+          (item.author?.display_name ?? '').toLowerCase().includes(searchLower) ||
+          (item.comment ?? '').toLowerCase().includes(searchLower);
 
-    return matchesSearch && matchesRating;
-  });
+        const matchesRating = !filterRating || item.rating.toString() === filterRating;
 
-  const stats = [
-    {
-      label: 'Total Feedback',
-      value: '1,243',
-      icon: MessageSquare,
-      color: 'bg-primary/10',
-      textColor: 'text-primary'
-    },
-    {
-      label: 'Avg Rating',
-      value: '4.7/5.0',
-      icon: Star,
-      color: 'bg-yellow-500/10',
-      textColor: 'text-yellow-500'
-    },
-    {
-      label: '5-Star Reviews',
-      value: '78%',
-      icon: Star,
-      color: 'bg-green-500/10',
-      textColor: 'text-green-500'
-    },
-    {
-      label: 'Needs Review',
-      value: '12',
-      icon: MessageSquare,
-      color: 'bg-orange-500/10',
-      textColor: 'text-orange-500'
-    },
-  ];
+        return matchesSearch && matchesRating;
+      }),
+    [feedback, searchTerm, filterRating]
+  );
+
+  const stats = useMemo(() => {
+    const total = feedback.length;
+    const avgRating = total ? feedback.reduce((sum, item) => sum + item.rating, 0) / total : 0;
+    const fiveStarPct = total ? Math.round((feedback.filter((item) => item.rating === 5).length / total) * 100) : 0;
+    const needsReview = feedback.filter((item) => item.rating <= 2).length;
+
+    return [
+      {
+        label: 'Total Feedback',
+        value: total.toLocaleString(),
+        icon: MessageSquare,
+        color: 'bg-primary/10',
+        textColor: 'text-primary',
+      },
+      {
+        label: 'Avg Rating',
+        value: `${avgRating.toFixed(1)}/5.0`,
+        icon: Star,
+        color: 'bg-yellow-500/10',
+        textColor: 'text-yellow-500',
+      },
+      {
+        label: '5-Star Reviews',
+        value: `${fiveStarPct}%`,
+        icon: Star,
+        color: 'bg-green-500/10',
+        textColor: 'text-green-500',
+      },
+      {
+        label: 'Needs Review',
+        value: needsReview.toString(),
+        icon: MessageSquare,
+        color: 'bg-orange-500/10',
+        textColor: 'text-orange-500',
+      },
+    ];
+  }, [feedback]);
 
   const getRatingColor = (rating: number) => {
     if (rating === 5) return 'text-green-500';
@@ -114,17 +91,52 @@ export default function StaffFeedback() {
     return 'text-destructive';
   };
 
-  const getFeedbackTypeColor = (type: string) => {
+  const getFeedbackTypeColor = (type: FeedbackType) => {
     switch (type) {
       case 'trip':
         return 'bg-blue-500/20 text-blue-700 dark:text-blue-400';
-      case 'car':
+      case 'service':
         return 'bg-purple-500/20 text-purple-700 dark:text-purple-400';
       case 'user':
         return 'bg-green-500/20 text-green-700 dark:text-green-400';
       default:
         return 'bg-gray-500/20 text-gray-700 dark:text-gray-300';
     }
+  };
+
+  const getFeedbackTypeLabel = (type: FeedbackType) => {
+    switch (type) {
+      case 'trip':
+        return 'Trip';
+      case 'service':
+        return 'Service';
+      case 'user':
+        return 'Traveler';
+      default:
+        return type;
+    }
+  };
+
+  const getSubject = (item: FeedbackRow) => {
+    if (item.feedback_type === 'user' && item.target_user?.display_name) {
+      return `Rated ${item.target_user.display_name}`;
+    }
+    if (item.trip?.title) {
+      return item.trip.title;
+    }
+    return 'Service feedback';
+  };
+
+  const formatRelativeTime = (isoDate: string) => {
+    const diffMs = Date.now() - new Date(isoDate).getTime();
+    const diffMinutes = Math.floor(diffMs / 60000);
+    if (diffMinutes < 1) return 'just now';
+    if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+    return new Date(isoDate).toLocaleDateString();
   };
 
   return (
@@ -185,38 +197,48 @@ export default function StaffFeedback() {
 
         {/* Feedback List */}
         <div className="space-y-4">
-          {filteredFeedback.map((item) => (
-            <div key={item.id} className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border hover:border-primary/30 transition-smooth">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="font-semibold text-foreground">{item.author}</span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getFeedbackTypeColor(item.type)}`}>
-                      {item.type.charAt(0).toUpperCase() + item.type.slice(1)}
-                    </span>
-                    <span className="text-xs text-muted-foreground">{item.date}</span>
-                  </div>
+          {isLoading ? (
+            <div className="bg-card rounded-2xl p-8 shadow-elevation-2 border border-border text-center text-sm text-muted-foreground">
+              Loading...
+            </div>
+          ) : filteredFeedback.length === 0 ? (
+            <div className="bg-card rounded-2xl p-8 shadow-elevation-2 border border-border text-center text-sm text-muted-foreground">
+              No feedback found
+            </div>
+          ) : (
+            filteredFeedback.map((item) => (
+              <div key={item.id} className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border hover:border-primary/30 transition-smooth">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="font-semibold text-foreground">{item.author?.display_name ?? 'Unknown'}</span>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getFeedbackTypeColor(item.feedback_type)}`}>
+                        {getFeedbackTypeLabel(item.feedback_type)}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{formatRelativeTime(item.created_at)}</span>
+                    </div>
 
-                  <h3 className="text-lg font-bold text-foreground mb-2">{item.subject}</h3>
-                  <p className="text-sm text-muted-foreground mb-4">{item.message}</p>
+                    <h3 className="text-lg font-bold text-foreground mb-2">{getSubject(item)}</h3>
+                    <p className="text-sm text-muted-foreground mb-4">{item.comment || 'No written comment.'}</p>
 
-                  <div className="flex items-center gap-2">
-                    {[...Array(5)].map((_, i) => (
-                      <Star
-                        key={i}
-                        className={`w-4 h-4 ${
-                          i < item.rating ? `${getRatingColor(item.rating)} fill-current` : 'text-gray-300'
-                        }`}
-                      />
-                    ))}
-                    <span className={`text-sm font-semibold ml-2 ${getRatingColor(item.rating)}`}>
-                      {item.rating}.0/5.0
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {[...Array(5)].map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`w-4 h-4 ${
+                            i < item.rating ? `${getRatingColor(item.rating)} fill-current` : 'text-gray-300'
+                          }`}
+                        />
+                      ))}
+                      <span className={`text-sm font-semibold ml-2 ${getRatingColor(item.rating)}`}>
+                        {item.rating}.0/5.0
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
 
         {/* Summary */}

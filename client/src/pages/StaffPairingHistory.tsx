@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import StaffLayout from '@/components/StaffLayout';
 import { Search, Users, TrendingUp, Filter, Calendar } from 'lucide-react';
+import { toast } from 'sonner';
+import { listPairingHistory, type PairingHistoryRow } from '@/lib/pairingHistory';
 
 /**
  * Staff Pairing History (View Only)
- * 
+ *
  * Staff can:
  * - View all user pairings and travel buddy matches
  * - Monitor pairing success rates
@@ -14,59 +16,30 @@ import { Search, Users, TrendingUp, Filter, Calendar } from 'lucide-react';
 export default function StaffPairingHistory() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [pairingHistory, setPairingHistory] = useState<PairingHistoryRow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const pairingHistory = [
-    {
-      id: 1,
-      user1: 'Sarah Johnson',
-      user2: 'Mike Chen',
-      tripType: 'Carpool',
-      destination: 'Boracay',
-      startDate: '2026-03-15',
-      status: 'completed',
-      rating: 4.8,
-      compatibility: 92,
-    },
-    {
-      id: 2,
-      user1: 'Lisa Rodriguez',
-      user2: 'John Smith',
-      tripType: 'Tour',
-      destination: 'Manila City Tour',
-      startDate: '2026-02-20',
-      status: 'completed',
-      rating: 5.0,
-      compatibility: 98,
-    },
-    {
-      id: 3,
-      user1: 'Emma Davis',
-      user2: 'Tom Brown',
-      tripType: 'Carpool',
-      destination: 'Tagaytay',
-      startDate: '2026-03-10',
-      status: 'completed',
-      rating: 3.5,
-      compatibility: 76,
-    },
-    {
-      id: 4,
-      user1: 'Alex Wilson',
-      user2: 'Grace Lee',
-      tripType: 'Tour',
-      destination: 'Historical Sites',
-      startDate: '2026-03-20',
-      status: 'active',
-      rating: null,
-      compatibility: 89,
-    },
-  ];
+  useEffect(() => {
+    (async () => {
+      setIsLoading(true);
+      const { data, error } = await listPairingHistory();
+      if (error) {
+        setLoadError(error.message);
+        toast.error('Failed to load pairing history');
+      } else {
+        setLoadError(null);
+        setPairingHistory(data);
+      }
+      setIsLoading(false);
+    })();
+  }, []);
 
   const filteredPairings = pairingHistory.filter(pairing => {
     const searchLower = searchTerm.toLowerCase();
     const matchesSearch =
-      pairing.user1.toLowerCase().includes(searchLower) ||
-      pairing.user2.toLowerCase().includes(searchLower) ||
+      pairing.user1_name.toLowerCase().includes(searchLower) ||
+      pairing.user2_name.toLowerCase().includes(searchLower) ||
       pairing.destination.toLowerCase().includes(searchLower);
 
     const matchesFilter = !filterStatus || pairing.status === filterStatus;
@@ -74,31 +47,43 @@ export default function StaffPairingHistory() {
     return matchesSearch && matchesFilter;
   });
 
+  const ratedPairings = pairingHistory.filter((p) => p.rating !== null);
+  const completedPairings = pairingHistory.filter((p) => p.status === 'completed');
+  const avgCompatibility = pairingHistory.length
+    ? Math.round(pairingHistory.reduce((sum, p) => sum + p.compatibility, 0) / pairingHistory.length)
+    : 0;
+  const successRate = pairingHistory.length
+    ? Math.round((completedPairings.length / pairingHistory.length) * 1000) / 10
+    : 0;
+  const avgRating = ratedPairings.length
+    ? Math.round((ratedPairings.reduce((sum, p) => sum + (p.rating ?? 0), 0) / ratedPairings.length) * 10) / 10
+    : 0;
+
   const stats = [
     {
       label: 'Total Pairings',
-      value: '1,847',
+      value: pairingHistory.length.toLocaleString(),
       icon: Users,
       color: 'bg-primary/10',
       textColor: 'text-primary'
     },
     {
       label: 'Avg Compatibility',
-      value: '88.2%',
+      value: `${avgCompatibility}%`,
       icon: TrendingUp,
       color: 'bg-green-500/10',
       textColor: 'text-green-500'
     },
     {
       label: 'Success Rate',
-      value: '92.5%',
+      value: `${successRate}%`,
       icon: TrendingUp,
       color: 'bg-emerald-500/10',
       textColor: 'text-emerald-500'
     },
     {
       label: 'Avg Rating',
-      value: '4.6/5.0',
+      value: `${avgRating.toFixed(1)}/5.0`,
       icon: TrendingUp,
       color: 'bg-accent/10',
       textColor: 'text-accent'
@@ -160,6 +145,13 @@ export default function StaffPairingHistory() {
 
         {/* Pairing History Table */}
         <div className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground p-6">Loading pairing history...</p>
+          ) : loadError ? (
+            <p className="text-sm text-destructive p-6">Failed to load pairing history: {loadError}</p>
+          ) : filteredPairings.length === 0 ? (
+            <p className="text-sm text-muted-foreground p-6">No pairings found.</p>
+          ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -176,17 +168,17 @@ export default function StaffPairingHistory() {
                 {filteredPairings.map((pairing) => (
                   <tr key={pairing.id} className="border-b border-border hover:bg-secondary/50 transition-smooth">
                     <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-foreground">{pairing.user1}</div>
-                      <div className="text-xs text-muted-foreground">& {pairing.user2}</div>
+                      <div className="text-sm font-medium text-foreground">{pairing.user1_name}</div>
+                      <div className="text-xs text-muted-foreground">& {pairing.user2_name}</div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-foreground">{pairing.tripType}</div>
+                      <div className="text-sm font-medium text-foreground capitalize">{pairing.trip_type}</div>
                       <div className="text-xs text-muted-foreground">{pairing.destination}</div>
                     </td>
                     <td className="px-6 py-4 text-sm text-foreground">
                       <div className="flex items-center gap-1 text-xs">
                         <Calendar className="w-4 h-4" />
-                        {pairing.startDate}
+                        {pairing.start_at ? new Date(pairing.start_at).toLocaleDateString() : '—'}
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -201,7 +193,7 @@ export default function StaffPairingHistory() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      {pairing.rating ? (
+                      {pairing.rating !== null ? (
                         <span className="text-sm font-medium text-foreground">{pairing.rating.toFixed(1)}/5.0 ⭐</span>
                       ) : (
                         <span className="text-xs text-muted-foreground">Pending</span>
@@ -223,6 +215,7 @@ export default function StaffPairingHistory() {
               </tbody>
             </table>
           </div>
+          )}
         </div>
 
         {/* Summary */}

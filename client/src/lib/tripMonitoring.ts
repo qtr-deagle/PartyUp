@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type { TripStatus, TripType, MemberRole, MemberStatus } from '@/lib/tours';
+import { logAuditAction } from '@/lib/auditLog';
 
 // Backs the staff/admin Trip Monitoring dashboard -- see
 // supabase/migrations/20260919000000_add_trip_monitoring.sql for the
@@ -138,5 +139,8 @@ export async function resolveSosAlert(alertId: string, notes?: string) {
     p_alert_id: alertId,
     p_notes: notes?.trim() || null,
   });
+  if (!error) {
+    logAuditAction('Resolved SOS alert', 'sos_alert', alertId, { notes: notes?.trim() || null });
+  }
   return { data: data as SosAlertRow | null, error };
 }

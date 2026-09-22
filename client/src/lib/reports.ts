@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { logAuditAction } from '@/lib/auditLog';
 
 export type ReportType = 'safety' | 'behavior' | 'payment' | 'feedback' | 'other';
 export type ReportStatus = 'open' | 'reviewing' | 'resolved' | 'dismissed';
@@ -25,10 +26,13 @@ export interface ReportRow {
 const SELECT_COLUMNS =
   '*, reporter:profiles!reports_reporter_id_fkey(display_name, avatar_url), reported_user:profiles!reports_reported_user_id_fkey(display_name, avatar_url), trip:trips(title)';
 
-export async function listReports(status?: ReportStatus) {
+export async function listReports(status?: ReportStatus, reportType?: ReportType) {
   let query = supabase.from('reports').select(SELECT_COLUMNS).order('created_at', { ascending: false });
   if (status) {
     query = query.eq('status', status);
+  }
+  if (reportType) {
+    query = query.eq('report_type', reportType);
   }
   const { data, error } = await query;
   return { data: (data ?? []) as unknown as ReportRow[], error };
@@ -51,5 +55,18 @@ export async function updateReportStatus(reportId: string, status: ReportStatus,
       reviewed_at: new Date().toISOString(),
     })
     .eq('id', reportId);
+
+  if (!error) {
+    const actionLabel =
+      status === 'resolved'
+        ? 'Resolved report'
+        : status === 'dismissed'
+          ? 'Dismissed report'
+          : status === 'reviewing'
+            ? 'Started investigating report'
+            : 'Updated report status';
+    logAuditAction(actionLabel, 'report', reportId, { status, resolution_notes: resolutionNotes ?? null });
+  }
+
   return { error };
 }

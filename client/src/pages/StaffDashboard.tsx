@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import StaffLayout from '@/components/StaffLayout';
-import { AlertCircle, CheckSquare, ShieldCheck, Plane } from 'lucide-react';
+import { Link } from 'wouter';
+import { AlertCircle, Car, CheckSquare, ChevronRight, ShieldCheck, Plane, Siren } from 'lucide-react';
 import { toast } from 'sonner';
 import { listReports, type ReportRow } from '@/lib/reports';
 import { getDashboardCounts } from '@/lib/adminStats';
@@ -51,6 +52,50 @@ export default function StaffDashboard() {
     { label: 'Open Disputes', value: reviewingCount.toLocaleString(), icon: CheckSquare, color: 'bg-orange-500/10', textColor: 'text-orange-500' },
     { label: 'Pending ID Verifications', value: pendingVerifications.toLocaleString(), icon: ShieldCheck, color: 'bg-primary/10', textColor: 'text-primary' },
     { label: 'Active Trips', value: activeTrips.toLocaleString(), icon: Plane, color: 'bg-accent/10', textColor: 'text-accent' },
+  ];
+
+  const reportQueueCount = openReports.length + reviewingCount;
+  const quickActions = [
+    {
+      label: 'Review Reports',
+      hint: reportQueueCount > 0 ? `${reportQueueCount} awaiting action` : 'Queue is clear',
+      path: '/staff/disputes',
+      icon: AlertCircle,
+      color: 'bg-destructive/10',
+      textColor: 'text-destructive',
+    },
+    {
+      label: 'SOS Center',
+      hint: 'Live emergency alerts',
+      path: '/staff/sos',
+      icon: Siren,
+      color: 'bg-destructive/10',
+      textColor: 'text-destructive',
+    },
+    {
+      label: 'Verify IDs',
+      hint: pendingVerifications > 0 ? `${pendingVerifications} pending` : 'No pending IDs',
+      path: '/staff/verification',
+      icon: ShieldCheck,
+      color: 'bg-primary/10',
+      textColor: 'text-primary',
+    },
+    {
+      label: 'Verify Vehicles',
+      hint: 'Review vehicle submissions',
+      path: '/staff/vehicles',
+      icon: Car,
+      color: 'bg-orange-500/10',
+      textColor: 'text-orange-500',
+    },
+    {
+      label: 'Monitor Trips',
+      hint: activeTrips > 0 ? `${activeTrips} active now` : 'No active trips',
+      path: '/staff/trips',
+      icon: Plane,
+      color: 'bg-accent/10',
+      textColor: 'text-accent',
+    },
   ];
 
   return (
@@ -139,16 +184,26 @@ export default function StaffDashboard() {
             {/* Quick Actions */}
             <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
               <h3 className="text-lg font-bold text-foreground mb-6">Quick Actions</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <button className="w-full py-3 px-4 bg-destructive text-destructive-foreground rounded-lg font-medium hover:shadow-lg transition-smooth">
-                  Review Reports
-                </button>
-                <button className="w-full py-3 px-4 bg-primary text-primary-foreground rounded-lg font-medium hover:shadow-lg transition-smooth">
-                  Handle Disputes
-                </button>
-                <button className="w-full py-3 px-4 bg-secondary text-foreground rounded-lg font-medium hover:bg-secondary/80 transition-smooth border border-border">
-                  Monitor Trips
-                </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                {quickActions.map((action) => {
+                  const Icon = action.icon;
+                  return (
+                    <Link
+                      key={action.path}
+                      href={action.path}
+                      className="group flex items-center gap-3 p-4 bg-secondary rounded-xl border border-border hover:border-primary/50 hover:shadow-lg transition-smooth"
+                    >
+                      <div className={`${action.color} p-2.5 rounded-lg shrink-0`}>
+                        <Icon className={`${action.textColor} w-5 h-5`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-foreground truncate">{action.label}</p>
+                        <p className="text-xs text-muted-foreground truncate">{action.hint}</p>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 group-hover:translate-x-0.5 group-hover:text-foreground transition-smooth" />
+                    </Link>
+                  );
+                })}
               </div>
             </div>
           </>

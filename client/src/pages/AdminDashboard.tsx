@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
-import { Users, Activity, AlertTriangle, Percent, ShieldCheck } from 'lucide-react';
+import { Link } from 'wouter';
+import { Users, Activity, AlertCircle, AlertTriangle, ChevronRight, Percent, Plane, ShieldCheck, Siren, UserCog } from 'lucide-react';
 import { toast } from 'sonner';
 import { getDashboardCounts, getStaffResolutionCounts, type DashboardCounts, type StaffResolutionCount } from '@/lib/adminStats';
 import { listReports, type ReportRow } from '@/lib/reports';
@@ -17,6 +18,7 @@ export default function AdminDashboard() {
   const [counts, setCounts] = useState<DashboardCounts | null>(null);
   const [staffMetrics, setStaffMetrics] = useState<StaffResolutionCount[]>([]);
   const [recentReports, setRecentReports] = useState<ReportRow[]>([]);
+  const [openReportCount, setOpenReportCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -37,6 +39,7 @@ export default function AdminDashboard() {
         setCounts(countsResult.data);
         setStaffMetrics(staffResult.data);
         setRecentReports(reportsResult.data.slice(0, 5));
+        setOpenReportCount(reportsResult.data.length);
       }
       setIsLoading(false);
     })();
@@ -62,6 +65,57 @@ export default function AdminDashboard() {
         },
       ]
     : [];
+
+  const quickActions = [
+    {
+      label: 'Review Reports',
+      hint: openReportCount > 0 ? `${openReportCount} open` : 'No open reports',
+      path: '/admin/reports',
+      icon: AlertCircle,
+      color: 'bg-destructive/10',
+      textColor: 'text-destructive',
+    },
+    {
+      label: 'SOS Center',
+      hint: 'Live emergency alerts',
+      path: '/admin/sos',
+      icon: Siren,
+      color: 'bg-destructive/10',
+      textColor: 'text-destructive',
+    },
+    {
+      label: 'Verify IDs',
+      hint: counts && counts.pendingVerifications > 0 ? `${counts.pendingVerifications} pending` : 'No pending IDs',
+      path: '/admin/verification',
+      icon: ShieldCheck,
+      color: 'bg-blue-500/10',
+      textColor: 'text-blue-500',
+    },
+    {
+      label: 'Manage Users',
+      hint: counts ? `${counts.totalUsers.toLocaleString()} registered` : 'User accounts',
+      path: '/admin/users',
+      icon: Users,
+      color: 'bg-primary/10',
+      textColor: 'text-primary',
+    },
+    {
+      label: 'Manage Staff',
+      hint: 'Roles and access',
+      path: '/admin/staff',
+      icon: UserCog,
+      color: 'bg-orange-500/10',
+      textColor: 'text-orange-500',
+    },
+    {
+      label: 'Monitor Trips',
+      hint: counts && counts.activeTrips > 0 ? `${counts.activeTrips} active now` : 'No active trips',
+      path: '/admin/trips',
+      icon: Plane,
+      color: 'bg-accent/10',
+      textColor: 'text-accent',
+    },
+  ];
 
   return (
     <AdminLayout>
@@ -94,6 +148,32 @@ export default function AdminDashboard() {
                     </div>
                   );
                 })}
+              </div>
+
+              {/* Quick Actions */}
+              <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
+                <h3 className="text-lg font-bold text-foreground mb-6">Quick Actions</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {quickActions.map((action) => {
+                    const Icon = action.icon;
+                    return (
+                      <Link
+                        key={action.path}
+                        href={action.path}
+                        className="group flex items-center gap-3 p-4 bg-secondary rounded-xl border border-border hover:border-primary/50 hover:shadow-lg transition-smooth"
+                      >
+                        <div className={`${action.color} p-2.5 rounded-lg shrink-0`}>
+                          <Icon className={`${action.textColor} w-5 h-5`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-foreground truncate">{action.label}</p>
+                          <p className="text-xs text-muted-foreground truncate">{action.hint}</p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 group-hover:translate-x-0.5 group-hover:text-foreground transition-smooth" />
+                      </Link>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Staff Performance & Recent Reports */}

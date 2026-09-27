@@ -23,6 +23,7 @@ import Cars from "./pages/Cars";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminUsers from "./pages/AdminUsers";
 import AdminTrips from "./pages/AdminTrips";
+import AdminSos from "./pages/AdminSos";
 import AdminReports from "./pages/AdminReports";
 import AdminStaff from "./pages/AdminStaff";
 import AdminAnalytics from "./pages/AdminAnalytics";
@@ -32,6 +33,7 @@ import StaffDashboard from "./pages/StaffDashboard";
 import StaffDisputes from "./pages/StaffDisputes";
 import StaffVehicles from "./pages/StaffVehicles";
 import StaffTrips from "./pages/StaffTrips";
+import StaffSos from "./pages/StaffSos";
 import EditProfile from "./pages/EditProfile";
 import Tours from "./pages/Tours";
 import ToursCreate from "./pages/ToursCreate";
@@ -129,6 +131,7 @@ function Router() {
       <Route path="/admin/analytics" component={() => <AdminRoute component={AdminAnalytics} />} />
       <Route path="/admin/users" component={() => <AdminRoute component={AdminUsers} />} />
       <Route path="/admin/trips" component={() => <AdminRoute component={AdminTrips} />} />
+      <Route path="/admin/sos" component={() => <AdminRoute component={AdminSos} />} />
       <Route path="/admin/reports" component={() => <AdminRoute component={AdminReports} />} />
       <Route path="/admin/audit" component={() => <AdminRoute component={AdminAudit} />} />
       <Route path="/admin/settings" component={() => <AdminRoute component={AdminSettings} />} />
@@ -142,6 +145,7 @@ function Router() {
       <Route path="/staff/disputes" component={() => <StaffRoute component={StaffDisputes} />} />
       <Route path="/staff/vehicles" component={() => <StaffRoute component={StaffVehicles} />} />
       <Route path="/staff/trips" component={() => <StaffRoute component={StaffTrips} />} />
+      <Route path="/staff/sos" component={() => <StaffRoute component={StaffSos} />} />
       <Route path="/staff/payments" component={() => <StaffRoute component={StaffPaymentMonitoring} />} />
       <Route path="/staff/pairing" component={() => <StaffRoute component={StaffPairingHistory} />} />
       <Route path="/staff/feedback" component={() => <StaffRoute component={StaffFeedback} />} />

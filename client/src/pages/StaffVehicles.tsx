@@ -10,17 +10,50 @@ import { listVehicles, getVehiclePhotoUrl, reviewVehicleVerification, type Vehic
  * Staff can:
  * - Review travelers' personal vehicles submitted for verification
  * - Inspect the exterior, OR/CR, and plate photos
+ * - For borrowed vehicles, also inspect the owner's letter of authorization,
+ *   both sides of the owner's ID, and the owner's 3 specimen signatures
  * - Approve or reject with a note back to the traveler
  */
+type VehicleImages = {
+  exterior: string | null;
+  orcr: string | null;
+  plate: string | null;
+  authorizationLetter: string | null;
+  ownerIdFront: string | null;
+  ownerIdBack: string | null;
+  ownerSignatures: string | null;
+};
+
+const EMPTY_IMAGES: VehicleImages = {
+  exterior: null,
+  orcr: null,
+  plate: null,
+  authorizationLetter: null,
+  ownerIdFront: null,
+  ownerIdBack: null,
+  ownerSignatures: null,
+};
+
+function DocumentImage({ label, src, alt, onOpen }: { label: string; src: string | null; alt: string; onOpen: (src: string) => void }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase">{label}</p>
+      <div className="bg-secondary rounded-lg overflow-hidden h-40 flex items-center justify-center border border-border">
+        {src ? (
+          <img src={src} alt={alt} className="h-full w-full object-contain cursor-zoom-in" onClick={() => onOpen(src)} />
+        ) : (
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function StaffVehicles() {
   const [vehicles, setVehicles] = useState<VehicleRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [images, setImages] = useState<{ exterior: string | null; orcr: string | null; plate: string | null }>({
-    exterior: null,
-    orcr: null,
-    plate: null,
-  });
+  const [images, setImages] = useState<VehicleImages>(EMPTY_IMAGES);
   const [rejectionReason, setRejectionReason] = useState('');
   const [showRejectionModal, setShowRejectionModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -41,7 +74,7 @@ export default function StaffVehicles() {
 
   useEffect(() => {
     if (!selected) {
-      setImages({ exterior: null, orcr: null, plate: null });
+      setImages(EMPTY_IMAGES);
       return;
     }
     let cancelled = false;
@@ -49,8 +82,12 @@ export default function StaffVehicles() {
       getVehiclePhotoUrl(selected.exterior_image_path),
       getVehiclePhotoUrl(selected.orcr_image_path),
       getVehiclePhotoUrl(selected.plate_image_path),
-    ]).then(([exterior, orcr, plate]) => {
-      if (!cancelled) setImages({ exterior, orcr, plate });
+      getVehiclePhotoUrl(selected.authorization_letter_path),
+      getVehiclePhotoUrl(selected.owner_id_front_path),
+      getVehiclePhotoUrl(selected.owner_id_back_path),
+      getVehiclePhotoUrl(selected.owner_signatures_path),
+    ]).then(([exterior, orcr, plate, authorizationLetter, ownerIdFront, ownerIdBack, ownerSignatures]) => {
+      if (!cancelled) setImages({ exterior, orcr, plate, authorizationLetter, ownerIdFront, ownerIdBack, ownerSignatures });
     });
     return () => {
       cancelled = true;
@@ -130,6 +167,9 @@ export default function StaffVehicles() {
                         {v.make} {v.model} {v.year ? `(${v.year})` : ''}
                       </p>
                       {v.plate_number && <p className="text-xs text-muted-foreground mt-1">Plate: {v.plate_number}</p>}
+                      {v.ownership_type === 'borrowed' && (
+                        <span className="inline-block mt-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-500">Borrowed</span>
+                      )}
                       <p className="text-xs text-muted-foreground mt-2">
                         {v.submitted_at ? new Date(v.submitted_at).toLocaleString() : ''}
                       </p>
@@ -151,55 +191,32 @@ export default function StaffVehicles() {
                     {selected.color ? ` • ${selected.color}` : ''}
                   </p>
                   {selected.plate_number && <p className="text-xs text-muted-foreground mt-1">Plate: {selected.plate_number}</p>}
+                  <span
+                    className={`inline-block mt-2 text-xs font-semibold px-2 py-0.5 rounded-full ${
+                      selected.ownership_type === 'borrowed' ? 'bg-yellow-500/10 text-yellow-500' : 'bg-green-500/10 text-green-500'
+                    }`}
+                  >
+                    {selected.ownership_type === 'borrowed' ? 'Borrowed vehicle' : 'Owned by traveler'}
+                  </span>
                 </div>
 
                 <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase">Vehicle</p>
-                    <div className="bg-secondary rounded-lg overflow-hidden h-40 flex items-center justify-center border border-border">
-                      {images.exterior ? (
-                        <img
-                          src={images.exterior}
-                          alt="Vehicle exterior"
-                          className="h-full w-full object-contain cursor-zoom-in"
-                          onClick={() => setLightboxSrc(images.exterior)}
-                        />
-                      ) : (
-                        <p className="text-sm text-muted-foreground">Loading...</p>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase">OR/CR</p>
-                    <div className="bg-secondary rounded-lg overflow-hidden h-40 flex items-center justify-center border border-border">
-                      {images.orcr ? (
-                        <img
-                          src={images.orcr}
-                          alt="OR/CR document"
-                          className="h-full w-full object-contain cursor-zoom-in"
-                          onClick={() => setLightboxSrc(images.orcr)}
-                        />
-                      ) : (
-                        <p className="text-sm text-muted-foreground">Loading...</p>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase">Plate</p>
-                    <div className="bg-secondary rounded-lg overflow-hidden h-40 flex items-center justify-center border border-border">
-                      {images.plate ? (
-                        <img
-                          src={images.plate}
-                          alt="License plate"
-                          className="h-full w-full object-contain cursor-zoom-in"
-                          onClick={() => setLightboxSrc(images.plate)}
-                        />
-                      ) : (
-                        <p className="text-sm text-muted-foreground">Loading...</p>
-                      )}
-                    </div>
-                  </div>
+                  <DocumentImage label="Vehicle" src={images.exterior} alt="Vehicle exterior" onOpen={setLightboxSrc} />
+                  <DocumentImage label="OR/CR" src={images.orcr} alt="OR/CR document" onOpen={setLightboxSrc} />
+                  <DocumentImage label="Plate" src={images.plate} alt="License plate" onOpen={setLightboxSrc} />
                 </div>
+
+                {selected.ownership_type === 'borrowed' && (
+                  <div>
+                    <h4 className="text-sm font-bold text-foreground mb-3">Owner's Authorization</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <DocumentImage label="Letter of Authorization" src={images.authorizationLetter} alt="Letter of authorization" onOpen={setLightboxSrc} />
+                      <DocumentImage label="Owner's 3 Signatures" src={images.ownerSignatures} alt="Owner specimen signatures" onOpen={setLightboxSrc} />
+                      <DocumentImage label="Owner ID (Front)" src={images.ownerIdFront} alt="Owner ID front" onOpen={setLightboxSrc} />
+                      <DocumentImage label="Owner ID (Back)" src={images.ownerIdBack} alt="Owner ID back" onOpen={setLightboxSrc} />
+                    </div>
+                  </div>
+                )}
 
                 <div className="bg-secondary rounded-lg p-3 space-y-2 border border-border">
                   <div className="flex justify-between text-sm">
@@ -266,6 +283,7 @@ export default function StaffVehicles() {
                   <option value="Photos do not match vehicle details">Photos do not match vehicle details</option>
                   <option value="Plate or OR/CR unreadable">Plate or OR/CR unreadable</option>
                   <option value="Vehicle or documents look suspicious">Vehicle or documents look suspicious</option>
+                  <option value="Owner authorization incomplete or invalid">Owner authorization incomplete or invalid</option>
                   <option value="Other">Other</option>
                 </select>
               </div>

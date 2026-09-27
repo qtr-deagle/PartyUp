@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LayoutDashboard, CheckSquare, Car, Plane, LogOut, Moon, Sun, DollarSign, Link2, MessageSquare, Shield } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, Car, Plane, LogOut, Moon, Sun, DollarSign, Link2, MessageSquare, Shield, Siren } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import SosGlobalAlert from '@/components/sos/SosGlobalAlert';
+import { useActiveSosAlerts } from '@/hooks/useSosRealtime';
 
 let staffSuppressHoverUntilMove = false;
 let staffLastClickPos: { x: number; y: number } | null = null;
@@ -20,10 +22,12 @@ export default function StaffLayout({ children }: StaffLayoutProps) {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [location] = useLocation();
+  const { alerts: activeSosAlerts, isLoading: isSosLoading } = useActiveSosAlerts();
   const isActive = (path: string) => location === path || location.startsWith(`${path}/`);
 
   const staffNavItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/staff/dashboard' },
+    { id: 'sos', label: 'SOS Center', icon: Siren, path: '/staff/sos' },
     { id: 'verification', label: 'ID Verification', icon: Shield, path: '/staff/verification' },
     { id: 'disputes', label: 'User Reports', icon: CheckSquare, path: '/staff/disputes' },
     { id: 'vehicles', label: 'Verify Vehicles', icon: Car, path: '/staff/vehicles' },
@@ -122,7 +126,14 @@ export default function StaffLayout({ children }: StaffLayoutProps) {
                       : 'text-sidebar-foreground hover:bg-sidebar-accent'
                   }`}
                 >
-                  <Icon className="w-5 h-5 shrink-0" />
+                  <span className="relative shrink-0">
+                    <Icon className={`w-5 h-5 ${item.id === 'sos' && activeSosAlerts.length > 0 && !active ? 'text-destructive' : ''}`} />
+                    {item.id === 'sos' && activeSosAlerts.length > 0 && (
+                      <span className="absolute -top-2 -right-2 min-w-4 h-4 px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold leading-4 text-center animate-pulse">
+                        {activeSosAlerts.length}
+                      </span>
+                    )}
+                  </span>
                   {isExpanded && <span className="text-sm whitespace-nowrap">{item.label}</span>}
                 </button>
               </Link>
@@ -166,6 +177,7 @@ export default function StaffLayout({ children }: StaffLayoutProps) {
       </aside>
 
       <div className="flex-1 flex flex-col overflow-hidden ml-20 min-h-0">
+        <SosGlobalAlert alerts={activeSosAlerts} isLoading={isSosLoading} basePath="/staff" />
         <main className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
           {children}
         </main>

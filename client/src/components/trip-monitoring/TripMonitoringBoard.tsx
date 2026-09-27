@@ -4,6 +4,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import mapboxgl from 'mapbox-gl';
 import { AlertTriangle, Search, ShieldAlert, Siren, Users, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
+import { useLocation } from 'wouter';
 import { useTheme } from '@/contexts/ThemeContext';
 import {
   listActiveTripsWithSafetyStatus,
@@ -50,7 +51,11 @@ export default function TripMonitoringBoard() {
   const [resolutionNotes, setResolutionNotes] = useState('');
   const [isResolving, setIsResolving] = useState(false);
 
-  const { livePositions, selectedTripSafetySessions, activeSosAlerts } = useTripMonitoringRealtime(selectedTripId);
+  const memberUserIds = useMemo(
+    () => (detail ? detail.members.filter((member) => member.status === 'accepted').map((member) => member.user_id) : []),
+    [detail]
+  );
+  const { livePositions, selectedTripSafetySessions, activeSosAlerts } = useTripMonitoringRealtime(selectedTripId, memberUserIds);
 
   const tripIdsWithActiveSos = useMemo(() => new Set(activeSosAlerts.map((alert) => alert.trip_id).filter((id): id is string => !!id)), [activeSosAlerts]);
 
@@ -126,7 +131,22 @@ export default function TripMonitoringBoard() {
 
   const memberDisplayName = (userId: string) => detail?.members.find((m) => m.user_id === userId)?.profiles?.display_name ?? 'Unknown user';
 
-  const bannerAlerts = activeSosAlerts.filter((alert) => alert.trip_id);
+  // Every active SOS, with or without a trip -- each opens its live view in the SOS Center.
+  const bannerAlerts = activeSosAlerts;
+  const [location, navigate] = useLocation();
+  const sosCenterPath = location.startsWith('/admin') ? '/admin/sos' : '/staff/sos';
+
+  // With an active SOS in the selected trip, open the map on that member rather than the destination.
+  const sosFocus = (() => {
+    if (!detail) return null;
+    const alert = detail.sosAlerts.find((a) => a.status === 'active');
+    if (!alert) return null;
+    const live = livePositions[alert.user_id];
+    if (live) return live;
+    const row = detail.locations.find((loc) => loc.user_id === alert.user_id);
+    if (row) return { latitude: Number(row.latitude), longitude: Number(row.longitude) };
+    return alert.latitude !== null && alert.longitude !== null ? { latitude: Number(alert.latitude), longitude: Number(alert.longitude) } : null;
+  })();
 
   return (
     <div className="space-y-6 p-8">
@@ -147,10 +167,11 @@ export default function TripMonitoringBoard() {
               return (
                 <button
                   key={alert.id}
-                  onClick={() => alert.trip_id && setSelectedTripId(alert.trip_id)}
+                  onClick={() => navigate(`${sosCenterPath}?alert=${alert.id}`)}
                   className="px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 text-xs font-medium transition-colors"
                 >
-                  {trip ? `${trip.origin} → ${trip.destination}` : 'Trip not in current view'}
+                  {alert.profile?.display_name ?? 'Unknown user'}
+                  {trip ? ` · ${trip.origin} → ${trip.destination}` : ''} · Live location
                 </button>
               );
             })}
@@ -297,12 +318,16 @@ export default function TripMonitoringBoard() {
                       <div className="h-full flex items-center justify-center text-sm text-muted-foreground">Map unavailable: VITE_MAPBOX_TOKEN is not set</div>
                     ) : (
                       <Map
-                        key={selectedTripId}
-                        initialViewState={{
-                          longitude: selectedTrip.destination_lng ?? 121.0244,
-                          latitude: selectedTrip.destination_lat ?? 14.5547,
-                          zoom: 11,
-                        }}
+                        key={`${selectedTripId}:${sosFocus ? 'sos' : 'trip'}`}
+                        initialViewState={
+                          sosFocus
+                            ? { longitude: sosFocus.longitude, latitude: sosFocus.latitude, zoom: 15 }
+                            : {
+                                longitude: selectedTrip.destination_lng ?? 121.0244,
+                                latitude: selectedTrip.destination_lat ?? 14.5547,
+                                zoom: 11,
+                              }
+                        }
                         style={{ width: '100%', height: '100%' }}
                         mapStyle={mapStyle}
                         mapboxAccessToken={mapboxToken}
@@ -316,8 +341,18 @@ export default function TripMonitoringBoard() {
                           </Marker>
                         )}
 
+                        {sosFocus && (
+                          <Marker longitude={sosFocus.longitude} latitude={sosFocus.latitude} anchor="center">
+                            <div title="SOS — live position" className="relative flex items-center justify-center">
+                              <span className="absolute w-10 h-10 rounded-full bg-destructive/40 animate-ping" />
+                              <span className="relative w-5 h-5 rounded-full border-2 border-white bg-destructive shadow-lg" />
+                            </div>
+                          </Marker>
+                        )}
+
                         {detail.members
                           .filter((m) => m.status === 'accepted')
+                          .filter((m) => !(sosFocus && detail.sosAlerts.some((a) => a.user_id === m.user_id && a.status === 'active')))
                           .map((member) => {
                             const live = livePositions[member.user_id];
                             const fallback = detail.locations.find((loc) => loc.user_id === member.user_id && loc.is_visible);

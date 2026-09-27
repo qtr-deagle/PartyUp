@@ -17,6 +17,11 @@ export interface VehicleRow {
   exterior_image_path: string | null;
   orcr_image_path: string | null;
   plate_image_path: string | null;
+  ownership_type: 'owned' | 'borrowed';
+  authorization_letter_path: string | null;
+  owner_id_front_path: string | null;
+  owner_id_back_path: string | null;
+  owner_signatures_path: string | null;
   reviewer_notes: string | null;
   submitted_at: string | null;
   reviewed_at: string | null;

@@ -106,13 +106,21 @@ export interface TripMonitoringDetail {
 }
 
 export async function getTripMonitoringDetail(tripId: string): Promise<{ data: TripMonitoringDetail | null; error: Error | null }> {
-  const [members, itinerary, locations, safetySessions, sosAlerts, reports] = await Promise.all([
-    supabase
-      .from('trip_members')
-      .select('id, user_id, member_role, status, joined_at, profiles!trip_members_user_id_fkey(display_name, avatar_url, phone)')
-      .eq('trip_id', tripId),
+  const members = await supabase
+    .from('trip_members')
+    .select('id, user_id, member_role, status, joined_at, profiles!trip_members_user_id_fkey(display_name, avatar_url, phone)')
+    .eq('trip_id', tripId);
+  if (members.error) return { data: null, error: members.error };
+  const memberIds = (members.data ?? []).map((member) => member.user_id as string);
+
+  // Locations are looked up by member, not by current_locations.trip_id: the
+  // phone never writes trip_id, so filtering on it found no one.
+  const [itinerary, locations, safetySessions, sosAlerts, reports] = await Promise.all([
     supabase.from('trip_itinerary_days').select('id, day_number, description').eq('trip_id', tripId).order('day_number', { ascending: true }),
-    supabase.from('current_locations').select('user_id, latitude, longitude, accuracy_m, is_visible, updated_at').eq('trip_id', tripId),
+    supabase
+      .from('current_locations')
+      .select('user_id, latitude, longitude, accuracy_m, is_visible, updated_at')
+      .in('user_id', memberIds.length > 0 ? memberIds : ['00000000-0000-0000-0000-000000000000']),
     supabase.from('safety_sessions').select('id, user_id, status, started_at, expires_at, resolved_at').eq('trip_id', tripId).order('started_at', { ascending: false }),
     supabase.from('sos_alerts').select('*').eq('trip_id', tripId).order('created_at', { ascending: false }),
     supabase.from('reports').select('id, reporter_id, reported_user_id, report_type, status, details, created_at').eq('trip_id', tripId).order('created_at', { ascending: false }),

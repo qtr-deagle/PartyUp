@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LayoutDashboard, Users, Plane, AlertCircle, Settings, LogOut, Moon, Sun, BarChart3, Shield, Lock, DollarSign, Link2, MessageSquare } from 'lucide-react';
+import { LayoutDashboard, Users, Plane, AlertCircle, Settings, LogOut, Moon, Sun, BarChart3, Shield, Lock, DollarSign, Link2, MessageSquare, Siren } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import SosGlobalAlert from '@/components/sos/SosGlobalAlert';
+import { useActiveSosAlerts } from '@/hooks/useSosRealtime';
 
 let adminSuppressHoverUntilMove = false;
 let adminLastClickPos: { x: number; y: number } | null = null;
@@ -24,10 +26,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [location] = useLocation();
+  const { alerts: activeSosAlerts, isLoading: isSosLoading } = useActiveSosAlerts();
   const isActive = (path: string) => location === path || location.startsWith(`${path}/`);
 
   const adminNavItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/admin/dashboard' },
+    { id: 'sos', label: 'SOS Center', icon: Siren, path: '/admin/sos' },
     { id: 'verification', label: 'ID Verification', icon: Shield, path: '/admin/verification' },
     { id: 'staff', label: 'Staff', icon: Users, path: '/admin/staff' },
     { id: 'analytics', label: 'Analytics', icon: BarChart3, path: '/admin/analytics' },
@@ -137,7 +141,14 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                       : 'text-sidebar-foreground hover:bg-sidebar-accent'
                   }`}
                 >
-                  <Icon className="w-5 h-5 shrink-0" />
+                  <span className="relative shrink-0">
+                    <Icon className={`w-5 h-5 ${item.id === 'sos' && activeSosAlerts.length > 0 && !active ? 'text-destructive' : ''}`} />
+                    {item.id === 'sos' && activeSosAlerts.length > 0 && (
+                      <span className="absolute -top-2 -right-2 min-w-4 h-4 px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold leading-4 text-center animate-pulse">
+                        {activeSosAlerts.length}
+                      </span>
+                    )}
+                  </span>
                   {isExpanded && <span className="text-sm whitespace-nowrap">{item.label}</span>}
                 </button>
               </Link>
@@ -190,6 +201,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       </aside>
 
       <div className="flex-1 flex flex-col overflow-hidden ml-20 min-h-0">
+        <SosGlobalAlert alerts={activeSosAlerts} isLoading={isSosLoading} basePath="/admin" />
         <main className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 p-8">
           {children}
         </main>

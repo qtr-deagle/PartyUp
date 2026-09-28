@@ -27,12 +27,12 @@ export default function PublicLanding() {
     {
       icon: MapPin,
       title: 'Location-Based Discovery',
-      description: 'Connect with travelers going to the same destination at the same time with geofencing technology',
+      description: 'See nearby travelers on the map and connect with people heading to the same destination on the same dates',
     },
     {
       icon: Shield,
       title: 'Safety Verified',
-      description: 'Verified profiles, ID checks, ratings, and SOS features ensure safe travels for everyone',
+      description: "Every traveler passes an ID check, drivers' vehicles are reviewed by our team, and one-tap SOS shares your live location",
     },
     {
       icon: MessageCircle,
@@ -42,7 +42,7 @@ export default function PublicLanding() {
     {
       icon: Zap,
       title: 'Carpool Integration',
-      description: 'Share rides, split costs, and reduce your travel expense with trusted drivers on the platform',
+      description: 'Join carpools and group tours, split costs, and pay securely with GCash or PayMaya',
     },
     {
       icon: Star,
@@ -56,7 +56,7 @@ export default function PublicLanding() {
       name: 'Sarah M.',
       role: 'Solo Traveler',
       image: '👩‍🦰',
-      text: "PartyUp helped me find amazing travel buddies for my Paris trip. I made friends I'm still in touch with!",
+      text: "PartyUp helped me find amazing travel buddies for my Baguio trip. I made friends I'm still in touch with!",
       rating: 5,
     },
     {
@@ -84,27 +84,27 @@ export default function PublicLanding() {
     {
       question: 'Is it safe to travel with strangers?',
       answer:
-        'Safety is our priority. All users are verified through ID checks, phone verification, and ratings. We also offer SOS features and live tracking for trips. Our community moderation team reviews all accounts.',
+        "Safety is our priority. Every traveler must pass an ID verification reviewed by our staff before joining trips, and drivers' vehicles are checked too. During a trip you can press SOS to share your live location with your trusted contacts and the PartyUp safety team.",
     },
     {
       question: 'How does the carpool feature work?',
       answer:
-        'Drivers can list their vehicles with rates, and travelers can request seats. Payments are processed securely through Stripe, and both parties are verified before the ride.',
+        'Verified drivers post rides with a price per seat, and travelers join the trip. Payments are made in the app with GCash or PayMaya through PayMongo, and every rider and driver is ID-verified before the ride.',
     },
     {
-      question: 'Can I cancel a trip or booking?',
+      question: 'Who can join PartyUp?',
       answer:
-        'Yes, you can cancel with refunds depending on the timing. Most cancellations within 48 hours get a full refund. See our cancellation policy for details.',
+        'PartyUp is for residents of Bulacan. Your ID must show a Bulacan address to get verified, but your trips can go anywhere.',
     },
     {
       question: 'What are the fees?',
       answer:
-        'PartyUp is free to use for finding travel buddies. For carpool bookings, we take a 5% commission on bookings. No hidden fees.',
+        "Finding travel buddies on PartyUp is free. For paid carpools and tours, PartyUp keeps a 2% service fee, which comes out of the driver's or organizer's share. Riders pay the listed price, with no hidden fees.",
     },
     {
       question: 'Is PartyUp available on mobile?',
       answer:
-        'Yes! PartyUp is fully responsive on mobile web, and native iOS/Android apps are coming soon. Download our app from the App Store or Google Play.',
+        'Yes. PartyUp is a mobile app, available now on Android. Download it to sign up, get verified, and start finding travel buddies.',
     },
   ];
 
@@ -166,7 +166,7 @@ export default function PublicLanding() {
               Find Your Perfect <span className="text-primary">Travel Buddy</span>
             </h1>
             <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
-              Connect with travelers going your way. Share experiences, split costs, and build friendships on the road.
+              Connect with fellow Bulacan travelers going your way. Share experiences, split costs, and build friendships on the road.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -204,12 +204,12 @@ export default function PublicLanding() {
               <div className="text-3xl mb-3">🚗</div>
               <h3 className="text-xl font-bold mb-2">Carpool & Rideshare</h3>
               <p className="text-muted-foreground text-sm">
-                Share rides with verified drivers, split costs, and travel together safely with real-time tracking.
+                Share rides with verified drivers, split costs, and travel together safely with live location sharing.
               </p>
               <div className="mt-4 space-y-2 text-xs text-muted-foreground">
                 <div>✓ Cost splitting</div>
                 <div>✓ Verified drivers</div>
-                <div>✓ Secure payments</div>
+                <div>✓ GCash & PayMaya payments</div>
               </div>
             </div>
           </div>
@@ -310,7 +310,7 @@ export default function PublicLanding() {
                         <div className="flex items-start justify-between">
                           <div>
                             <h3 className="font-bold text-sm">Sarah, 24</h3>
-                            <p className="text-xs text-muted-foreground">First time in Paris</p>
+                            <p className="text-xs text-muted-foreground">First time in Baguio</p>
                           </div>
                           <span className="text-xs font-bold bg-primary/10 text-primary px-2 py-1 rounded">92%</span>
                         </div>
@@ -373,7 +373,7 @@ export default function PublicLanding() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-primary font-bold text-xl">✓</span>
-                  <span>Offline mode with cached data</span>
+                  <span>One-tap SOS with live location</span>
                 </div>
               </div>
 

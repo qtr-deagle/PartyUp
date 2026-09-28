@@ -14,6 +14,9 @@ import { Users, MapPin, Shield, MessageCircle, Star, Zap, ChevronDown, Menu, X }
  * - CTA section: App download call-to-action
  * - Responsive mobile/desktop
  */
+// Latest Android build from EAS (preview profile). Update when a new APK is built.
+const APK_DOWNLOAD_URL = 'https://expo.dev/artifacts/eas/bHLfM7iaZy3qSpj19rJt7XaSRBTsEvqMtR3JOWv_Wsc.apk';
+
 export default function PublicLanding() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
@@ -380,7 +383,7 @@ export default function PublicLanding() {
               {/* Download Buttons */}
               <div className="pt-4 space-y-3">
                 <a
-                  href="https://play.google.com/store/apps/details?id=com.partyup"
+                  href={APK_DOWNLOAD_URL}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="block w-full px-6 py-4 bg-primary text-primary-foreground rounded-lg font-medium text-lg hover:shadow-lg transition text-center"
@@ -440,7 +443,7 @@ export default function PublicLanding() {
           </p>
 
           <a
-            href="https://play.google.com/store/apps/details?id=com.partyup"
+            href={APK_DOWNLOAD_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-block px-8 py-4 bg-primary text-primary-foreground rounded-lg font-medium text-lg hover:shadow-lg transition"

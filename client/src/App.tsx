@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Redirect, Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
@@ -26,14 +26,11 @@ import AdminTrips from "./pages/AdminTrips";
 import AdminSos from "./pages/AdminSos";
 import AdminReports from "./pages/AdminReports";
 import AdminStaff from "./pages/AdminStaff";
-import AdminAnalytics from "./pages/AdminAnalytics";
+import AdminTeam from "./pages/AdminTeam";
+import AdminGuilds from "./pages/AdminGuilds";
 import AdminSettings from "./pages/AdminSettings";
 import AdminAudit from "./pages/AdminAudit";
-import StaffDashboard from "./pages/StaffDashboard";
-import StaffDisputes from "./pages/StaffDisputes";
 import StaffVehicles from "./pages/StaffVehicles";
-import StaffTrips from "./pages/StaffTrips";
-import StaffSos from "./pages/StaffSos";
 import EditProfile from "./pages/EditProfile";
 import Tours from "./pages/Tours";
 import ToursCreate from "./pages/ToursCreate";
@@ -41,19 +38,18 @@ import ToursManage from "./pages/ToursManage";
 import AdminFeedback from "./pages/AdminFeedback";
 import AdminPaymentManagement from "./pages/AdminPaymentManagement";
 import AdminPairingHistory from "./pages/AdminPairingHistory";
-import StaffPaymentMonitoring from "./pages/StaffPaymentMonitoring";
-import StaffPairingHistory from "./pages/StaffPairingHistory";
-import StaffFeedback from "./pages/StaffFeedback";
 import MyParticipatedTours from "./pages/MyParticipatedTours";
 import Trips from "./pages/Trips";
 import TransactionHistory from "./pages/TransactionHistory";
-import StaffIDVerificationReview from "./pages/StaffIDVerificationReview";
 import AdminIDVerificationReview from "./pages/AdminIDVerificationReview";
 import MobileOnlyNotice from "./pages/MobileOnlyNotice";
+import AccountSettings from "./pages/AccountSettings";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 
 // The traveler dashboard (Home, Discovery, Chat, Map, Profile, Tours,
 // Carpooling, etc.) lives in the PartyUp mobile app, not this website --
-// this codebase is staff/admin tooling only. These routes stay defined
+// this codebase is admin tooling only (Guild Leaders work in the app too). These routes stay defined
 // (rather than deleted) so the mobile-parity page components don't need to
 // be ripped out, but ProtectedRoute always shows a static notice instead of
 // ever rendering them, regardless of auth state.
@@ -80,31 +76,14 @@ function AdminRoute({ component: Component }: { component: React.ComponentType }
   return <Component />;
 }
 
-function StaffRoute({ component: Component }: { component: React.ComponentType }) {
-  const { user, isLoading } = useAuth();
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (user?.role !== 'staff' && user?.role !== 'admin') {
-    window.location.href = '/login';
-    return null;
-  }
-
-  return <Component />;
-}
-
 function Router() {
   return (
     <Switch>
       <Route path="/landing" component={PublicLanding} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
+      <Route path="/forgot-password" component={ForgotPassword} />
+      <Route path="/reset-password" component={ResetPassword} />
       <Route path="/" component={() => <ProtectedRoute component={Home} />} />
       <Route path="/discovery" component={() => <ProtectedRoute component={Discovery} />} />
       <Route path="/find-buddy" component={() => <ProtectedRoute component={Discovery} />} />
@@ -128,27 +107,24 @@ function Router() {
       <Route path="/admin/dashboard" component={() => <AdminRoute component={AdminDashboard} />} />
       <Route path="/admin/verification" component={() => <AdminRoute component={AdminIDVerificationReview} />} />
       <Route path="/admin/staff" component={() => <AdminRoute component={AdminStaff} />} />
-      <Route path="/admin/analytics" component={() => <AdminRoute component={AdminAnalytics} />} />
+      <Route path="/admin/team" component={() => <AdminRoute component={AdminTeam} />} />
+      <Route path="/admin/guilds" component={() => <AdminRoute component={AdminGuilds} />} />
+      <Route path="/admin/vehicles" component={() => <AdminRoute component={StaffVehicles} />} />
+      {/* The Guild Leader (ex-staff) console was retired; old bookmarks land on the admin dashboard. */}
+      <Route path="/staff">{() => <Redirect to="/admin/dashboard" />}</Route>
+      <Route path="/staff/*">{() => <Redirect to="/admin/dashboard" />}</Route>
+      <Route path="/admin/analytics">{() => <Redirect to="/admin/dashboard" />}</Route>
       <Route path="/admin/users" component={() => <AdminRoute component={AdminUsers} />} />
       <Route path="/admin/trips" component={() => <AdminRoute component={AdminTrips} />} />
       <Route path="/admin/sos" component={() => <AdminRoute component={AdminSos} />} />
       <Route path="/admin/reports" component={() => <AdminRoute component={AdminReports} />} />
       <Route path="/admin/audit" component={() => <AdminRoute component={AdminAudit} />} />
       <Route path="/admin/settings" component={() => <AdminRoute component={AdminSettings} />} />
+      <Route path="/admin/account" component={() => <AdminRoute component={AccountSettings} />} />
       <Route path="/admin/feedback" component={() => <AdminRoute component={AdminFeedback} />} />
       <Route path="/admin/payment-issues" component={() => <AdminRoute component={AdminPaymentManagement} />} />
       <Route path="/admin/payments" component={() => <AdminRoute component={AdminPaymentManagement} />} />
       <Route path="/admin/pairing" component={() => <AdminRoute component={AdminPairingHistory} />} />
-      <Route path="/staff" component={() => <StaffRoute component={StaffDashboard} />} />
-      <Route path="/staff/dashboard" component={() => <StaffRoute component={StaffDashboard} />} />
-      <Route path="/staff/verification" component={() => <StaffRoute component={StaffIDVerificationReview} />} />
-      <Route path="/staff/disputes" component={() => <StaffRoute component={StaffDisputes} />} />
-      <Route path="/staff/vehicles" component={() => <StaffRoute component={StaffVehicles} />} />
-      <Route path="/staff/trips" component={() => <StaffRoute component={StaffTrips} />} />
-      <Route path="/staff/sos" component={() => <StaffRoute component={StaffSos} />} />
-      <Route path="/staff/payments" component={() => <StaffRoute component={StaffPaymentMonitoring} />} />
-      <Route path="/staff/pairing" component={() => <StaffRoute component={StaffPairingHistory} />} />
-      <Route path="/staff/feedback" component={() => <StaffRoute component={StaffFeedback} />} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

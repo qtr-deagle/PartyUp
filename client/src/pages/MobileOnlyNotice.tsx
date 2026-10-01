@@ -16,11 +16,11 @@ export default function MobileOnlyNotice() {
         </div>
         <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-3">Get the PartyUp App</h1>
         <p className="text-lg text-muted-foreground mb-8">
-          The traveler dashboard lives in the PartyUp mobile app. This website is for PartyUp staff and admins only.
+          The traveler dashboard lives in the PartyUp mobile app. This website is for PartyUp admins only. Guild Leaders use the mobile app.
         </p>
         <Link href="/login">
           <a className="inline-flex items-center justify-center gap-2 w-full py-3 bg-primary text-primary-foreground rounded-lg font-medium transition-smooth hover:shadow-md">
-            Staff / Admin Login
+            Admin Login
           </a>
         </Link>
       </div>

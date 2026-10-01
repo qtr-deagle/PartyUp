@@ -4,6 +4,7 @@ import { ImageLightbox } from '@/components/ImageLightbox';
 import { Search, DollarSign, AlertCircle, CheckCircle, Clock, Filter, Camera, AlertTriangle, XCircle, Eye } from 'lucide-react';
 import { getReportEvidenceUrl, listReports, updateReportStatus, type ReportRow, type ReportStatus } from '@/lib/reports';
 import { listPaymentHistory, type PaymentHistoryRow } from '@/lib/payments';
+import { useTableRealtime } from '@/hooks/useTableRealtime';
 
 /**
  * Admin Payment Management
@@ -31,15 +32,16 @@ export default function AdminPaymentManagement() {
   const [transactions, setTransactions] = useState<PaymentHistoryRow[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
-  const loadIssues = useCallback(async () => {
-    setIsLoadingIssues(true);
+  // `silent` refreshes (realtime / tab focus) skip the loading state.
+  const loadIssues = useCallback(async (silent = false) => {
+    if (!silent) setIsLoadingIssues(true);
     const { data } = await listReports(undefined, 'payment');
     setIssues(data);
     setIsLoadingIssues(false);
   }, []);
 
-  const loadHistory = useCallback(async () => {
-    setIsLoadingHistory(true);
+  const loadHistory = useCallback(async (silent = false) => {
+    if (!silent) setIsLoadingHistory(true);
     const { data } = await listPaymentHistory();
     setTransactions(data);
     setIsLoadingHistory(false);
@@ -49,6 +51,9 @@ export default function AdminPaymentManagement() {
     void loadIssues();
     void loadHistory();
   }, [loadIssues, loadHistory]);
+
+  useTableRealtime('reports', () => void loadIssues(true));
+  useTableRealtime('payment_history', () => void loadHistory(true));
 
   const filteredIssues = useMemo(
     () =>

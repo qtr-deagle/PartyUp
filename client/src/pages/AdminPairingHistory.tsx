@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { Search, Calendar, Users, TrendingUp, Filter } from 'lucide-react';
 import { toast } from 'sonner';
 import { listPairingHistory, type PairingHistoryRow } from '@/lib/pairingHistory';
+import { useTableRealtime } from '@/hooks/useTableRealtime';
 
 /**
  * Admin Pairing History
@@ -20,20 +21,27 @@ export default function AdminPairingHistory() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      setIsLoading(true);
-      const { data, error } = await listPairingHistory();
-      if (error) {
-        setLoadError(error.message);
-        toast.error('Failed to load pairing history');
-      } else {
-        setLoadError(null);
-        setPairingHistory(data);
-      }
-      setIsLoading(false);
-    })();
+  // `silent` refreshes (realtime / tab focus) skip the loading state and the
+  // error toast.
+  const loadPairings = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
+    const { data, error } = await listPairingHistory();
+    if (error) {
+      setLoadError(error.message);
+      if (!silent) toast.error('Failed to load pairing history');
+    } else {
+      setLoadError(null);
+      setPairingHistory(data);
+    }
+    setIsLoading(false);
   }, []);
+
+  useEffect(() => {
+    void loadPairings();
+  }, [loadPairings]);
+
+  // list_pairing_history reads trips, trip_members and feedback.
+  useTableRealtime(['trips', 'trip_members', 'feedback'], () => void loadPairings(true));
 
   const filteredPairings = pairingHistory.filter(pairing => {
     const searchLower = searchTerm.toLowerCase();

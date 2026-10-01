@@ -1,8 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Session } from '@supabase/supabase-js';
 
-export type UserRole = 'traveler' | 'staff' | 'admin';
+export type UserRole = 'traveler' | 'guild_leader' | 'admin';
 export type VerificationStatus = 'unverified' | 'pending' | 'approved' | 'rejected';
 
 export interface User {
@@ -54,6 +54,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // Token refreshes and password changes emit a new session for the same
+  // user; only a different user should put the app back into loading (which
+  // makes the route guards unmount the current page).
+  const loadedUserId = useRef<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -84,13 +88,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let isMounted = true;
 
     if (!session) {
+      loadedUserId.current = null;
       setUser(null);
       return;
     }
 
-    setIsLoading(true);
+    if (loadedUserId.current !== session.user.id) {
+      setIsLoading(true);
+    }
     loadUser(session).then((nextUser) => {
       if (isMounted) {
+        loadedUserId.current = nextUser?.id ?? null;
         setUser(nextUser);
         setIsLoading(false);
       }

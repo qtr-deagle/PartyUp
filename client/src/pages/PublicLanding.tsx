@@ -87,7 +87,7 @@ export default function PublicLanding() {
     {
       question: 'Is it safe to travel with strangers?',
       answer:
-        "Safety is our priority. Every traveler must pass an ID verification reviewed by our staff before joining trips, and drivers' vehicles are checked too. During a trip you can press SOS to share your live location with your trusted contacts and the PartyUp safety team.",
+        "Safety is our priority. Every traveler must pass an ID verification reviewed by our Guild Leaders before joining trips, and drivers' vehicles are checked too. During a trip you can press SOS to share your live location with your trusted contacts and the PartyUp safety team.",
     },
     {
       question: 'How does the carpool feature work?',

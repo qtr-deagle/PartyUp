@@ -3,6 +3,7 @@ import StaffLayout from '@/components/StaffLayout';
 import { Search, DollarSign, AlertCircle, CheckCircle, Clock, Filter } from 'lucide-react';
 import { listReports, type ReportRow } from '@/lib/reports';
 import { listPaymentHistory, type PaymentHistoryRow } from '@/lib/payments';
+import { useTableRealtime } from '@/hooks/useTableRealtime';
 
 /**
  * Staff Payment Monitoring (View Only)
@@ -24,15 +25,16 @@ export default function StaffPaymentMonitoring() {
   const [transactions, setTransactions] = useState<PaymentHistoryRow[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
-  const loadIssues = useCallback(async () => {
-    setIsLoadingIssues(true);
+  // `silent` refreshes (realtime / tab focus) skip the loading state.
+  const loadIssues = useCallback(async (silent = false) => {
+    if (!silent) setIsLoadingIssues(true);
     const { data } = await listReports(undefined, 'payment');
     setIssues(data);
     setIsLoadingIssues(false);
   }, []);
 
-  const loadHistory = useCallback(async () => {
-    setIsLoadingHistory(true);
+  const loadHistory = useCallback(async (silent = false) => {
+    if (!silent) setIsLoadingHistory(true);
     const { data } = await listPaymentHistory();
     setTransactions(data);
     setIsLoadingHistory(false);
@@ -42,6 +44,9 @@ export default function StaffPaymentMonitoring() {
     void loadIssues();
     void loadHistory();
   }, [loadIssues, loadHistory]);
+
+  useTableRealtime('reports', () => void loadIssues(true));
+  useTableRealtime('payment_history', () => void loadHistory(true));
 
   const filteredIssues = useMemo(
     () =>
@@ -163,7 +168,7 @@ export default function StaffPaymentMonitoring() {
         {/* Header */}
         <div>
           <h1 className="text-3xl font-bold text-foreground">Payment Monitoring</h1>
-          <p className="text-sm text-muted-foreground mt-2">View payment issues and disputes (Staff View)</p>
+          <p className="text-sm text-muted-foreground mt-2">View payment issues and disputes (Guild Leader View)</p>
         </div>
 
         {/* Tab Navigation */}
@@ -306,8 +311,8 @@ export default function StaffPaymentMonitoring() {
             {/* Summary */}
             <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-6">
               <p className="text-sm text-foreground">
-                <strong>Note:</strong> This is a view-only interface for staff. For payment dispute resolution and management,
-                please contact the admin panel. Staff can monitor trends and escalate issues to administrators.
+                <strong>Note:</strong> This is a view-only interface for Guild Leaders. For payment dispute resolution and management,
+                please contact the admin panel. Guild Leaders can monitor trends and escalate issues to administrators.
               </p>
             </div>
           </>
@@ -429,7 +434,7 @@ export default function StaffPaymentMonitoring() {
             {/* Summary */}
             <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-6">
               <p className="text-sm text-foreground">
-                <strong>Note:</strong> This transaction history is view-only for staff monitoring. Staff can identify payment method issues,
+                <strong>Note:</strong> This transaction history is view-only for Guild Leader monitoring. Guild Leaders can identify payment method issues,
                 track transaction volume, and flag problematic patterns for admin escalation.
               </p>
             </div>

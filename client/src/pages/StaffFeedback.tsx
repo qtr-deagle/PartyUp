@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import StaffLayout from '@/components/StaffLayout';
 import { Search, Star, MessageSquare, Filter } from 'lucide-react';
 import { listFeedback, type FeedbackRow, type FeedbackType } from '@/lib/feedback';
+import { useTableRealtime } from '@/hooks/useTableRealtime';
 
 /**
  * Staff Feedback Monitoring (View Only)
@@ -18,8 +19,9 @@ export default function StaffFeedback() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRating, setFilterRating] = useState('');
 
-  const loadFeedback = useCallback(async () => {
-    setIsLoading(true);
+  // `silent` refreshes (realtime / tab focus) skip the loading state.
+  const loadFeedback = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
     const { data } = await listFeedback();
     setFeedback(data);
     setIsLoading(false);
@@ -28,6 +30,8 @@ export default function StaffFeedback() {
   useEffect(() => {
     void loadFeedback();
   }, [loadFeedback]);
+
+  useTableRealtime('feedback', () => void loadFeedback(true));
 
   const filteredFeedback = useMemo(
     () =>
@@ -145,7 +149,7 @@ export default function StaffFeedback() {
         {/* Header */}
         <div>
           <h1 className="text-3xl font-bold text-foreground">Feedback Monitoring</h1>
-          <p className="text-sm text-muted-foreground mt-2">Monitor user feedback and reviews (Staff View)</p>
+          <p className="text-sm text-muted-foreground mt-2">Monitor user feedback and reviews (Guild Leader View)</p>
         </div>
 
         {/* Stats */}
@@ -244,7 +248,7 @@ export default function StaffFeedback() {
         {/* Summary */}
         <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-6">
           <p className="text-sm text-foreground">
-            <strong>Note:</strong> This is a view-only interface for staff monitoring. Staff can track feedback trends,
+            <strong>Note:</strong> This is a view-only interface for Guild Leader monitoring. Guild Leaders can track feedback trends,
             identify patterns, and escalate critical feedback to administrators. For response management and detailed analysis,
             contact the admin panel.
           </p>

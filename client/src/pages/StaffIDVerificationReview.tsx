@@ -2,22 +2,12 @@
 import { CheckCircle, XCircle, Clock } from 'lucide-react';
 import StaffLayout from '@/components/StaffLayout';
 import { ImageLightbox } from '@/components/ImageLightbox';
-import { listIdVerifications, getSignedImageUrl, reviewIdVerification, type IdVerificationRow, type AiFlag } from '@/lib/verification';
-
-const AI_FLAG_STYLES: Record<AiFlag, string> = {
-  high_confidence: 'bg-green-100 text-green-700',
-  needs_review: 'bg-yellow-100 text-yellow-700',
-  low_similarity: 'bg-red-100 text-red-700',
-  error: 'bg-gray-200 text-gray-600',
-};
-
-function AiSimilarityBadge({ score, flag }: { score: number | null; flag: AiFlag | null }) {
-  if (!flag) {
-    return <span className="text-xs font-medium px-2 py-0.5 rounded-lg bg-gray-100 text-gray-500 whitespace-nowrap">AI: pending</span>;
-  }
-  const label = flag === 'error' ? 'AI: error' : `AI match: ${Math.round(score ?? 0)}%`;
-  return <span className={`text-xs font-bold px-2 py-0.5 rounded-lg whitespace-nowrap ${AI_FLAG_STYLES[flag]}`}>{label}</span>;
-}
+import { listIdVerifications, getSignedImageUrl, reviewIdVerification, type IdVerificationRow } from '@/lib/verification';
+import AiAddressBadge from '@/components/AiAddressBadge';
+import AiSimilarityBadge from '@/components/AiSimilarityBadge';
+import LegalNameCheck from '@/components/LegalNameCheck';
+import { useAiResultPoll } from '@/hooks/useAiResultPoll';
+import { useTableRealtime } from '@/hooks/useTableRealtime';
 
 export default function StaffIDVerificationReview() {
   const [verifications, setVerifications] = useState<IdVerificationRow[]>([]);
@@ -25,12 +15,15 @@ export default function StaffIDVerificationReview() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [images, setImages] = useState<{ front: string | null; back: string | null; selfie: string | null }>({ front: null, back: null, selfie: null });
   const [rejectionReason, setRejectionReason] = useState<string>('');
+  const [otherReason, setOtherReason] = useState('');
   const [showRejectionModal, setShowRejectionModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
-  const loadQueue = useCallback(async () => {
-    setIsLoading(true);
+  // `silent` refreshes (realtime / tab focus) keep the list on screen instead of
+  // flashing the loading state.
+  const loadQueue = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
     const { data } = await listIdVerifications('pending');
     setVerifications(data);
     setIsLoading(false);
@@ -40,29 +33,34 @@ export default function StaffIDVerificationReview() {
     void loadQueue();
   }, [loadQueue]);
 
-  const selected = verifications.find((v) => v.id === selectedId) ?? null;
+  useTableRealtime('id_verifications', () => void loadQueue(true));
+  useAiResultPoll(verifications, () => void loadQueue(true));
 
+  const selected = verifications.find((v) => v.id === selectedId) ?? null;
+  const frontPath = selected?.front_image_path ?? null;
+  const backPath = selected?.back_image_path ?? null;
+  const selfiePath = selected?.selfie_image_path ?? null;
+  const hasSelected = selected !== null;
+
+  // Keyed on the paths, not the row object, so a background refresh doesn't
+  // re-sign and reload the photos being reviewed.
   useEffect(() => {
-    if (!selected) {
+    if (!hasSelected) {
       setImages({ front: null, back: null, selfie: null });
       return;
     }
     let cancelled = false;
-    Promise.all([
-      getSignedImageUrl(selected.front_image_path),
-      getSignedImageUrl(selected.back_image_path),
-      getSignedImageUrl(selected.selfie_image_path),
-    ]).then(([front, back, selfie]) => {
+    Promise.all([getSignedImageUrl(frontPath), getSignedImageUrl(backPath), getSignedImageUrl(selfiePath)]).then(([front, back, selfie]) => {
       if (!cancelled) setImages({ front, back, selfie });
     });
     return () => {
       cancelled = true;
     };
-  }, [selected]);
+  }, [hasSelected, selectedId, frontPath, backPath, selfiePath]);
 
   const handleApprove = async (id: string) => {
     setIsSubmitting(true);
-    const { error } = await reviewIdVerification(id, 'approved', 'Approved by staff after manual review.');
+    const { error } = await reviewIdVerification(id, 'approved', 'Approved by a Guild Leader after manual review.');
     setIsSubmitting(false);
     if (!error) {
       setSelectedId(null);
@@ -75,14 +73,18 @@ export default function StaffIDVerificationReview() {
     setShowRejectionModal(true);
   };
 
+  // Picking "Other" requires typing the reason; that text is what gets saved.
+  const finalRejectionReason = rejectionReason === 'Other' ? otherReason.trim() : rejectionReason;
+
   const handleRejectSubmit = async () => {
-    if (!selectedId || !rejectionReason) return;
+    if (!selectedId || !finalRejectionReason) return;
     setIsSubmitting(true);
-    const { error } = await reviewIdVerification(selectedId, 'rejected', rejectionReason);
+    const { error } = await reviewIdVerification(selectedId, 'rejected', finalRejectionReason);
     setIsSubmitting(false);
     if (!error) {
       setShowRejectionModal(false);
       setRejectionReason('');
+      setOtherReason('');
       setSelectedId(null);
       await loadQueue();
     }
@@ -132,7 +134,7 @@ export default function StaffIDVerificationReview() {
                       <p className="text-xs text-muted-foreground mt-2">{new Date(v.submitted_at).toLocaleString()}</p>
                       <p className="text-xs font-semibold text-primary mt-1 uppercase">{v.document_type.replace('_', ' ')}</p>
                       <div className="flex items-center gap-1.5 mt-2">
-                        <AiSimilarityBadge score={v.ai_similarity_score} flag={v.ai_flag} />
+                        <AiSimilarityBadge score={v.ai_similarity_score} flag={v.ai_flag} submittedAt={v.submitted_at} />
                         {v.ai_underage_flag && (
                           <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-orange-100 text-orange-700 whitespace-nowrap">Age flag</span>
                         )}
@@ -151,6 +153,7 @@ export default function StaffIDVerificationReview() {
                   <h3 className="text-lg font-bold text-foreground">{selected.profiles?.display_name ?? 'Unknown user'}</h3>
                   <p className="text-sm text-muted-foreground mt-1">{selected.profiles?.email}</p>
                   <p className="text-xs text-muted-foreground mt-2">Document: {selected.document_type.replace('_', ' ')}</p>
+                  <LegalNameCheck profile={selected.profiles} />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -206,7 +209,16 @@ export default function StaffIDVerificationReview() {
                 <div className="bg-secondary rounded-lg p-3 space-y-2 border border-border">
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-muted-foreground">AI facial similarity match:</span>
-                    <AiSimilarityBadge score={selected.ai_similarity_score} flag={selected.ai_flag} />
+                    <AiSimilarityBadge score={selected.ai_similarity_score} flag={selected.ai_flag} submittedAt={selected.submitted_at} />
+                  </div>
+                  <div className="flex justify-between items-center text-sm gap-4">
+                    <span className="text-muted-foreground shrink-0">AI Bulacan address check:</span>
+                    <AiAddressBadge
+                      flag={selected.ai_address_flag}
+                      detected={selected.ai_detected_municipality}
+                      declared={selected.profiles?.city ?? null}
+                      submittedAt={selected.submitted_at}
+                    />
                   </div>
                   {selected.ai_age_low !== null && selected.ai_age_high !== null && (
                     <div className="flex justify-between text-sm">
@@ -287,6 +299,16 @@ export default function StaffIDVerificationReview() {
                   <option value="Face or ID obscured">Face or ID obscured</option>
                   <option value="Other">Other</option>
                 </select>
+                {rejectionReason === 'Other' && (
+                  <textarea
+                    value={otherReason}
+                    onChange={(e) => setOtherReason(e.target.value)}
+                    placeholder="Describe the reason (the user will see this)"
+                    rows={3}
+                    autoFocus
+                    className="mt-3 w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary transition-colors resize-none"
+                  />
+                )}
               </div>
               <div className="flex gap-3 pt-2">
                 <button
@@ -297,7 +319,7 @@ export default function StaffIDVerificationReview() {
                 </button>
                 <button
                   onClick={handleRejectSubmit}
-                  disabled={!rejectionReason || isSubmitting}
+                  disabled={!finalRejectionReason || isSubmitting}
                   className="flex-1 bg-red-600 text-white py-2.5 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-colors"
                 >
                   Reject

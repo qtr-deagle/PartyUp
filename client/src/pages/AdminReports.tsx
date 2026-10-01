@@ -3,6 +3,7 @@ import AdminLayout from '@/components/AdminLayout';
 import { ImageLightbox } from '@/components/ImageLightbox';
 import { Camera, Search, AlertTriangle, CheckCircle, XCircle, Eye } from 'lucide-react';
 import { getReportEvidenceUrl, listReports, updateReportStatus, type ReportRow, type ReportStatus } from '@/lib/reports';
+import { useTableRealtime } from '@/hooks/useTableRealtime';
 
 const STATUS_FILTERS: Array<ReportStatus | 'all'> = ['all', 'open', 'reviewing', 'resolved', 'dismissed'];
 
@@ -33,8 +34,9 @@ export default function AdminReports() {
   const [evidenceUrls, setEvidenceUrls] = useState<string[] | null>(null);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
-  const loadReports = useCallback(async (status: ReportStatus | 'all') => {
-    setIsLoading(true);
+  // `silent` refreshes (realtime / tab focus) skip the loading state.
+  const loadReports = useCallback(async (status: ReportStatus | 'all', silent = false) => {
+    if (!silent) setIsLoading(true);
     const { data } = await listReports(status === 'all' ? undefined : status);
     setReports(data);
     setIsLoading(false);
@@ -43,6 +45,8 @@ export default function AdminReports() {
   useEffect(() => {
     void loadReports(statusFilter);
   }, [statusFilter, loadReports]);
+
+  useTableRealtime('reports', () => void loadReports(statusFilter, true));
 
   const filteredReports = useMemo(
     () =>

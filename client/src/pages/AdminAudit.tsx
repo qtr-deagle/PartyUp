@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { Search, Filter, Clock, User } from 'lucide-react';
 import { listAuditLogs, type AuditLogRow } from '@/lib/auditLog';
+import { useTableRealtime } from '@/hooks/useTableRealtime';
 
 /**
  * Admin Audit Log - Compliance & Monitoring
@@ -40,8 +41,9 @@ export default function AdminAudit() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSeverity, setFilterSeverity] = useState<'all' | Severity>('all');
 
-  const loadLogs = useCallback(async () => {
-    setIsLoading(true);
+  // `silent` refreshes (realtime / tab focus) skip the loading state.
+  const loadLogs = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
     const { data } = await listAuditLogs();
     setLogs(data);
     setIsLoading(false);
@@ -50,6 +52,8 @@ export default function AdminAudit() {
   useEffect(() => {
     void loadLogs();
   }, [loadLogs]);
+
+  useTableRealtime('audit_logs', () => void loadLogs(true));
 
   const filteredLogs = useMemo(
     () =>
@@ -121,7 +125,7 @@ export default function AdminAudit() {
         {/* Header */}
         <div>
           <h1 className="text-3xl font-bold text-foreground">Audit Log</h1>
-          <p className="text-sm text-muted-foreground mt-2">Track all staff actions and system changes</p>
+          <p className="text-sm text-muted-foreground mt-2">Track all Guild Leader and admin actions</p>
         </div>
 
         {/* Filters */}
@@ -130,7 +134,7 @@ export default function AdminAudit() {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search by staff or action..."
+              placeholder="Search by Guild Leader or action..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-12 pr-4 py-3 bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-smooth"
@@ -157,7 +161,7 @@ export default function AdminAudit() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-secondary">
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Staff Member</th>
+                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Guild Leader</th>
                   <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Action</th>
                   <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Target</th>
                   <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Severity</th>
@@ -223,7 +227,7 @@ export default function AdminAudit() {
             <p className="text-xs text-muted-foreground mt-2">Requiring attention</p>
           </div>
           <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-            <p className="text-sm text-muted-foreground mb-2">Most Active Staff (7 days)</p>
+            <p className="text-sm text-muted-foreground mb-2">Most Active Guild Leaders (7 days)</p>
             <p className="text-lg font-bold text-foreground">{stats.mostActive?.name ?? '—'}</p>
             <p className="text-xs text-muted-foreground mt-2">
               {stats.mostActive ? `${stats.mostActive.count} action${stats.mostActive.count === 1 ? '' : 's'} this week` : 'No activity yet'}

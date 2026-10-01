@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LayoutDashboard, CheckSquare, Car, Plane, LogOut, Moon, Sun, DollarSign, Link2, MessageSquare, Shield, Siren } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, Car, Plane, UserCog, LogOut, Moon, Sun, DollarSign, Link2, MessageSquare, Shield, Siren, Trophy } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import SosGlobalAlert from '@/components/sos/SosGlobalAlert';
+import LogoutConfirmDialog from '@/components/LogoutConfirmDialog';
 import { useActiveSosAlerts } from '@/hooks/useSosRealtime';
+import { roleLabel } from '@/lib/guilds';
 
 let staffSuppressHoverUntilMove = false;
 let staffLastClickPos: { x: number; y: number } | null = null;
@@ -20,6 +22,7 @@ export default function StaffLayout({ children }: StaffLayoutProps) {
   const lastMousePos = useRef<{ x: number; y: number } | null>(staffLastClickPos);
   const sidebarRef = useRef<HTMLElement | null>(null);
   const { user, logout } = useAuth();
+  const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
   const [location] = useLocation();
   const { alerts: activeSosAlerts, isLoading: isSosLoading } = useActiveSosAlerts();
@@ -27,6 +30,7 @@ export default function StaffLayout({ children }: StaffLayoutProps) {
 
   const staffNavItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/staff/dashboard' },
+    { id: 'guild', label: 'My Guild', icon: Trophy, path: '/staff/guild' },
     { id: 'sos', label: 'SOS Center', icon: Siren, path: '/staff/sos' },
     { id: 'verification', label: 'ID Verification', icon: Shield, path: '/staff/verification' },
     { id: 'disputes', label: 'User Reports', icon: CheckSquare, path: '/staff/disputes' },
@@ -105,7 +109,7 @@ export default function StaffLayout({ children }: StaffLayoutProps) {
             {isExpanded && (
               <div>
                 <h1 className="text-lg font-bold text-primary">PartyUp</h1>
-                <p className="text-xs text-muted-foreground whitespace-nowrap">Staff</p>
+                <p className="text-xs text-muted-foreground whitespace-nowrap">Guild Leader</p>
               </div>
             )}
           </div>
@@ -151,7 +155,7 @@ export default function StaffLayout({ children }: StaffLayoutProps) {
               {isExpanded && (
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-sidebar-foreground truncate">{user.name}</p>
-                  <p className="text-xs text-muted-foreground truncate capitalize">{user.role}</p>
+                  <p className="text-xs text-muted-foreground truncate capitalize">{roleLabel(user.role)}</p>
                 </div>
               )}
             </div>
@@ -163,10 +167,21 @@ export default function StaffLayout({ children }: StaffLayoutProps) {
             {theme === 'dark' ? <Sun className="w-5 h-5 shrink-0" /> : <Moon className="w-5 h-5 shrink-0" />}
             {isExpanded && <span className="text-sm whitespace-nowrap">{theme === 'dark' ? 'Light' : 'Dark'}</span>}
           </button>
+          <Link href="/staff/account" asChild>
+            <button
+              onClick={handleSidebarItemClick}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-smooth border-0 text-left cursor-pointer ${
+                isActive('/staff/account') ? 'bg-primary text-primary-foreground font-semibold shadow-md' : 'bg-transparent text-sidebar-foreground hover:bg-sidebar-accent/50'
+              }`}
+            >
+              <UserCog className="w-5 h-5 shrink-0" />
+              {isExpanded && <span className="text-sm whitespace-nowrap">Account</span>}
+            </button>
+          </Link>
           <button
             onClick={(event) => {
               handleSidebarItemClick(event);
-              handleLogout();
+              setConfirmLogoutOpen(true);
             }}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-smooth border-0 bg-transparent text-left cursor-pointer text-sidebar-foreground hover:bg-destructive/10 hover:text-destructive"
           >
@@ -182,6 +197,12 @@ export default function StaffLayout({ children }: StaffLayoutProps) {
           {children}
         </main>
       </div>
+
+      <LogoutConfirmDialog
+        open={confirmLogoutOpen}
+        onOpenChange={setConfirmLogoutOpen}
+        onConfirm={handleLogout}
+      />
     </div>
   );
 }

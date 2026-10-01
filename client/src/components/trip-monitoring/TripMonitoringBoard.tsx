@@ -13,6 +13,7 @@ import {
   type TripMonitoringRow,
   type TripMonitoringDetail,
 } from '@/lib/tripMonitoring';
+import { useTableRealtime } from '@/hooks/useTableRealtime';
 import { useTripMonitoringRealtime } from '@/hooks/useTripMonitoringRealtime';
 
 const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
@@ -59,12 +60,12 @@ export default function TripMonitoringBoard() {
 
   const tripIdsWithActiveSos = useMemo(() => new Set(activeSosAlerts.map((alert) => alert.trip_id).filter((id): id is string => !!id)), [activeSosAlerts]);
 
-  const loadTrips = useCallback(async (search: string, withCompleted: boolean) => {
-    setIsLoading(true);
+  const loadTrips = useCallback(async (search: string, withCompleted: boolean, silent = false) => {
+    if (!silent) setIsLoading(true);
     const { data, error } = await listActiveTripsWithSafetyStatus(search, withCompleted);
     if (error) {
       setLoadError(error.message);
-      toast.error('Failed to load trips');
+      if (!silent) toast.error('Failed to load trips');
       setIsLoading(false);
       return;
     }
@@ -77,6 +78,9 @@ export default function TripMonitoringBoard() {
     const timeout = setTimeout(() => void loadTrips(searchTerm, includeCompleted), 300);
     return () => clearTimeout(timeout);
   }, [searchTerm, includeCompleted, loadTrips]);
+
+  // Live: new trips, status changes and member joins/leaves update the list.
+  useTableRealtime(['trips', 'trip_members'], () => void loadTrips(searchTerm, includeCompleted, true));
 
   // Client-side reinforcement on top of the RPC's baked-in sort: trips with a
   // currently-live SOS (per the realtime hook, which reflects resolves

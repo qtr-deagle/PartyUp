@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { CheckCircle, XCircle, Clock } from 'lucide-react';
-import StaffLayout from '@/components/StaffLayout';
+import AdminLayout from '@/components/AdminLayout';
 import { ImageLightbox } from '@/components/ImageLightbox';
 import { listVehicles, getVehiclePhotoUrl, reviewVehicleVerification, type VehicleRow } from '@/lib/vehicles';
+import { useTableRealtime } from '@/hooks/useTableRealtime';
 
 /**
  * Staff Vehicles - Personal Vehicle Verification
@@ -55,12 +56,15 @@ export default function StaffVehicles() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [images, setImages] = useState<VehicleImages>(EMPTY_IMAGES);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [otherReason, setOtherReason] = useState('');
   const [showRejectionModal, setShowRejectionModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
-  const loadQueue = useCallback(async () => {
-    setIsLoading(true);
+  // `silent` refreshes (realtime / tab focus) keep the list on screen instead of
+  // flashing the loading state.
+  const loadQueue = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
     const { data } = await listVehicles('pending');
     setVehicles(data);
     setIsLoading(false);
@@ -70,7 +74,23 @@ export default function StaffVehicles() {
     void loadQueue();
   }, [loadQueue]);
 
+  useTableRealtime('vehicles', () => void loadQueue(true));
+
   const selected = vehicles.find((v) => v.id === selectedId) ?? null;
+  // Changes only when the reviewed vehicle or its documents change, so a
+  // background refresh doesn't re-sign and reload the photos on screen.
+  const photoKey = selected
+    ? [
+        selected.id,
+        selected.exterior_image_path,
+        selected.orcr_image_path,
+        selected.plate_image_path,
+        selected.authorization_letter_path,
+        selected.owner_id_front_path,
+        selected.owner_id_back_path,
+        selected.owner_signatures_path,
+      ].join('|')
+    : null;
 
   useEffect(() => {
     if (!selected) {
@@ -92,11 +112,12 @@ export default function StaffVehicles() {
     return () => {
       cancelled = true;
     };
-  }, [selected]);
+    // photoKey captures every field read from `selected`.
+  }, [photoKey]);
 
   const handleApprove = async (id: string) => {
     setIsSubmitting(true);
-    const { error } = await reviewVehicleVerification(id, 'approved', 'Approved by staff after manual review.');
+    const { error } = await reviewVehicleVerification(id, 'approved', 'Approved by a Guild Leader after manual review.');
     setIsSubmitting(false);
     if (!error) {
       setSelectedId(null);
@@ -109,14 +130,18 @@ export default function StaffVehicles() {
     setShowRejectionModal(true);
   };
 
+  // Picking "Other" requires typing the reason; that text is what gets saved.
+  const finalRejectionReason = rejectionReason === 'Other' ? otherReason.trim() : rejectionReason;
+
   const handleRejectSubmit = async () => {
-    if (!selectedId || !rejectionReason) return;
+    if (!selectedId || !finalRejectionReason) return;
     setIsSubmitting(true);
-    const { error } = await reviewVehicleVerification(selectedId, 'rejected', rejectionReason);
+    const { error } = await reviewVehicleVerification(selectedId, 'rejected', finalRejectionReason);
     setIsSubmitting(false);
     if (!error) {
       setShowRejectionModal(false);
       setRejectionReason('');
+      setOtherReason('');
       setSelectedId(null);
       await loadQueue();
     }
@@ -125,8 +150,8 @@ export default function StaffVehicles() {
   const pendingCount = vehicles.length;
 
   return (
-    <StaffLayout>
-      <div className="space-y-8 p-8">
+    <AdminLayout>
+      <div className="space-y-8">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Vehicle Verification</h1>
           <p className="text-sm text-muted-foreground mt-2">Review and approve travelers' personal vehicles for carpooling</p>
@@ -286,6 +311,16 @@ export default function StaffVehicles() {
                   <option value="Owner authorization incomplete or invalid">Owner authorization incomplete or invalid</option>
                   <option value="Other">Other</option>
                 </select>
+                {rejectionReason === 'Other' && (
+                  <textarea
+                    value={otherReason}
+                    onChange={(e) => setOtherReason(e.target.value)}
+                    placeholder="Describe the reason (the user will see this)"
+                    rows={3}
+                    autoFocus
+                    className="mt-3 w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary transition-colors resize-none"
+                  />
+                )}
               </div>
               <div className="flex gap-3 pt-2">
                 <button
@@ -296,7 +331,7 @@ export default function StaffVehicles() {
                 </button>
                 <button
                   onClick={handleRejectSubmit}
-                  disabled={!rejectionReason || isSubmitting}
+                  disabled={!finalRejectionReason || isSubmitting}
                   className="flex-1 bg-red-600 text-white py-2.5 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-colors"
                 >
                   Reject
@@ -308,6 +343,6 @@ export default function StaffVehicles() {
       )}
 
       <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
-    </StaffLayout>
+    </AdminLayout>
   );
 }

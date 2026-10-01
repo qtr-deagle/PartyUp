@@ -16,8 +16,6 @@ import {
 } from 'lucide-react';
 
 const SHOW_DEMO_LOGIN = import.meta.env.VITE_SHOW_DEMO_LOGIN === 'true';
-const DEMO_STAFF_EMAIL = import.meta.env.VITE_DEMO_STAFF_EMAIL;
-const DEMO_STAFF_PASSWORD = import.meta.env.VITE_DEMO_STAFF_PASSWORD;
 const DEMO_ADMIN_EMAIL = import.meta.env.VITE_DEMO_ADMIN_EMAIL;
 const DEMO_ADMIN_PASSWORD = import.meta.env.VITE_DEMO_ADMIN_PASSWORD;
 
@@ -41,6 +39,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [justReset] = useState(() => new URLSearchParams(window.location.search).get('reset') === 'success');
   const { login, logout } = useAuth();
   const [, setLocation] = useLocation();
 
@@ -53,12 +52,10 @@ export default function Login() {
       const loggedInUser = await login(email, password);
       if (loggedInUser?.role === 'admin') {
         setLocation('/admin/dashboard');
-      } else if (loggedInUser?.role === 'staff') {
-        setLocation('/staff/dashboard');
       } else {
         await logout();
         setError(
-          'This console is for PartyUp staff and admins only. Travelers can sign in through the PartyUp mobile app.'
+          'This console is for PartyUp admins only. Guild Leaders and travelers sign in through the PartyUp mobile app.'
         );
       }
     } catch (err) {
@@ -78,7 +75,7 @@ export default function Login() {
           </div>
           <div>
             <p className="text-lg font-bold text-primary leading-tight">PartyUp</p>
-            <p className="text-xs text-muted-foreground">Staff &amp; Admin Console</p>
+            <p className="text-xs text-muted-foreground">Admin Console</p>
           </div>
         </div>
 
@@ -117,7 +114,7 @@ export default function Login() {
             </div>
             <div>
               <p className="text-lg font-bold text-primary leading-tight">PartyUp</p>
-              <p className="text-xs text-muted-foreground">Staff &amp; Admin Console</p>
+              <p className="text-xs text-muted-foreground">Admin Console</p>
             </div>
           </div>
 
@@ -127,19 +124,16 @@ export default function Login() {
             </span>
             <h1 className="text-3xl font-bold mb-2">Console sign in</h1>
             <p className="text-muted-foreground">
-              Use the staff or admin account issued to you by PartyUp.
+              Use the admin account issued to you by PartyUp.
             </p>
           </div>
 
           {/* Demo Access Hint */}
-          {SHOW_DEMO_LOGIN && (DEMO_STAFF_EMAIL || DEMO_ADMIN_EMAIL) && (
+          {SHOW_DEMO_LOGIN && DEMO_ADMIN_EMAIL && (
             <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900 space-y-1">
               <p className="flex items-center gap-2 font-medium">
                 <Info className="w-4 h-4" /> Demo access — for review only
               </p>
-              {DEMO_STAFF_EMAIL && (
-                <p>Staff: {DEMO_STAFF_EMAIL} / {DEMO_STAFF_PASSWORD}</p>
-              )}
               {DEMO_ADMIN_EMAIL && (
                 <p>Admin: {DEMO_ADMIN_EMAIL} / {DEMO_ADMIN_PASSWORD}</p>
               )}
@@ -147,6 +141,14 @@ export default function Login() {
           )}
 
           <div className="bg-card rounded-2xl shadow-elevation-3 border border-border p-8 space-y-6">
+            {justReset && !error && (
+              <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
+                <p className="text-sm text-green-700 dark:text-green-400">
+                  Password updated. Sign in with your new password.
+                </p>
+              </div>
+            )}
+
             {/* Error Message */}
             {error && (
               <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
@@ -176,9 +178,14 @@ export default function Login() {
 
               {/* Password Input */}
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Password
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-foreground">
+                    Password
+                  </label>
+                  <a href="/forgot-password" className="text-sm text-primary hover:underline">
+                    Forgot password?
+                  </a>
+                </div>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <input

@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LayoutDashboard, Users, Plane, AlertCircle, Settings, LogOut, Moon, Sun, BarChart3, Shield, Lock, DollarSign, Link2, MessageSquare, Siren } from 'lucide-react';
+import { LayoutDashboard, Users, Plane, AlertCircle, UserCog, LogOut, Moon, Sun, Shield, Lock, DollarSign, Link2, MessageSquare, Siren, Trophy, Car, ShieldCheck } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import SosGlobalAlert from '@/components/sos/SosGlobalAlert';
+import LogoutConfirmDialog from '@/components/LogoutConfirmDialog';
 import { useActiveSosAlerts } from '@/hooks/useSosRealtime';
+import { roleLabel } from '@/lib/guilds';
 
 let adminSuppressHoverUntilMove = false;
 let adminLastClickPos: { x: number; y: number } | null = null;
@@ -24,6 +26,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   );
   const sidebarRef = useRef<HTMLElement | null>(null);
   const { user, logout } = useAuth();
+  const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
   const [location] = useLocation();
   const { alerts: activeSosAlerts, isLoading: isSosLoading } = useActiveSosAlerts();
@@ -33,8 +36,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/admin/dashboard' },
     { id: 'sos', label: 'SOS Center', icon: Siren, path: '/admin/sos' },
     { id: 'verification', label: 'ID Verification', icon: Shield, path: '/admin/verification' },
-    { id: 'staff', label: 'Staff', icon: Users, path: '/admin/staff' },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3, path: '/admin/analytics' },
+    { id: 'vehicles', label: 'Vehicles', icon: Car, path: '/admin/vehicles' },
+    { id: 'staff', label: 'Guild Leaders', icon: Users, path: '/admin/staff' },
+    { id: 'guilds', label: 'Guilds & Rewards', icon: Trophy, path: '/admin/guilds' },
     { id: 'users', label: 'Users', icon: Lock, path: '/admin/users' },
     { id: 'trips', label: 'Trips', icon: Plane, path: '/admin/trips' },
     { id: 'payment', label: 'Payments', icon: DollarSign, path: '/admin/payments' },
@@ -42,6 +46,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     { id: 'feedback', label: 'Feedback', icon: MessageSquare, path: '/admin/feedback' },
     { id: 'reports', label: 'Reports', icon: AlertCircle, path: '/admin/reports' },
     { id: 'audit', label: 'Audit Log', icon: Lock, path: '/admin/audit' },
+    { id: 'team', label: 'Admins', icon: ShieldCheck, path: '/admin/team' },
   ];
 
   const handleLogout = async () => {
@@ -166,7 +171,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               {isExpanded && (
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-sidebar-foreground truncate">{user.name}</p>
-                  <p className="text-xs text-muted-foreground truncate capitalize">{user.role}</p>
+                  <p className="text-xs text-muted-foreground truncate capitalize">{roleLabel(user.role)}</p>
                 </div>
               )}
             </div>
@@ -178,19 +183,21 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             {theme === 'dark' ? <Sun className="w-5 h-5 shrink-0" /> : <Moon className="w-5 h-5 shrink-0" />}
             {isExpanded && <span className="text-sm whitespace-nowrap">{theme === 'dark' ? 'Light' : 'Dark'}</span>}
           </button>
-          <Link href="/profile" asChild>
+          <Link href="/admin/account" asChild>
             <button
               onClick={handleSidebarItemClick}
-              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-smooth border-0 bg-transparent text-left cursor-pointer text-sidebar-foreground hover:bg-sidebar-accent/50"
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-smooth border-0 text-left cursor-pointer ${
+                isActive('/admin/account') ? 'bg-primary text-primary-foreground font-semibold shadow-md' : 'bg-transparent text-sidebar-foreground hover:bg-sidebar-accent/50'
+              }`}
             >
-              <Settings className="w-5 h-5 shrink-0" />
-              {isExpanded && <span className="text-sm whitespace-nowrap">Settings</span>}
+              <UserCog className="w-5 h-5 shrink-0" />
+              {isExpanded && <span className="text-sm whitespace-nowrap">Account</span>}
             </button>
           </Link>
           <button
             onClick={(event) => {
               handleSidebarItemClick(event);
-              handleLogout();
+              setConfirmLogoutOpen(true);
             }}
             className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-smooth border-0 bg-transparent text-left cursor-pointer text-sidebar-foreground hover:bg-destructive/10 hover:text-destructive"
           >
@@ -206,6 +213,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           {children}
         </main>
       </div>
+
+      <LogoutConfirmDialog
+        open={confirmLogoutOpen}
+        onOpenChange={setConfirmLogoutOpen}
+        onConfirm={handleLogout}
+      />
     </div>
   );
 }

@@ -4,6 +4,14 @@ import { logAuditAction } from '@/lib/auditLog';
 export type DocumentType = 'passport' | 'driver_license' | 'national_id' | 'other';
 export type VerificationStatus = 'pending' | 'approved' | 'rejected' | 'resubmitted';
 export type AiFlag = 'high_confidence' | 'needs_review' | 'low_similarity' | 'error';
+export type AiAddressFlag =
+  | 'match'
+  | 'other_bulacan_town'
+  | 'bulacan_unknown_town'
+  | 'not_bulacan'
+  | 'not_found'
+  | 'not_applicable'
+  | 'error';
 
 export interface IdVerificationRow {
   id: string;
@@ -25,16 +33,34 @@ export interface IdVerificationRow {
   ai_age_high: number | null;
   ai_flag: AiFlag | null;
   ai_underage_flag: boolean;
+  // OCR of the ID address vs the declared Bulacan municipality (profiles.city).
+  ai_address_flag: AiAddressFlag | null;
+  ai_detected_municipality: string | null;
   ai_error: string | null;
   ai_processed_at: string | null;
   profiles: {
     display_name: string;
     email: string | null;
     avatar_url: string | null;
+    first_name: string | null;
+    middle_name: string | null;
+    last_name: string | null;
+    name_suffix: string | null;
+    city: string | null;
   } | null;
 }
 
-const SELECT_COLUMNS = '*, profiles!id_verifications_user_id_fkey(display_name, email, avatar_url)';
+const SELECT_COLUMNS =
+  '*, profiles!id_verifications_user_id_fkey(display_name, email, avatar_url, first_name, middle_name, last_name, name_suffix, city)';
+
+// Formats the legal name the way PH government IDs print it, so staff can
+// compare it line by line: "DELA CRUZ, Juan Miguel Santos Jr.". Null for
+// accounts that predate the legal-name fields.
+export function formatLegalName(profile: IdVerificationRow['profiles']) {
+  if (!profile?.last_name || !profile.first_name) return null;
+  const given = [profile.first_name, profile.middle_name, profile.name_suffix].filter(Boolean).join(' ');
+  return `${profile.last_name.toUpperCase()}, ${given}`;
+}
 
 export async function listIdVerifications(status?: VerificationStatus) {
   let query = supabase.from('id_verifications').select(SELECT_COLUMNS).order('submitted_at', { ascending: true });

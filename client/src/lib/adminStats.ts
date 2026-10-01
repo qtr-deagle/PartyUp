@@ -117,21 +117,30 @@ export interface WeekBucket {
   disputes: number;
 }
 
-export async function getWeeklyTripsAndDisputes(): Promise<{ data: WeekBucket[]; error: Error | null }> {
-  const fourWeeksAgo = new Date();
-  fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
+export async function getWeeklyTripsAndDisputes(weeks = 8): Promise<{ data: WeekBucket[]; error: Error | null }> {
+  const since = new Date();
+  since.setDate(since.getDate() - weeks * 7);
 
   const [trips, reports] = await Promise.all([
-    supabase.from('trips').select('created_at').gte('created_at', fourWeeksAgo.toISOString()),
-    supabase.from('reports').select('created_at').gte('created_at', fourWeeksAgo.toISOString()),
+    supabase.from('trips').select('created_at').gte('created_at', since.toISOString()),
+    supabase.from('reports').select('created_at').gte('created_at', since.toISOString()),
   ]);
   const error = trips.error ?? reports.error ?? null;
 
-  const buckets: WeekBucket[] = [0, 1, 2, 3].map((i) => ({ weekLabel: `Week ${i + 1}`, trips: 0, disputes: 0 }));
+  // Bucket i covers the 7 days ending (weeks - 1 - i) weeks before today; label it by its date range.
+  const fmt = (d: Date) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const buckets: WeekBucket[] = Array.from({ length: weeks }, (_, i) => {
+    const end = new Date();
+    end.setDate(end.getDate() - (weeks - 1 - i) * 7);
+    const start = new Date(end);
+    start.setDate(start.getDate() - 6);
+    const endLabel = start.getMonth() === end.getMonth() ? String(end.getDate()) : fmt(end);
+    return { weekLabel: `${fmt(start)}–${endLabel}`, trips: 0, disputes: 0 };
+  });
   const bucketIndex = (dateStr: string) => {
     const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / (24 * 3_600_000));
-    const index = 3 - Math.floor(days / 7);
-    return index >= 0 && index <= 3 ? index : null;
+    const index = weeks - 1 - Math.floor(days / 7);
+    return index >= 0 && index < weeks ? index : null;
   };
   for (const row of trips.data ?? []) {
     const idx = bucketIndex(row.created_at as string);
@@ -154,14 +163,18 @@ export async function getTopDestinations(limit = 5): Promise<{ data: Destination
   const { data, error } = await supabase.from('trips').select('destination').not('destination', 'is', null);
   if (error) return { data: [], error };
 
+  // Destinations are free text, so "Makati", "makati " and "MAKATI" are the same
+  // place. Group on a case/whitespace-insensitive key and show a title-cased label.
   const counts = new Map<string, number>();
   for (const row of data ?? []) {
-    const destination = row.destination as string;
-    counts.set(destination, (counts.get(destination) ?? 0) + 1);
+    const key = (row.destination as string).trim().replace(/\s+/g, ' ').toLowerCase();
+    if (!key) continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   const total = data?.length ?? 0;
+  const titleCase = (s: string) => s.replace(/(^|[\s-])(\p{L})/gu, (_, sep, ch) => sep + ch.toUpperCase());
   const sorted = Array.from(counts.entries())
-    .map(([destination, count]) => ({ destination, count, pct: total > 0 ? (count / total) * 100 : 0 }))
+    .map(([key, count]) => ({ destination: titleCase(key), count, pct: total > 0 ? (count / total) * 100 : 0 }))
     .sort((a, b) => b.count - a.count)
     .slice(0, limit);
   return { data: sorted, error: null };

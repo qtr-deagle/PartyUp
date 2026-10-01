@@ -3,6 +3,7 @@ import StaffLayout from '@/components/StaffLayout';
 import { Search, CheckCircle, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { listReports, updateReportStatus, type ReportRow } from '@/lib/reports';
+import { useTableRealtime } from '@/hooks/useTableRealtime';
 
 /**
  * Staff Moderation - Reports Queue
@@ -18,12 +19,14 @@ export default function StaffModeration() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actioningReportId, setActioningReportId] = useState<string | null>(null);
 
-  const loadReports = useCallback(async () => {
-    setIsLoading(true);
+  // `silent` refreshes (realtime / tab focus) skip the loading state and the
+  // error toast.
+  const loadReports = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
     const { data, error } = await listReports('open');
     if (error) {
       setLoadError(error.message);
-      toast.error('Failed to load reports');
+      if (!silent) toast.error('Failed to load reports');
     } else {
       setLoadError(null);
       setReports(data);
@@ -34,6 +37,8 @@ export default function StaffModeration() {
   useEffect(() => {
     void loadReports();
   }, [loadReports]);
+
+  useTableRealtime('reports', () => void loadReports(true));
 
   const filteredReports = useMemo(
     () =>

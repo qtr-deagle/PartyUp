@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import StaffLayout from '@/components/StaffLayout';
 import { Search, Users, TrendingUp, Filter, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import { listPairingHistory, type PairingHistoryRow } from '@/lib/pairingHistory';
+import { useTableRealtime } from '@/hooks/useTableRealtime';
 
 /**
  * Staff Pairing History (View Only)
@@ -20,20 +21,27 @@ export default function StaffPairingHistory() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      setIsLoading(true);
-      const { data, error } = await listPairingHistory();
-      if (error) {
-        setLoadError(error.message);
-        toast.error('Failed to load pairing history');
-      } else {
-        setLoadError(null);
-        setPairingHistory(data);
-      }
-      setIsLoading(false);
-    })();
+  // `silent` refreshes (realtime / tab focus) skip the loading state and the
+  // error toast.
+  const loadPairings = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
+    const { data, error } = await listPairingHistory();
+    if (error) {
+      setLoadError(error.message);
+      if (!silent) toast.error('Failed to load pairing history');
+    } else {
+      setLoadError(null);
+      setPairingHistory(data);
+    }
+    setIsLoading(false);
   }, []);
+
+  useEffect(() => {
+    void loadPairings();
+  }, [loadPairings]);
+
+  // list_pairing_history reads trips, trip_members and feedback.
+  useTableRealtime(['trips', 'trip_members', 'feedback'], () => void loadPairings(true));
 
   const filteredPairings = pairingHistory.filter(pairing => {
     const searchLower = searchTerm.toLowerCase();
@@ -96,7 +104,7 @@ export default function StaffPairingHistory() {
         {/* Header */}
         <div>
           <h1 className="text-3xl font-bold text-foreground">Pairing History</h1>
-          <p className="text-sm text-muted-foreground mt-2">Monitor user pairings and travel buddy matches (Staff View)</p>
+          <p className="text-sm text-muted-foreground mt-2">Monitor user pairings and travel buddy matches (Guild Leader View)</p>
         </div>
 
         {/* Stats */}
@@ -221,7 +229,7 @@ export default function StaffPairingHistory() {
         {/* Summary */}
         <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-6">
           <p className="text-sm text-foreground">
-            <strong>Note:</strong> This is a view-only interface for staff monitoring. Staff can track pairing patterns,
+            <strong>Note:</strong> This is a view-only interface for Guild Leader monitoring. Guild Leaders can track pairing patterns,
             compatibility scores, and success rates. For detailed analysis or interventions, contact the admin panel.
           </p>
         </div>

@@ -3,6 +3,7 @@ import StaffLayout from '@/components/StaffLayout';
 import { ImageLightbox } from '@/components/ImageLightbox';
 import { Camera, Search, AlertTriangle, CheckCircle, XCircle, Eye } from 'lucide-react';
 import { getReportEvidenceUrl, listReports, updateReportStatus, type ReportRow, type ReportStatus } from '@/lib/reports';
+import { useTableRealtime } from '@/hooks/useTableRealtime';
 
 /**
  * Staff User Reports - Review Community-Reported Users
@@ -23,8 +24,9 @@ export default function StaffDisputes() {
   const [evidenceUrls, setEvidenceUrls] = useState<string[] | null>(null);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
-  const loadQueue = useCallback(async () => {
-    setIsLoading(true);
+  // `silent` refreshes (realtime / tab focus) skip the loading state.
+  const loadQueue = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
     const [open, reviewing] = await Promise.all([listReports('open'), listReports('reviewing')]);
     const combined = [...open.data, ...reviewing.data].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -36,6 +38,8 @@ export default function StaffDisputes() {
   useEffect(() => {
     void loadQueue();
   }, [loadQueue]);
+
+  useTableRealtime('reports', () => void loadQueue(true));
 
   const filteredReports = useMemo(
     () =>

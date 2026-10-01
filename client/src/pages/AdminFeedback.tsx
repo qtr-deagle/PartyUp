@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { Search, Star, MessageSquare, Filter, ThumbsUp, AlertCircle, Download } from 'lucide-react';
 import { listFeedback, type FeedbackRow, type FeedbackType } from '@/lib/feedback';
+import { useTableRealtime } from '@/hooks/useTableRealtime';
 
 /**
  * Admin Feedback Management
@@ -22,8 +23,9 @@ export default function AdminFeedback() {
   const [filterRating, setFilterRating] = useState('');
   const [filterType, setFilterType] = useState<FeedbackType | ''>('');
 
-  const loadFeedback = useCallback(async () => {
-    setIsLoading(true);
+  // `silent` refreshes (realtime / tab focus) skip the loading state.
+  const loadFeedback = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
     const { data } = await listFeedback();
     setFeedback(data);
     setIsLoading(false);
@@ -32,6 +34,8 @@ export default function AdminFeedback() {
   useEffect(() => {
     void loadFeedback();
   }, [loadFeedback]);
+
+  useTableRealtime('feedback', () => void loadFeedback(true));
 
   const filteredFeedback = useMemo(
     () =>

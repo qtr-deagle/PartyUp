@@ -8,8 +8,10 @@ import { useTableRealtime } from '@/hooks/useTableRealtime';
  * Admin Audit Log - Compliance & Monitoring
  *
  * Reads the real audit_logs table. Entries are written by the actual
- * staff/admin actions that produce them -- see logAuditAction() call sites
- * in lib/reports.ts, lib/vehicles.ts, lib/verification.ts, lib/tripMonitoring.ts.
+ * admin actions that produce them -- see logAuditAction() call sites in
+ * lib/reports.ts, lib/vehicles.ts, lib/verification.ts, lib/tripMonitoring.ts.
+ * A DB trigger (202610020005_audit_log_admin_only) drops inserts from
+ * non-admins, so Guild Leader actions never land here.
  */
 type Severity = 'high' | 'medium' | 'low';
 
@@ -125,7 +127,7 @@ export default function AdminAudit() {
         {/* Header */}
         <div>
           <h1 className="text-3xl font-bold text-foreground">Audit Log</h1>
-          <p className="text-sm text-muted-foreground mt-2">Track all Guild Leader and admin actions</p>
+          <p className="text-sm text-muted-foreground mt-2">Track all admin actions</p>
         </div>
 
         {/* Filters */}
@@ -134,7 +136,7 @@ export default function AdminAudit() {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search by Guild Leader or action..."
+              placeholder="Search by admin or action..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-12 pr-4 py-3 bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-smooth"
@@ -161,7 +163,7 @@ export default function AdminAudit() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-secondary">
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Guild Leader</th>
+                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Admin</th>
                   <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Action</th>
                   <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Target</th>
                   <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Severity</th>
@@ -227,7 +229,7 @@ export default function AdminAudit() {
             <p className="text-xs text-muted-foreground mt-2">Requiring attention</p>
           </div>
           <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-            <p className="text-sm text-muted-foreground mb-2">Most Active Guild Leaders (7 days)</p>
+            <p className="text-sm text-muted-foreground mb-2">Most Active Admin (7 days)</p>
             <p className="text-lg font-bold text-foreground">{stats.mostActive?.name ?? '—'}</p>
             <p className="text-xs text-muted-foreground mt-2">
               {stats.mostActive ? `${stats.mostActive.count} action${stats.mostActive.count === 1 ? '' : 's'} this week` : 'No activity yet'}

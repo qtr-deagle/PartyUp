@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
+import GuildDetailDialog from '@/components/GuildDetailDialog';
 import GuildEmblem from '@/components/GuildEmblem';
-import { Check, Coins, Edit2, Gift, Plus, Trash2, Trophy, X } from 'lucide-react';
+import { Check, ChevronRight, Coins, Edit2, Gift, Plus, Trash2, Trophy, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
 import {
@@ -48,7 +49,7 @@ const EMPTY_REWARD: RewardInput = { title: '', description: '', cost: 100, audie
  * - Points: manual +/- adjustments with a required reason (audited)
  */
 export default function AdminGuilds() {
-  const [tab, setTab] = useState<Tab>('redemptions');
+  const [tab, setTab] = useState<Tab>('guilds');
   const [redemptions, setRedemptions] = useState<RedemptionRow[]>([]);
   const [statusFilter, setStatusFilter] = useState<RedemptionStatus | ''>('pending');
   const [rewards, setRewards] = useState<GuildReward[]>([]);
@@ -60,7 +61,8 @@ export default function AdminGuilds() {
   const [handling, setHandling] = useState<{ row: RedemptionRow; status: 'fulfilled' | 'rejected' } | null>(null);
   const [handleNotes, setHandleNotes] = useState('');
   const [editingReward, setEditingReward] = useState<{ id?: string; values: RewardInput } | null>(null);
-  const [disbanding, setDisbanding] = useState<GuildStanding | null>(null);
+  const [disbanding, setDisbanding] = useState<Pick<GuildStanding, 'guild_id' | 'name' | 'member_count'> | null>(null);
+  const [viewingGuildId, setViewingGuildId] = useState<string | null>(null);
   const [adjust, setAdjust] = useState({ email: '', amount: '', note: '' });
 
   const load = useCallback(
@@ -150,6 +152,7 @@ export default function AdminGuilds() {
       return;
     }
     toast.success(`${disbanding.name} was disbanded`);
+    if (viewingGuildId === disbanding.guild_id) setViewingGuildId(null);
     setDisbanding(null);
     void load(true);
   };
@@ -176,9 +179,9 @@ export default function AdminGuilds() {
   };
 
   const tabs: { id: Tab; label: string; icon: typeof Gift; badge?: number }[] = [
+    { id: 'guilds', label: 'Guilds', icon: Trophy },
     { id: 'redemptions', label: 'Redemptions', icon: Gift, badge: statusFilter === 'pending' ? pendingCount : undefined },
     { id: 'rewards', label: 'Reward Catalog', icon: Coins },
-    { id: 'guilds', label: 'Guilds', icon: Trophy },
     { id: 'points', label: 'Adjust Points', icon: Plus },
   ];
 
@@ -359,7 +362,11 @@ export default function AdminGuilds() {
                 <p className="p-8 text-center text-sm text-muted-foreground">No guilds yet. Guild Leaders found them in the mobile app.</p>
               ) : (
                 standings.map((row, index) => (
-                  <div key={row.guild_id} className="flex items-center justify-between gap-4 px-6 py-4 border-b border-border last:border-0">
+                  <div
+                    key={row.guild_id}
+                    onClick={() => setViewingGuildId(row.guild_id)}
+                    className="flex items-center justify-between gap-4 px-6 py-4 border-b border-border last:border-0 cursor-pointer hover:bg-secondary/50 transition-smooth"
+                  >
                     <div className="flex items-center gap-4 min-w-0">
                       <span className={`w-6 text-center font-bold ${index < 3 ? 'text-yellow-500' : 'text-muted-foreground'}`}>{index + 1}</span>
                       <GuildEmblem emblem={row.emblem} color={row.color} size={40} />
@@ -372,9 +379,17 @@ export default function AdminGuilds() {
                     </div>
                     <div className="flex items-center gap-4">
                       <span className="font-bold text-foreground">{row.points.toLocaleString()} pts</span>
-                      <button onClick={() => setDisbanding(row)} title="Disband guild" className="p-2 rounded-lg text-destructive hover:bg-destructive/10">
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setDisbanding(row);
+                        }}
+                        title="Disband guild"
+                        className="p-2 rounded-lg text-destructive hover:bg-destructive/10"
+                      >
                         <Trash2 className="w-4 h-4" />
                       </button>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
                     </div>
                   </div>
                 ))
@@ -539,6 +554,9 @@ export default function AdminGuilds() {
           </div>
         </div>
       )}
+
+      {/* Guild inspector */}
+      {viewingGuildId && <GuildDetailDialog guildId={viewingGuildId} onClose={() => setViewingGuildId(null)} onDisband={setDisbanding} />}
 
       {/* Disband confirmation */}
       {disbanding && (

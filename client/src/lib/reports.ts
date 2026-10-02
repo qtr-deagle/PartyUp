@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { logAuditAction } from '@/lib/auditLog';
+import type { GuildEmblem } from '@/lib/guilds';
 
 export type ReportType = 'safety' | 'behavior' | 'payment' | 'feedback' | 'other';
 export type ReportStatus = 'open' | 'reviewing' | 'resolved' | 'dismissed';
@@ -21,20 +22,34 @@ export interface ReportRow {
   reporter: { display_name: string; avatar_url: string | null } | null;
   reported_user: { display_name: string; avatar_url: string | null } | null;
   trip: { title: string } | null;
+  // Set when a guild leader escalated a guild report (or it escalated on its
+  // own). Mobile migration 202610030002.
+  guild_id?: string | null;
+  guild_report_id?: string | null;
+  guild?: { id: string; name: string; emblem: GuildEmblem; color: string } | null;
 }
 
-const SELECT_COLUMNS =
+const BASE_COLUMNS =
   '*, reporter:profiles!reports_reporter_id_fkey(display_name, avatar_url), reported_user:profiles!reports_reported_user_id_fkey(display_name, avatar_url), trip:trips(title)';
+const SELECT_COLUMNS = `${BASE_COLUMNS}, guild:guilds!reports_guild_id_fkey(id, name, emblem, color)`;
 
 export async function listReports(status?: ReportStatus, reportType?: ReportType) {
-  let query = supabase.from('reports').select(SELECT_COLUMNS).order('created_at', { ascending: false });
-  if (status) {
-    query = query.eq('status', status);
+  const run = (columns: string) => {
+    let query = supabase.from('reports').select(columns).order('created_at', { ascending: false });
+    if (status) {
+      query = query.eq('status', status);
+    }
+    if (reportType) {
+      query = query.eq('report_type', reportType);
+    }
+    return query;
+  };
+  let { data, error } = await run(SELECT_COLUMNS);
+  // Until the guild-reports migration is pushed there's no reports.guild_id
+  // to join on; fall back so the page keeps working.
+  if (error && /guild/i.test(error.message)) {
+    ({ data, error } = await run(BASE_COLUMNS));
   }
-  if (reportType) {
-    query = query.eq('report_type', reportType);
-  }
-  const { data, error } = await query;
   return { data: (data ?? []) as unknown as ReportRow[], error };
 }
 

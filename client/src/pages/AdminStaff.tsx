@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
+import GuildDetailDialog from '@/components/GuildDetailDialog';
 import { Search, Edit2, Trash2, Plus, X, KeyRound, Crown } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -43,6 +44,7 @@ export default function AdminStaff() {
   const [revokeChoice, setRevokeChoice] = useState<'handover' | 'disband'>('handover');
   const [successorId, setSuccessorId] = useState('');
   const [resettingStaff, setResettingStaff] = useState<StaffRow | null>(null);
+  const [viewingGuildId, setViewingGuildId] = useState<string | null>(null);
   // Bumped after an application decision so the scorecards pick up the new leader.
   const [scorecardKey, setScorecardKey] = useState(0);
 
@@ -120,7 +122,7 @@ export default function AdminStaff() {
     setLoadingSuccessors(false);
     if (error) toast.error(error.message);
     setSuccessors(data);
-    // Officers are listed first; preselect the top one.
+    // Sorted by points; preselect the top member.
     if (data[0]) setSuccessorId(data[0].user_id);
     else setRevokeChoice('disband');
   };
@@ -277,12 +279,16 @@ export default function AdminStaff() {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm">
-                        {member.guild_name ? (
-                          <span className="flex items-center gap-1.5 text-foreground">
+                        {member.guild_id && member.guild_name ? (
+                          <button
+                            onClick={() => setViewingGuildId(member.guild_id)}
+                            title={`View ${member.guild_name}`}
+                            className="group flex items-center gap-1.5 text-left text-foreground"
+                          >
                             <Crown className="w-4 h-4 text-amber-600" />
-                            {member.guild_name}
-                            <span className="text-muted-foreground">· {member.member_count} members</span>
-                          </span>
+                            <span className="font-medium group-hover:text-primary group-hover:underline underline-offset-2">{member.guild_name}</span>
+                            <span className="text-muted-foreground">· {member.member_count} {member.member_count === 1 ? 'member' : 'members'}</span>
+                          </button>
                         ) : (
                           <span className="text-muted-foreground">No guild founded yet</span>
                         )}
@@ -453,8 +459,7 @@ export default function AdminStaff() {
                           >
                             {successors.map((member) => (
                               <option key={member.user_id} value={member.user_id}>
-                                {member.display_name}
-                                {member.member_role === 'officer' ? ' (officer)' : ''} · {member.lifetime_points} pts
+                                {member.display_name} · {member.lifetime_points} pts
                               </option>
                             ))}
                           </select>
@@ -504,6 +509,9 @@ export default function AdminStaff() {
           </div>
         </div>
       )}
+
+      {/* Guild inspector: members, level, perks and activity */}
+      {viewingGuildId && <GuildDetailDialog guildId={viewingGuildId} onClose={() => setViewingGuildId(null)} />}
     </AdminLayout>
   );
 }

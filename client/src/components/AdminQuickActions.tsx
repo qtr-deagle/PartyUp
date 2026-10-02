@@ -47,7 +47,7 @@ export default function AdminQuickActions({
   isRefreshing,
 }: AdminQuickActionsProps) {
   const [openAction, setOpenAction] = useState<ActionId | null>(null);
-  const reportsHref = role === 'admin' ? '/admin/reports' : '/staff/disputes';
+  const reportsHref = role === 'admin' ? '/admin/support?view=reports' : '/staff/disputes';
   const sosHref = role === 'admin' ? '/admin/sos' : '/staff/sos';
   const close = () => setOpenAction(null);
 
@@ -357,6 +357,7 @@ function TriageReportAction({ reportsHref, onChanged }: { reportsHref: string; o
         <Row label="Reporter" value={current.reporter?.display_name ?? 'Unknown'} />
         <Row label="Reported user" value={current.reported_user?.display_name ?? '—'} />
         {current.trip && <Row label="Trip" value={current.trip.title} />}
+        {current.guild && <Row label="Guild" value={`${current.guild.name} (escalated guild report — audit log on Reports page)`} />}
         {current.evidence_paths.length > 0 && <Row label="Evidence" value={`${current.evidence_paths.length} file(s) — view on Reports page`} />}
       </div>
       <p className="text-sm text-foreground whitespace-pre-wrap">{current.details}</p>

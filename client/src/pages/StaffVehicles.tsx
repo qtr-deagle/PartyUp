@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
-import { CheckCircle, XCircle, Clock } from 'lucide-react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { CheckCircle, XCircle, Clock, BarChart3 } from 'lucide-react';
 import AdminLayout from '@/components/AdminLayout';
 import { ImageLightbox } from '@/components/ImageLightbox';
-import { listVehicles, getVehiclePhotoUrl, reviewVehicleVerification, type VehicleRow } from '@/lib/vehicles';
+import { listVehicles, getVehiclePhotoUrl, reviewVehicleVerification, type VehicleRow, type VehicleVerificationStatus } from '@/lib/vehicles';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
 
 /**
@@ -14,7 +14,11 @@ import { useTableRealtime } from '@/hooks/useTableRealtime';
  * - For borrowed vehicles, also inspect the owner's letter of authorization,
  *   both sides of the owner's ID, and the owner's 3 specimen signatures
  * - Approve or reject with a note back to the traveler
+ * - Browse past decisions by status (all / pending / approved / rejected)
  */
+// 'unverified' vehicles were never submitted, so they never show up here.
+type FilterStatus = 'all' | Exclude<VehicleVerificationStatus, 'unverified'>;
+
 type VehicleImages = {
   exterior: string | null;
   orcr: string | null;
@@ -60,21 +64,23 @@ export default function StaffVehicles() {
   const [showRejectionModal, setShowRejectionModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>('pending');
 
   // `silent` refreshes (realtime / tab focus) keep the list on screen instead of
   // flashing the loading state.
-  const loadQueue = useCallback(async (silent = false) => {
+  const loadQueue = useCallback(async (status: FilterStatus, silent = false) => {
     if (!silent) setIsLoading(true);
-    const { data } = await listVehicles('pending');
-    setVehicles(data);
+    const { data } = await listVehicles(status === 'all' ? undefined : status);
+    setVehicles(data.filter((v) => v.verification_status !== 'unverified'));
     setIsLoading(false);
   }, []);
 
   useEffect(() => {
-    void loadQueue();
-  }, [loadQueue]);
+    void loadQueue(filterStatus);
+    setSelectedId(null);
+  }, [filterStatus, loadQueue]);
 
-  useTableRealtime('vehicles', () => void loadQueue(true));
+  useTableRealtime('vehicles', () => void loadQueue(filterStatus, true));
 
   const selected = vehicles.find((v) => v.id === selectedId) ?? null;
   // Changes only when the reviewed vehicle or its documents change, so a
@@ -121,7 +127,7 @@ export default function StaffVehicles() {
     setIsSubmitting(false);
     if (!error) {
       setSelectedId(null);
-      await loadQueue();
+      await loadQueue(filterStatus);
     }
   };
 
@@ -143,11 +149,18 @@ export default function StaffVehicles() {
       setRejectionReason('');
       setOtherReason('');
       setSelectedId(null);
-      await loadQueue();
+      await loadQueue(filterStatus);
     }
   };
 
-  const pendingCount = vehicles.length;
+  const stats = useMemo(() => {
+    const pending = vehicles.filter((v) => v.verification_status === 'pending').length;
+    const approved = vehicles.filter((v) => v.verification_status === 'approved').length;
+    const rejected = vehicles.filter((v) => v.verification_status === 'rejected').length;
+    const total = vehicles.length;
+    const approvalRate = total ? Math.round((approved / (approved + rejected || 1)) * 100) : 0;
+    return { pending, total, approvalRate };
+  }, [vehicles]);
 
   return (
     <AdminLayout>
@@ -157,7 +170,7 @@ export default function StaffVehicles() {
           <p className="text-sm text-muted-foreground mt-2">Review and approve travelers' personal vehicles for carpooling</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
             <div className="flex items-center justify-between mb-4">
               <div className="bg-primary/10 p-3 rounded-lg">
@@ -165,19 +178,53 @@ export default function StaffVehicles() {
               </div>
             </div>
             <p className="text-muted-foreground text-sm mb-1">Pending Verifications</p>
-            <p className="text-3xl font-bold text-foreground">{pendingCount}</p>
+            <p className="text-3xl font-bold text-foreground">{stats.pending}</p>
+          </div>
+          <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
+            <div className="flex items-center justify-between mb-4">
+              <div className="bg-green-500/10 p-3 rounded-lg">
+                <CheckCircle className="w-6 h-6 text-green-600" />
+              </div>
+            </div>
+            <p className="text-muted-foreground text-sm mb-1">Approval Rate (loaded set)</p>
+            <p className="text-3xl font-bold text-foreground">{stats.approvalRate}%</p>
+          </div>
+          <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
+            <div className="flex items-center justify-between mb-4">
+              <div className="bg-blue-500/10 p-3 rounded-lg">
+                <BarChart3 className="w-6 h-6 text-blue-600" />
+              </div>
+            </div>
+            <p className="text-muted-foreground text-sm mb-1">Total Loaded</p>
+            <p className="text-3xl font-bold text-foreground">{stats.total}</p>
+          </div>
+        </div>
+
+        <div className="bg-card rounded-2xl p-4 shadow-elevation-2 border border-border">
+          <div className="flex gap-2 flex-wrap">
+            {(['all', 'pending', 'approved', 'rejected'] as const).map((status) => (
+              <button
+                key={status}
+                onClick={() => setFilterStatus(status)}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  filterStatus === status ? 'bg-primary text-primary-foreground' : 'bg-secondary text-foreground hover:bg-secondary/80'
+                }`}
+              >
+                {status.charAt(0).toUpperCase() + status.slice(1)}
+              </button>
+            ))}
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1">
-            <h2 className="text-lg font-bold text-foreground mb-4">Pending Queue ({pendingCount})</h2>
+            <h2 className="text-lg font-bold text-foreground mb-4">Queue ({vehicles.length})</h2>
             <div className="bg-card rounded-2xl p-4 shadow-elevation-2 border border-border">
               {isLoading ? (
                 <p className="text-sm text-muted-foreground text-center py-4">Loading...</p>
               ) : (
                 <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {vehicles.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No pending verifications</p>}
+                  {vehicles.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No vehicles to review</p>}
                   {vehicles.map((v) => (
                     <button
                       key={v.id}
@@ -186,7 +233,20 @@ export default function StaffVehicles() {
                         selectedId === v.id ? 'bg-primary/10 border-primary' : 'bg-secondary border-border hover:border-primary/50'
                       }`}
                     >
-                      <p className="font-semibold text-foreground">{v.profiles?.display_name ?? 'Unknown traveler'}</p>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-semibold text-foreground">{v.profiles?.display_name ?? 'Unknown traveler'}</p>
+                        <span
+                          className={`text-xs font-bold px-2.5 py-1 rounded-lg whitespace-nowrap capitalize ${
+                            v.verification_status === 'approved'
+                              ? 'bg-green-100 text-green-700'
+                              : v.verification_status === 'pending'
+                                ? 'bg-yellow-100 text-yellow-700'
+                                : 'bg-red-100 text-red-700'
+                          }`}
+                        >
+                          {v.verification_status}
+                        </span>
+                      </div>
                       <p className="text-xs text-muted-foreground mt-1">{v.profiles?.email}</p>
                       <p className="text-sm text-muted-foreground mt-2">
                         {v.make} {v.model} {v.year ? `(${v.year})` : ''}
@@ -250,26 +310,44 @@ export default function StaffVehicles() {
                       {selected.submitted_at ? new Date(selected.submitted_at).toLocaleString() : 'Unknown'}
                     </span>
                   </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Status:</span>
+                    <span className="font-medium text-foreground capitalize">{selected.verification_status}</span>
+                  </div>
+                  {selected.reviewed_at && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Reviewed:</span>
+                      <span className="font-medium text-foreground">{new Date(selected.reviewed_at).toLocaleString()}</span>
+                    </div>
+                  )}
+                  {selected.reviewer_notes && (
+                    <div className="flex justify-between text-sm gap-4">
+                      <span className="text-muted-foreground shrink-0">Reviewer notes:</span>
+                      <span className="font-medium text-foreground text-right">{selected.reviewer_notes}</span>
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex gap-3 pt-4 border-t border-border">
-                  <button
-                    onClick={() => handleApprove(selected.id)}
-                    disabled={isSubmitting}
-                    className="flex-1 bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 font-semibold transition-smooth hover:shadow-lg flex items-center justify-center gap-2"
-                  >
-                    <CheckCircle className="w-5 h-5" />
-                    Approve
-                  </button>
-                  <button
-                    onClick={() => handleRejectClick(selected.id)}
-                    disabled={isSubmitting}
-                    className="flex-1 bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 disabled:opacity-50 font-semibold transition-smooth hover:shadow-lg flex items-center justify-center gap-2"
-                  >
-                    <XCircle className="w-5 h-5" />
-                    Reject
-                  </button>
-                </div>
+                {selected.verification_status === 'pending' && (
+                  <div className="flex gap-3 pt-4 border-t border-border">
+                    <button
+                      onClick={() => handleApprove(selected.id)}
+                      disabled={isSubmitting}
+                      className="flex-1 bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 font-semibold transition-smooth hover:shadow-lg flex items-center justify-center gap-2"
+                    >
+                      <CheckCircle className="w-5 h-5" />
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleRejectClick(selected.id)}
+                      disabled={isSubmitting}
+                      className="flex-1 bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 disabled:opacity-50 font-semibold transition-smooth hover:shadow-lg flex items-center justify-center gap-2"
+                    >
+                      <XCircle className="w-5 h-5" />
+                      Reject
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ) : (

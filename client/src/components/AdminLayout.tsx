@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LayoutDashboard, Users, Plane, AlertCircle, UserCog, LogOut, Moon, Sun, Shield, Lock, DollarSign, Link2, MessageSquare, Siren, Trophy, Car, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, Users, Plane, UserCog, LogOut, Moon, Sun, Shield, Lock, DollarSign, Link2, MessageSquare, Siren, Trophy, Car, ShieldCheck, LifeBuoy } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -44,7 +44,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     { id: 'payment', label: 'Payments', icon: DollarSign, path: '/admin/payments' },
     { id: 'pairing', label: 'Pairing History', icon: Link2, path: '/admin/pairing' },
     { id: 'feedback', label: 'Feedback', icon: MessageSquare, path: '/admin/feedback' },
-    { id: 'reports', label: 'Reports', icon: AlertCircle, path: '/admin/reports' },
+    { id: 'support', label: 'Support & Reports', icon: LifeBuoy, path: '/admin/support' },
     { id: 'audit', label: 'Audit Log', icon: Lock, path: '/admin/audit' },
     { id: 'team', label: 'Admins', icon: ShieldCheck, path: '/admin/team' },
   ];

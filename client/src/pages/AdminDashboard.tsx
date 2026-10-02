@@ -272,7 +272,7 @@ export default function AdminDashboard() {
               <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-bold text-foreground">Recent Open Reports</h3>
-                  <Link href="/admin/reports" className="text-xs font-medium text-primary hover:underline">
+                  <Link href="/admin/support?view=reports" className="text-xs font-medium text-primary hover:underline">
                     View all →
                   </Link>
                 </div>

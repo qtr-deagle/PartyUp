@@ -1,7 +1,28 @@
-import { Compass, Crown, Flame, Leaf, Mountain, Shield, Star, Waves } from 'lucide-react';
+import { Anchor, Bike, Camera, Car, Compass, Crown, Flame, Heart, Leaf, Mountain, Plane, Shield, Star, Sun, Tent, TreePalm, Trees, Utensils, Waves, Zap } from 'lucide-react';
 import type { GuildEmblem as Emblem } from '@/lib/guilds';
 
-const ICONS = { shield: Shield, flame: Flame, mountain: Mountain, compass: Compass, star: Star, wave: Waves, leaf: Leaf, crown: Crown } as const;
+const ICONS = {
+  shield: Shield,
+  flame: Flame,
+  mountain: Mountain,
+  compass: Compass,
+  star: Star,
+  wave: Waves,
+  leaf: Leaf,
+  crown: Crown,
+  car: Car,
+  bike: Bike,
+  tent: Tent,
+  trees: Trees,
+  sun: Sun,
+  palm: TreePalm,
+  anchor: Anchor,
+  plane: Plane,
+  camera: Camera,
+  utensils: Utensils,
+  heart: Heart,
+  bolt: Zap,
+} as const;
 
 // Round guild crest: the guild's color behind its emblem (same as the mobile app).
 export default function GuildEmblem({ emblem, color, size = 40 }: { emblem: Emblem; color: string; size?: number }) {

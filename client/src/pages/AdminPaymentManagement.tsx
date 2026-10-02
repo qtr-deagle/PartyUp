@@ -11,7 +11,7 @@ import { useTableRealtime } from '@/hooks/useTableRealtime';
  *
  * Admin can:
  * - Review payment-related reports (reports table, report_type='payment') and
- *   investigate / resolve / dismiss them, same action set as AdminReports.tsx
+ *   investigate / resolve / dismiss them, same action set as the Support page's Reports tab
  * - View real payment/transaction history (payment_history table)
  */
 export default function AdminPaymentManagement() {

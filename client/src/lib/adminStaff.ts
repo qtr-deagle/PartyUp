@@ -21,6 +21,7 @@ export interface StaffRow {
   created_at: string;
   resolved_count: number;
   // Guild Leaders only: the guild they lead, if founded yet.
+  guild_id: string | null;
   guild_name: string | null;
   member_count: number;
 }
@@ -55,7 +56,7 @@ export async function listStaff(roles: StaffRole[] = ['guild_leader', 'admin'], 
     });
   }
 
-  const guilds = new Map<string, { name: string; members: number }>();
+  const guilds = new Map<string, { id: string; name: string; members: number }>();
   if (ids.length > 0) {
     const { data: led } = await supabase.from('guilds').select('id, name, leader_id').in('leader_id', ids);
     const guildIds = (led ?? []).map((row: { id: string }) => row.id);
@@ -64,6 +65,7 @@ export async function listStaff(roles: StaffRole[] = ['guild_leader', 'admin'], 
       : { data: [] as { guild_id: string }[] };
     (led ?? []).forEach((row: { id: string; name: string; leader_id: string }) => {
       guilds.set(row.leader_id, {
+        id: row.id,
         name: row.name,
         members: (members ?? []).filter((member: { guild_id: string }) => member.guild_id === row.id).length,
       });
@@ -74,6 +76,7 @@ export async function listStaff(roles: StaffRole[] = ['guild_leader', 'admin'], 
     data: staff.map((row) => ({
       ...row,
       resolved_count: resolvedCounts.get(row.id) ?? 0,
+      guild_id: guilds.get(row.id)?.id ?? null,
       guild_name: guilds.get(row.id)?.name ?? null,
       member_count: guilds.get(row.id)?.members ?? 0,
     })) as StaffRow[],
@@ -101,11 +104,10 @@ export interface LeaderGuildMember {
   guild_name: string;
   user_id: string;
   display_name: string;
-  member_role: 'member' | 'officer';
   lifetime_points: number;
 }
 
-// Members who could take over a leader's guild (officers first).
+// Members who could take over a leader's guild (most points first).
 export async function listLeaderGuildMembers(leaderId: string) {
   const { data, error } = await supabase.rpc('get_leader_guild_members', { p_leader_id: leaderId });
   return {

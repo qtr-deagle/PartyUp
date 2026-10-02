@@ -1,8 +1,23 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import Map, { Marker, Popup } from 'react-map-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import mapboxgl from 'mapbox-gl';
-import { AlertTriangle, Search, ShieldAlert, Siren, Users, MapPin } from 'lucide-react';
+import {
+  Activity,
+  AlertTriangle,
+  Bus,
+  CalendarDays,
+  Car,
+  Compass,
+  ListOrdered,
+  MapPin,
+  Navigation,
+  Phone,
+  Search,
+  ShieldAlert,
+  Siren,
+  Users,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { useLocation } from 'wouter';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -33,12 +48,96 @@ function StatusPill({ status }: { status: string }) {
   return <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${styles[status] ?? 'bg-gray-100 text-gray-700'}`}>{status}</span>;
 }
 
+// A member's phone counts as "live" if it reported a position this recently.
+const LIVE_WITHIN_MS = 5 * 60_000;
+
+type StatusFilter = 'all' | 'ongoing' | 'open' | 'full';
+
+function formatAgo(iso: string, now: number) {
+  const seconds = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000));
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+function formatDate(iso: string | null) {
+  if (!iso) return null;
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function formatDateRange(start: string | null, end: string | null) {
+  const from = formatDate(start);
+  const to = formatDate(end);
+  if (from && to) return from === to ? from : `${from} – ${to}`;
+  return from ?? to ?? 'No dates set';
+}
+
+// Share of the trip's scheduled window that has passed, or null without dates.
+function tripProgress(start: string | null, end: string | null, now: number) {
+  if (!start || !end) return null;
+  const from = new Date(start).getTime();
+  const to = new Date(end).getTime();
+  if (to <= from) return null;
+  return Math.min(100, Math.max(0, Math.round(((now - from) / (to - from)) * 100)));
+}
+
+function initialsOf(name: string) {
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join('') || '?'
+  );
+}
+
+function Avatar({ name, url, size = 'md' }: { name: string; url: string | null | undefined; size?: 'sm' | 'md' }) {
+  const box = size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm';
+  return url ? (
+    <img src={url} alt={name} className={`${box} rounded-full object-cover border border-border shrink-0`} />
+  ) : (
+    <div className={`${box} rounded-full bg-secondary border border-border flex items-center justify-center font-bold text-foreground shrink-0`}>{initialsOf(name)}</div>
+  );
+}
+
+function StatCard({ icon, iconClass, label, value, hint }: { icon: ReactNode; iconClass: string; label: string; value: string; hint: string }) {
+  return (
+    <div className="bg-card rounded-2xl p-5 shadow-elevation-2 border border-border flex items-center gap-4">
+      <div className={`p-3 rounded-xl ${iconClass}`}>{icon}</div>
+      <div className="min-w-0">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="text-2xl font-bold text-foreground leading-tight">{value}</p>
+        <p className="text-xs text-muted-foreground truncate">{hint}</p>
+      </div>
+    </div>
+  );
+}
+
+function TripTypeIcon({ type, className }: { type: string; className?: string }) {
+  return type === 'carpool' ? <Car className={className} /> : <Bus className={className} />;
+}
+
+function useNow(intervalMs = 15_000) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return now;
+}
+
 export default function TripMonitoringBoard() {
   const { theme } = useTheme();
   const mapStyle = theme === 'dark' ? 'mapbox://styles/mapbox/navigation-night-v1' : 'mapbox://styles/mapbox/navigation-day-v1';
 
   const [searchTerm, setSearchTerm] = useState('');
   const [includeCompleted, setIncludeCompleted] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const now = useNow();
   const [trips, setTrips] = useState<TripMonitoringRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -94,6 +193,27 @@ export default function TripMonitoringBoard() {
     });
   }, [trips, tripIdsWithActiveSos]);
 
+  const visibleTrips = useMemo(
+    () => (statusFilter === 'all' ? sortedTrips : sortedTrips.filter((trip) => trip.status === statusFilter)),
+    [sortedTrips, statusFilter]
+  );
+
+  const stats = useMemo(() => {
+    const ongoing = trips.filter((trip) => trip.status === 'ongoing');
+    const travelersOnTrips = ongoing.reduce((sum, trip) => sum + trip.members_accepted_count, 0);
+    const needsAttention = trips.filter(
+      (trip) => tripIdsWithActiveSos.has(trip.id) || trip.active_sos_count > 0 || trip.active_safety_session_count > 0 || trip.open_report_count > 0
+    ).length;
+    const openReports = trips.reduce((sum, trip) => sum + trip.open_report_count, 0);
+    const counts: Record<StatusFilter, number> = {
+      all: trips.length,
+      ongoing: ongoing.length,
+      open: trips.filter((trip) => trip.status === 'open').length,
+      full: trips.filter((trip) => trip.status === 'full').length,
+    };
+    return { ongoing: ongoing.length, travelersOnTrips, needsAttention, openReports, counts };
+  }, [trips, tripIdsWithActiveSos]);
+
   useEffect(() => {
     if (!selectedTripId) {
       setDetail(null);
@@ -134,6 +254,35 @@ export default function TripMonitoringBoard() {
   }
 
   const memberDisplayName = (userId: string) => detail?.members.find((m) => m.user_id === userId)?.profiles?.display_name ?? 'Unknown user';
+
+  // Last time each member's phone reported a position (live stream first, then the stored row).
+  const lastSeenAt = (userId: string) => {
+    const live = livePositions[userId];
+    if (live) return live.updatedAt;
+    return detail?.locations.find((loc) => loc.user_id === userId && loc.is_visible)?.updated_at ?? null;
+  };
+  const acceptedMembers = detail ? detail.members.filter((member) => member.status === 'accepted') : [];
+  const liveMemberCount = acceptedMembers.filter((member) => {
+    const seen = lastSeenAt(member.user_id);
+    return seen !== null && now - new Date(seen).getTime() < LIVE_WITHIN_MS;
+  }).length;
+  const progress = selectedTrip ? tripProgress(selectedTrip.start_at, selectedTrip.end_at, now) : null;
+  const pastSafetyEvents = detail
+    ? [
+        ...detail.sosAlerts
+          .filter((alert) => alert.status === 'resolved')
+          .map((alert) => ({ id: alert.id, at: alert.created_at, userId: alert.user_id, kind: 'SOS resolved' as const, note: alert.resolution_notes })),
+        ...detail.safetySessions
+          .filter((session) => session.status !== 'monitoring')
+          .map((session) => ({
+            id: session.id,
+            at: session.started_at,
+            userId: session.user_id,
+            kind: session.status === 'escalated' ? ('Warning Mode escalated' as const) : ('Warning Mode ended' as const),
+            note: null,
+          })),
+      ].sort((a, b) => (a.at < b.at ? 1 : -1))
+    : [];
 
   // Every active SOS, with or without a trip -- each opens its live view in the SOS Center.
   const bannerAlerts = activeSosAlerts;
@@ -183,6 +332,37 @@ export default function TripMonitoringBoard() {
         </div>
       )}
 
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard
+          icon={<Activity className="w-6 h-6 text-green-500" />}
+          iconClass="bg-green-500/10"
+          label="Ongoing trips"
+          value={String(stats.ongoing)}
+          hint={`${trips.length} trip${trips.length === 1 ? '' : 's'} in view`}
+        />
+        <StatCard
+          icon={<Users className="w-6 h-6 text-primary" />}
+          iconClass="bg-primary/10"
+          label="Travelers on the road"
+          value={String(stats.travelersOnTrips)}
+          hint="Accepted members of ongoing trips"
+        />
+        <StatCard
+          icon={<Siren className={`w-6 h-6 ${activeSosAlerts.length > 0 ? 'text-destructive animate-pulse' : 'text-muted-foreground'}`} />}
+          iconClass={activeSosAlerts.length > 0 ? 'bg-destructive/10' : 'bg-secondary'}
+          label="Active SOS"
+          value={String(activeSosAlerts.length)}
+          hint={activeSosAlerts.length > 0 ? 'Open the SOS Center to respond' : 'No one needs help right now'}
+        />
+        <StatCard
+          icon={<AlertTriangle className="w-6 h-6 text-amber-500" />}
+          iconClass="bg-amber-500/10"
+          label="Trips needing attention"
+          value={String(stats.needsAttention)}
+          hint={`${stats.openReports} open report${stats.openReports === 1 ? '' : 's'} · SOS · Warning Mode`}
+        />
+      </div>
+
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -200,6 +380,20 @@ export default function TripMonitoringBoard() {
         </label>
       </div>
 
+      <div className="flex gap-2 flex-wrap">
+        {(['all', 'ongoing', 'open', 'full'] as const).map((value) => (
+          <button
+            key={value}
+            onClick={() => setStatusFilter(value)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium capitalize transition-colors ${
+              statusFilter === value ? 'bg-primary text-primary-foreground' : 'bg-card border border-border text-foreground hover:bg-secondary'
+            }`}
+          >
+            {value} <span className="opacity-70">({stats.counts[value]})</span>
+          </button>
+        ))}
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         <div className="lg:col-span-2">
           <div className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
@@ -207,12 +401,17 @@ export default function TripMonitoringBoard() {
               <p className="text-sm text-muted-foreground text-center py-8">Loading...</p>
             ) : loadError ? (
               <p className="text-sm text-destructive text-center py-8">Failed to load trips: {loadError}</p>
-            ) : sortedTrips.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No trips match this view</p>
+            ) : visibleTrips.length === 0 ? (
+              <div className="py-12 px-6 text-center space-y-2">
+                <Compass className="w-10 h-10 mx-auto text-muted-foreground opacity-60" />
+                <p className="font-semibold text-foreground">No trips match this view</p>
+                <p className="text-sm text-muted-foreground">Try another status filter, clear the search, or include completed trips.</p>
+              </div>
             ) : (
               <div className="divide-y divide-border max-h-[70vh] overflow-y-auto">
-                {sortedTrips.map((trip) => {
+                {visibleTrips.map((trip) => {
                   const hasActiveSos = tripIdsWithActiveSos.has(trip.id) || trip.active_sos_count > 0;
+                  const seatsFilled = trip.seats_total ? trip.seats_total - (trip.seats_available ?? 0) : null;
                   return (
                     <button
                       key={trip.id}
@@ -221,18 +420,37 @@ export default function TripMonitoringBoard() {
                         selectedTripId === trip.id ? 'bg-primary/10' : 'hover:bg-secondary/50'
                       } ${hasActiveSos ? 'border-l-4 border-destructive' : ''}`}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="font-semibold text-foreground text-sm">
-                          {trip.origin} → {trip.destination}
-                        </p>
-                        {hasActiveSos && (
-                          <span className="flex items-center gap-1 text-destructive text-xs font-bold shrink-0">
-                            <Siren className="w-3.5 h-3.5" /> SOS
-                          </span>
-                        )}
+                      <div className="flex items-start gap-3">
+                        <div
+                          className={`p-2 rounded-lg shrink-0 ${
+                            hasActiveSos ? 'bg-destructive/10 text-destructive' : trip.status === 'ongoing' ? 'bg-green-500/10 text-green-500' : 'bg-primary/10 text-primary'
+                          }`}
+                        >
+                          <TripTypeIcon type={trip.trip_type} className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="font-semibold text-foreground text-sm">
+                              {trip.origin} → {trip.destination}
+                            </p>
+                            {hasActiveSos && (
+                              <span className="flex items-center gap-1 text-destructive text-xs font-bold shrink-0">
+                                <Siren className="w-3.5 h-3.5" /> SOS
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-x-1.5">
+                            <span>{trip.organizer_display_name}</span>
+                            <span>·</span>
+                            <span className="capitalize">{trip.trip_type}</span>
+                            <span>·</span>
+                            <span className="flex items-center gap-1">
+                              <CalendarDays className="w-3 h-3" /> {formatDateRange(trip.start_at, trip.end_at)}
+                            </span>
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">{trip.organizer_display_name}</p>
-                      <div className="flex items-center flex-wrap gap-2 mt-2">
+                      <div className="flex items-center flex-wrap gap-2 mt-3 pl-12">
                         <StatusPill status={trip.status} />
                         {trip.open_report_count > 0 && (
                           <span className="flex items-center gap-1 text-xs text-amber-700">
@@ -248,6 +466,19 @@ export default function TripMonitoringBoard() {
                           <Users className="w-3.5 h-3.5" /> {trip.members_accepted_count}
                         </span>
                       </div>
+                      {trip.seats_total && seatsFilled !== null ? (
+                        <div className="mt-2 pl-12">
+                          <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${seatsFilled >= trip.seats_total ? 'bg-amber-500' : 'bg-primary'}`}
+                              style={{ width: `${Math.min(100, (seatsFilled / trip.seats_total) * 100)}%` }}
+                            />
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-1">
+                            {seatsFilled} of {trip.seats_total} seats taken
+                          </p>
+                        </div>
+                      ) : null}
                     </button>
                   );
                 })}
@@ -258,18 +489,77 @@ export default function TripMonitoringBoard() {
 
         <div className="lg:col-span-3">
           {!selectedTrip ? (
-            <div className="bg-card rounded-2xl p-12 shadow-elevation-2 border border-border flex items-center justify-center h-full">
-              <p className="text-muted-foreground">Select a trip to view live details</p>
+            <div className="bg-card rounded-2xl p-10 shadow-elevation-2 border border-border h-full flex flex-col items-center justify-center text-center gap-4">
+              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                <Navigation className="w-8 h-8 text-primary" />
+              </div>
+              <div>
+                <p className="font-semibold text-foreground">Select a trip to view live details</p>
+                <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                  See members on the map, who is sharing their location, the itinerary, and any reports or safety alerts.
+                </p>
+              </div>
+              <div className="flex flex-wrap justify-center gap-4 text-xs text-muted-foreground pt-2">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-full bg-destructive" /> SOS
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <ShieldAlert className="w-3.5 h-3.5 text-blue-500" /> Warning Mode
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> Open report
+                </span>
+              </div>
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border space-y-1">
-                <h3 className="text-lg font-bold text-foreground">
-                  {selectedTrip.origin} → {selectedTrip.destination}
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  {selectedTrip.organizer_display_name} · {selectedTrip.trip_type} · <StatusPill status={selectedTrip.status} />
-                </p>
+              <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border space-y-4">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 rounded-xl bg-primary/10 text-primary shrink-0">
+                    <TripTypeIcon type={selectedTrip.trip_type} className="w-6 h-6" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-lg font-bold text-foreground">
+                        {selectedTrip.origin} → {selectedTrip.destination}
+                      </h3>
+                      <StatusPill status={selectedTrip.status} />
+                    </div>
+                    {selectedTrip.title && <p className="text-sm text-foreground mt-0.5">{selectedTrip.title}</p>}
+                    <p className="text-sm text-muted-foreground">
+                      Organized by {selectedTrip.organizer_display_name} · <span className="capitalize">{selectedTrip.trip_type}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Starts', value: selectedTrip.start_at ? new Date(selectedTrip.start_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—' },
+                    { label: 'Ends', value: selectedTrip.end_at ? new Date(selectedTrip.end_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—' },
+                    {
+                      label: 'Seats',
+                      value: selectedTrip.seats_total ? `${selectedTrip.seats_total - (selectedTrip.seats_available ?? 0)} / ${selectedTrip.seats_total} taken` : '—',
+                    },
+                    { label: 'Sharing location', value: detail ? `${liveMemberCount} of ${acceptedMembers.length} members` : '—' },
+                  ].map((fact) => (
+                    <div key={fact.label} className="bg-secondary rounded-lg p-3 border border-border">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">{fact.label}</p>
+                      <p className="text-sm font-medium text-foreground mt-1">{fact.value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {progress !== null && (
+                  <div>
+                    <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
+                      <span>Trip progress</span>
+                      <span>{progress === 0 ? 'Not started' : progress === 100 ? 'Schedule finished' : `${progress}% of schedule`}</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-secondary overflow-hidden">
+                      <div className="h-full rounded-full bg-green-500 transition-all" style={{ width: `${progress}%` }} />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {isDetailLoading ? (
@@ -317,7 +607,7 @@ export default function TripMonitoringBoard() {
                     </div>
                   )}
 
-                  <div className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden h-[420px]">
+                  <div className="relative bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden h-[420px]">
                     {!mapboxToken ? (
                       <div className="h-full flex items-center justify-center text-sm text-muted-foreground">Map unavailable: VITE_MAPBOX_TOKEN is not set</div>
                     ) : (
@@ -404,22 +694,134 @@ export default function TripMonitoringBoard() {
                           })()}
                       </Map>
                     )}
+                    {mapboxToken && (
+                      <>
+                        <div className="absolute top-3 left-3 rounded-lg bg-card/90 border border-border px-3 py-2 text-xs text-foreground flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full ${liveMemberCount > 0 ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground'}`} />
+                          {liveMemberCount} of {acceptedMembers.length} sharing live location
+                        </div>
+                        <div className="absolute bottom-3 right-3 flex flex-wrap items-center gap-3 rounded-lg bg-card/90 border border-border px-3 py-2 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1.5">
+                            <MapPin className="w-3.5 h-3.5 text-primary" fill="currentColor" /> Destination
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-3 h-3 rounded-full bg-primary/60 border-2 border-primary" /> Member
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-3 h-3 rounded-full bg-blue-500 border-2 border-blue-600" /> Driver
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-3 h-3 rounded-full bg-destructive border-2 border-white" /> SOS
+                          </span>
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-                    <h4 className="font-bold text-foreground mb-3">Members ({detail.members.length})</h4>
-                    <div className="space-y-2">
-                      {detail.members.map((member) => (
-                        <div key={member.id} className="flex items-center justify-between text-sm py-2 border-b border-border last:border-0">
-                          <div>
-                            <span className="font-medium text-foreground">{member.profiles?.display_name ?? 'Unknown user'}</span>
-                            <span className="text-muted-foreground capitalize"> · {member.member_role}</span>
+                    <h4 className="font-bold text-foreground mb-3 flex items-center gap-2">
+                      <Users className="w-5 h-5 text-muted-foreground" /> Members ({detail.members.length})
+                    </h4>
+                    <div className="divide-y divide-border">
+                      {detail.members.map((member) => {
+                        const name = member.profiles?.display_name ?? 'Unknown user';
+                        const seen = lastSeenAt(member.user_id);
+                        const isLiveNow = seen !== null && now - new Date(seen).getTime() < LIVE_WITHIN_MS;
+                        const isSos = detail.sosAlerts.some((a) => a.user_id === member.user_id && a.status === 'active');
+                        const inWarning = selectedTripSafetySessions.some((session) => session.user_id === member.user_id);
+                        return (
+                          <div key={member.id} className="flex items-center gap-3 py-3">
+                            <div className="relative">
+                              <Avatar name={name} url={member.profiles?.avatar_url} />
+                              {member.status === 'accepted' && (
+                                <span
+                                  className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-card ${
+                                    isSos ? 'bg-destructive animate-pulse' : isLiveNow ? 'bg-green-500' : 'bg-muted-foreground'
+                                  }`}
+                                />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-medium text-foreground text-sm">{name}</span>
+                                <span
+                                  className={`text-[11px] px-2 py-0.5 rounded-full font-semibold capitalize ${
+                                    member.member_role === 'coordinator'
+                                      ? 'bg-purple-500/10 text-purple-500'
+                                      : member.member_role === 'driver'
+                                        ? 'bg-blue-500/10 text-blue-500'
+                                        : 'bg-secondary text-muted-foreground'
+                                  }`}
+                                >
+                                  {member.member_role}
+                                </span>
+                                {isSos && <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-destructive/10 text-destructive">SOS</span>}
+                                {inWarning && <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-blue-500/10 text-blue-500">Warning Mode</span>}
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {member.status !== 'accepted'
+                                  ? <span className="capitalize">{member.status}</span>
+                                  : seen
+                                    ? `${isLiveNow ? 'Live' : 'Last seen'} ${formatAgo(seen, now)}`
+                                    : 'Not sharing location'}
+                                {member.joined_at ? ` · joined ${formatDate(member.joined_at)}` : ''}
+                              </p>
+                            </div>
+                            {member.profiles?.phone && (
+                              <a
+                                href={`tel:${member.profiles.phone}`}
+                                title={`Call ${name}`}
+                                className="p-2 rounded-lg text-primary hover:bg-primary/10 transition-colors shrink-0"
+                              >
+                                <Phone className="w-4 h-4" />
+                              </a>
+                            )}
                           </div>
-                          <span className="text-xs text-muted-foreground capitalize">{member.status}</span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
+
+                  {detail.itinerary.length > 0 && (
+                    <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
+                      <h4 className="font-bold text-foreground mb-4 flex items-center gap-2">
+                        <ListOrdered className="w-5 h-5 text-muted-foreground" /> Itinerary
+                      </h4>
+                      <ol className="relative border-l-2 border-border ml-3 space-y-4">
+                        {detail.itinerary.map((day) => (
+                          <li key={day.id} className="pl-6 relative">
+                            <span className="absolute -left-[13px] top-0 w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center">
+                              {day.day_number}
+                            </span>
+                            <p className="text-sm font-semibold text-foreground">Day {day.day_number}</p>
+                            <p className="text-sm text-muted-foreground whitespace-pre-line">{day.description || 'No plan written for this day.'}</p>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+
+                  {pastSafetyEvents.length > 0 && (
+                    <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
+                      <h4 className="font-bold text-foreground mb-3 flex items-center gap-2">
+                        <ShieldAlert className="w-5 h-5 text-muted-foreground" /> Safety history
+                      </h4>
+                      <div className="divide-y divide-border">
+                        {pastSafetyEvents.map((event) => (
+                          <div key={event.id} className="py-2.5 flex items-start justify-between gap-3 text-sm">
+                            <div className="min-w-0">
+                              <p className="text-foreground">
+                                <span className="font-medium">{memberDisplayName(event.userId)}</span>
+                                <span className="text-muted-foreground"> · {event.kind}</span>
+                              </p>
+                              {event.note && <p className="text-xs text-muted-foreground mt-0.5">{event.note}</p>}
+                            </div>
+                            <span className="text-xs text-muted-foreground shrink-0">{new Date(event.at).toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {detail.reports.length > 0 && (
                     <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">

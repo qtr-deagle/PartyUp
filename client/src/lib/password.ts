@@ -15,8 +15,11 @@ import { logAuditAction } from '@/lib/auditLog';
 
 export const PASSWORD_RULES = [
   { id: 'length', label: 'At least 8 characters', test: (value: string) => value.length >= 8 },
-  { id: 'letter', label: 'Contains a letter', test: (value: string) => /[A-Za-z]/.test(value) },
+  { id: 'uppercase', label: 'Contains an uppercase letter', test: (value: string) => /[A-Z]/.test(value) },
+  { id: 'lowercase', label: 'Contains a lowercase letter', test: (value: string) => /[a-z]/.test(value) },
   { id: 'number', label: 'Contains a number', test: (value: string) => /\d/.test(value) },
+  { id: 'symbol', label: 'Contains a symbol like @ # $ % ! & *', test: (value: string) => /[^A-Za-z0-9\s]/.test(value) },
+  { id: 'spaces', label: 'Has no spaces', test: (value: string) => value.length > 0 && !/\s/.test(value) },
 ] as const;
 
 export function validateNewPassword(password: string, confirmation: string): string | null {

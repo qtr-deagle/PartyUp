@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Map, { Layer, Marker, Source, type MapRef } from 'react-map-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import mapboxgl from 'mapbox-gl';
-import { Crosshair, MapPin, Phone, Plane, ShieldCheck, Siren, Users, WifiOff } from 'lucide-react';
+import { CheckCircle2, Clock, Crosshair, History, MapPin, Phone, PhoneCall, Plane, ShieldCheck, Siren, Timer, Users, WifiOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link, useLocation, useSearch } from 'wouter';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -25,6 +25,62 @@ function formatAgo(iso: string, now: number) {
   const hours = Math.floor(minutes / 60);
   return `${hours}h ${minutes % 60}m ago`;
 }
+
+function formatDuration(ms: number) {
+  const minutes = Math.max(0, Math.round(ms / 60_000));
+  if (minutes < 1) return '<1m';
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ${minutes % 60}m`;
+  return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+}
+
+function alertDuration(alert: SosAlertDetail) {
+  if (!alert.resolved_at) return null;
+  return new Date(alert.resolved_at).getTime() - new Date(alert.created_at).getTime();
+}
+
+function Avatar({ profile, live }: { profile: SosAlertDetail['profile']; live: boolean }) {
+  const name = profile?.display_name ?? '?';
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
+  return (
+    <div className="relative shrink-0">
+      {profile?.avatar_url ? (
+        <img src={profile.avatar_url} alt={name} className="w-10 h-10 rounded-full object-cover border border-border" />
+      ) : (
+        <div className="w-10 h-10 rounded-full bg-secondary border border-border flex items-center justify-center text-sm font-bold text-foreground">{initials || '?'}</div>
+      )}
+      {live && <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-destructive border-2 border-card animate-pulse" />}
+    </div>
+  );
+}
+
+function StatCard({ icon, iconClass, label, value, hint }: { icon: ReactNode; iconClass: string; label: string; value: string; hint?: string }) {
+  return (
+    <div className="bg-card rounded-2xl p-5 shadow-elevation-2 border border-border flex items-center gap-4">
+      <div className={`p-3 rounded-xl ${iconClass}`}>{icon}</div>
+      <div className="min-w-0">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="text-2xl font-bold text-foreground leading-tight">{value}</p>
+        {hint && <p className="text-xs text-muted-foreground truncate">{hint}</p>}
+      </div>
+    </div>
+  );
+}
+
+// Shown when nothing is selected, so the panel guides responders instead of sitting empty.
+const RESPONSE_STEPS = [
+  { title: 'Open the alert', body: 'Check the live position, signal status, and the path walked since SOS was pressed.' },
+  { title: 'Call the traveler', body: 'Use the phone number on the alert. No answer or signal lost? Treat it as urgent.' },
+  { title: 'Coordinate with trusted contacts', body: 'They were notified automatically. Ask if they have already reached the traveler.' },
+  { title: 'Escalate if needed', body: 'If the traveler is in danger or unreachable, call 911 and share the coordinates.' },
+  { title: 'Resolve with notes', body: 'Record what happened. Resolving stops live location sharing on their phone.' },
+];
 
 function useNow(intervalMs = 1000) {
   const [now, setNow] = useState(() => Date.now());
@@ -67,15 +123,34 @@ export default function SosCenterBoard() {
     }
   }, [requestedAlertId]);
 
+  // Loaded up front (not only on the Resolved tab) so the stats and recent list
+  // have data; reloaded whenever an active alert ends.
   useEffect(() => {
-    if (tab !== 'resolved') return;
+    let cancelled = false;
     setIsResolvedLoading(true);
     listSosAlerts('resolved').then(({ data, error }) => {
+      if (cancelled) return;
       if (error) toast.error('Failed to load resolved alerts');
       setResolvedAlerts(data);
       setIsResolvedLoading(false);
     });
-  }, [tab]);
+    return () => {
+      cancelled = true;
+    };
+  }, [activeAlerts.length]);
+
+  const stats = useMemo(() => {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const resolvedToday = resolvedAlerts.filter((alert) => alert.resolved_at && new Date(alert.resolved_at) >= startOfToday).length;
+    const durations = resolvedAlerts.map(alertDuration).filter((ms): ms is number => ms !== null);
+    const avgResolveMs = durations.length ? durations.reduce((sum, ms) => sum + ms, 0) / durations.length : null;
+    const latest = [...activeAlerts, ...resolvedAlerts].reduce<string | null>(
+      (max, alert) => (!max || alert.created_at > max ? alert.created_at : max),
+      null
+    );
+    return { resolvedToday, avgResolveMs, latest, sampleSize: durations.length };
+  }, [activeAlerts, resolvedAlerts]);
 
   const list = tab === 'active' ? activeAlerts : resolvedAlerts;
   const selected = list.find((alert) => alert.id === selectedId) ?? (tab === 'active' ? activeAlerts[0] : null) ?? null;
@@ -178,15 +253,54 @@ export default function SosCenterBoard() {
         </div>
       </div>
 
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard
+          icon={<Siren className={`w-6 h-6 ${activeAlerts.length > 0 ? 'text-destructive animate-pulse' : 'text-green-500'}`} />}
+          iconClass={activeAlerts.length > 0 ? 'bg-destructive/10' : 'bg-green-500/10'}
+          label="Active now"
+          value={String(activeAlerts.length)}
+          hint={activeAlerts.length > 0 ? 'Needs a responder' : 'All clear'}
+        />
+        <StatCard
+          icon={<CheckCircle2 className="w-6 h-6 text-primary" />}
+          iconClass="bg-primary/10"
+          label="Resolved today"
+          value={String(stats.resolvedToday)}
+          hint={`${resolvedAlerts.length} in recent history`}
+        />
+        <StatCard
+          icon={<Timer className="w-6 h-6 text-amber-500" />}
+          iconClass="bg-amber-500/10"
+          label="Avg. time to resolve"
+          value={stats.avgResolveMs === null ? '—' : formatDuration(stats.avgResolveMs)}
+          hint={stats.sampleSize ? `Last ${stats.sampleSize} alerts` : 'No resolved alerts yet'}
+        />
+        <StatCard
+          icon={<Clock className="w-6 h-6 text-blue-500" />}
+          iconClass="bg-blue-500/10"
+          label="Last alert"
+          value={stats.latest ? formatAgo(stats.latest, now) : '—'}
+          hint={stats.latest ? new Date(stats.latest).toLocaleString() : 'No alerts on record'}
+        />
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         <div className="lg:col-span-2">
           <div className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
             {(tab === 'active' ? isActiveLoading : isResolvedLoading) ? (
               <p className="text-sm text-muted-foreground text-center py-8">Loading...</p>
             ) : list.length === 0 ? (
-              <div className="py-12 text-center space-y-2">
-                <ShieldCheck className="w-10 h-10 mx-auto text-green-500" />
-                <p className="text-sm text-muted-foreground">{tab === 'active' ? 'No active SOS alerts' : 'No resolved alerts yet'}</p>
+              <div className="py-12 px-6 text-center space-y-3">
+                <div className="w-16 h-16 mx-auto rounded-full bg-green-500/10 flex items-center justify-center">
+                  <ShieldCheck className="w-8 h-8 text-green-500" />
+                </div>
+                <p className="font-semibold text-foreground">{tab === 'active' ? 'All travelers are safe' : 'No resolved alerts yet'}</p>
+                <p className="text-sm text-muted-foreground">
+                  {tab === 'active'
+                    ? 'No one has pressed SOS. New alerts appear here instantly with a sound and banner.'
+                    : 'Alerts you resolve will be listed here with their notes.'}
+                </p>
+                {tab === 'active' && stats.latest && <p className="text-xs text-muted-foreground">Last alert {formatAgo(stats.latest, now)}</p>}
               </div>
             ) : (
               <div className="divide-y divide-border max-h-[70vh] overflow-y-auto">
@@ -201,26 +315,32 @@ export default function SosCenterBoard() {
                         alert.status === 'active' ? 'border-l-4 border-destructive' : ''
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="font-semibold text-foreground text-sm">{alert.profile?.display_name ?? 'Unknown user'}</p>
-                        <span className="text-xs text-muted-foreground shrink-0">{formatAgo(alert.created_at, now)}</span>
+                      <div className="flex items-start gap-3">
+                        <Avatar profile={alert.profile} live={alert.status === 'active'} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="font-semibold text-foreground text-sm">{alert.profile?.display_name ?? 'Unknown user'}</p>
+                            <span className="text-xs text-muted-foreground shrink-0">{formatAgo(alert.created_at, now)}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {alert.trigger_reason === 'manual' ? 'Pressed SOS' : 'Auto-escalated from Warning Mode'}
+                            {alert.trip ? ` · ${alert.trip.origin} → ${alert.trip.destination}` : ''}
+                          </p>
+                          {alert.status === 'active' ? (
+                            <p className={`text-xs mt-2 flex items-center gap-1.5 ${stale ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'}`}>
+                              {stale ? <WifiOff className="w-3.5 h-3.5" /> : <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />}
+                              {position ? `${stale ? 'Signal lost · last seen' : 'Live · updated'} ${formatAgo(position.updatedAt, now)}` : 'No GPS yet'}
+                              {position?.accuracyM != null && !stale ? ` · ±${Math.round(position.accuracyM)} m` : ''}
+                            </p>
+                          ) : (
+                            <p className="text-xs mt-2 text-muted-foreground">
+                              Resolved {alert.resolved_at ? formatAgo(alert.resolved_at, now) : ''}
+                              {alertDuration(alert) !== null ? ` · handled in ${formatDuration(alertDuration(alert)!)}` : ''}
+                              {alert.resolution_notes ? ` · ${alert.resolution_notes}` : ''}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {alert.trigger_reason === 'manual' ? 'Pressed SOS' : 'Auto-escalated from Warning Mode'}
-                        {alert.trip ? ` · ${alert.trip.origin} → ${alert.trip.destination}` : ''}
-                      </p>
-                      {alert.status === 'active' ? (
-                        <p className={`text-xs mt-2 flex items-center gap-1.5 ${stale ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'}`}>
-                          {stale ? <WifiOff className="w-3.5 h-3.5" /> : <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />}
-                          {position ? `${stale ? 'Signal lost · last seen' : 'Live · updated'} ${formatAgo(position.updatedAt, now)}` : 'No GPS yet'}
-                          {position?.accuracyM != null && !stale ? ` · ±${Math.round(position.accuracyM)} m` : ''}
-                        </p>
-                      ) : (
-                        <p className="text-xs mt-2 text-muted-foreground">
-                          Resolved {alert.resolved_at ? formatAgo(alert.resolved_at, now) : ''}
-                          {alert.resolution_notes ? ` · ${alert.resolution_notes}` : ''}
-                        </p>
-                      )}
                     </button>
                   );
                 })}
@@ -231,8 +351,74 @@ export default function SosCenterBoard() {
 
         <div className="lg:col-span-3">
           {!selected ? (
-            <div className="bg-card rounded-2xl p-12 shadow-elevation-2 border border-border flex items-center justify-center h-full min-h-[300px]">
-              <p className="text-muted-foreground">Select an alert to see the traveler&apos;s location</p>
+            <div className="space-y-4">
+              <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
+                <div className="flex items-center gap-2 mb-1">
+                  <PhoneCall className="w-5 h-5 text-destructive" />
+                  <h3 className="text-lg font-bold text-foreground">Response protocol</h3>
+                </div>
+                <p className="text-sm text-muted-foreground mb-5">
+                  {list.length > 0 ? 'Select an alert to see the traveler’s live location.' : 'What to do when an SOS comes in.'}
+                </p>
+                <ol className="space-y-4">
+                  {RESPONSE_STEPS.map((step, index) => (
+                    <li key={step.title} className="flex gap-3">
+                      <span className="w-7 h-7 shrink-0 rounded-full bg-destructive/10 text-destructive text-sm font-bold flex items-center justify-center">{index + 1}</span>
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">{step.title}</p>
+                        <p className="text-sm text-muted-foreground">{step.body}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+
+              <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                    <History className="w-5 h-5 text-muted-foreground" /> Recently resolved
+                  </h3>
+                  {resolvedAlerts.length > 3 && tab !== 'resolved' && (
+                    <button onClick={() => setTab('resolved')} className="text-sm text-primary font-medium hover:underline">
+                      View all
+                    </button>
+                  )}
+                </div>
+                {isResolvedLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading...</p>
+                ) : resolvedAlerts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No alerts have been resolved yet.</p>
+                ) : (
+                  <div className="divide-y divide-border">
+                    {resolvedAlerts.slice(0, 3).map((alert) => {
+                      const duration = alertDuration(alert);
+                      return (
+                        <button
+                          key={alert.id}
+                          onClick={() => {
+                            setTab('resolved');
+                            setSelectedId(alert.id);
+                          }}
+                          className="w-full flex items-center gap-3 py-3 text-left hover:bg-secondary/40 rounded-lg px-2 -mx-2 transition-colors"
+                        >
+                          <Avatar profile={alert.profile} live={false} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-foreground truncate">{alert.profile?.display_name ?? 'Unknown user'}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {alert.trigger_reason === 'manual' ? 'Pressed SOS' : 'Auto-escalated'}
+                              {alert.resolution_notes ? ` · ${alert.resolution_notes}` : ''}
+                            </p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-xs text-muted-foreground">{alert.resolved_at ? formatAgo(alert.resolved_at, now) : ''}</p>
+                            {duration !== null && <p className="text-xs font-medium text-foreground">{formatDuration(duration)}</p>}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <div className="space-y-4">
@@ -293,7 +479,13 @@ export default function SosCenterBoard() {
                     </a>
                   </p>
                 )}
-                {!isLive && selected.resolution_notes && <p className="text-sm text-foreground">Resolution: {selected.resolution_notes}</p>}
+                {!isLive && (
+                  <p className="text-sm text-foreground">
+                    {selected.resolved_at && `Resolved ${new Date(selected.resolved_at).toLocaleString()}`}
+                    {alertDuration(selected) !== null && ` · active for ${formatDuration(alertDuration(selected)!)}`}
+                    {selected.resolution_notes && <span className="block text-muted-foreground mt-1">Notes: {selected.resolution_notes}</span>}
+                  </p>
+                )}
               </div>
 
               <div className="relative bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden h-[480px]">

@@ -24,7 +24,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import AdminUsers from "./pages/AdminUsers";
 import AdminTrips from "./pages/AdminTrips";
 import AdminSos from "./pages/AdminSos";
-import AdminReports from "./pages/AdminReports";
+import AdminSupport from "./pages/AdminSupport";
 import AdminStaff from "./pages/AdminStaff";
 import AdminTeam from "./pages/AdminTeam";
 import AdminGuilds from "./pages/AdminGuilds";
@@ -117,7 +117,9 @@ function Router() {
       <Route path="/admin/users" component={() => <AdminRoute component={AdminUsers} />} />
       <Route path="/admin/trips" component={() => <AdminRoute component={AdminTrips} />} />
       <Route path="/admin/sos" component={() => <AdminRoute component={AdminSos} />} />
-      <Route path="/admin/reports" component={() => <AdminRoute component={AdminReports} />} />
+      {/* Reports live in the Support inbox now (every report is a ticket). */}
+      <Route path="/admin/reports">{() => <Redirect to="/admin/support?view=reports" />}</Route>
+      <Route path="/admin/support" component={() => <AdminRoute component={AdminSupport} />} />
       <Route path="/admin/audit" component={() => <AdminRoute component={AdminAudit} />} />
       <Route path="/admin/settings" component={() => <AdminRoute component={AdminSettings} />} />
       <Route path="/admin/account" component={() => <AdminRoute component={AccountSettings} />} />

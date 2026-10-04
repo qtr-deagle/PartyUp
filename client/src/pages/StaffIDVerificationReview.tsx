@@ -136,7 +136,7 @@ export default function StaffIDVerificationReview() {
                       <div className="flex items-center gap-1.5 mt-2">
                         <AiSimilarityBadge score={v.ai_similarity_score} flag={v.ai_flag} submittedAt={v.submitted_at} />
                         {v.ai_underage_flag && (
-                          <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-orange-100 text-orange-700 whitespace-nowrap">Age flag</span>
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300 whitespace-nowrap">Age flag</span>
                         )}
                       </div>
                     </button>

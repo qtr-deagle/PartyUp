@@ -137,7 +137,7 @@ export default function StaffDisputes() {
                       <td className="px-6 py-4">
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${
-                            report.status === 'reviewing' ? 'bg-primary/20 text-primary' : 'bg-yellow-200/30 text-yellow-600 dark:text-yellow-400'
+                            report.status === 'reviewing' ? 'bg-primary/20 text-primary' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300'
                           }`}
                         >
                           {report.status}

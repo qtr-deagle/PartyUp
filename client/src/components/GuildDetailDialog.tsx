@@ -34,12 +34,12 @@ function healthOf(overview: GuildOverview) {
   const total = overview.members.length;
   const active = overview.members.filter((member) => member.points > 0).length;
   if (overview.xpLast30Days === 0) {
-    return { active, total, label: 'Inactive', note: 'No XP earned in the last 30 days.', style: 'bg-red-500/15 text-red-700 dark:text-red-400' };
+    return { active, total, label: 'Inactive', note: 'No XP earned in the last 30 days.', style: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300' };
   }
   if (total > 0 && active / total >= 0.5) {
-    return { active, total, label: 'Thriving', note: 'Most members earned points this month.', style: 'bg-green-500/15 text-green-700 dark:text-green-400' };
+    return { active, total, label: 'Thriving', note: 'Most members earned points this month.', style: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300' };
   }
-  return { active, total, label: 'Quiet', note: 'Earning XP, but fewer than half the members are active this month.', style: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400' };
+  return { active, total, label: 'Quiet', note: 'Earning XP, but fewer than half the members are active this month.', style: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300' };
 }
 
 /**

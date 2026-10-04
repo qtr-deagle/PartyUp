@@ -211,8 +211,8 @@ export default function StaffPairingHistory() {
                       <span
                         className={`px-3 py-1 rounded-full text-xs font-medium ${
                           pairing.status === 'completed'
-                            ? 'bg-green-500/20 text-green-700 dark:text-green-400'
-                            : 'bg-blue-500/20 text-blue-700 dark:text-blue-400'
+                            ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300'
+                            : 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300'
                         }`}
                       >
                         {pairing.status.charAt(0).toUpperCase() + pairing.status.slice(1)}

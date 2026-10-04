@@ -35,6 +35,9 @@ const inputClass =
   'w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary transition-colors';
 const primaryButton = 'px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors';
 const secondaryButton = 'px-4 py-2 rounded-lg text-sm font-semibold border border-border text-foreground hover:bg-secondary transition-colors';
+const tileClass =
+  'flex items-center gap-3 px-3.5 py-3 rounded-2xl border text-left shadow-elevation-1 transition-smooth hover:shadow-elevation-2 hover:-translate-y-0.5';
+const iconChipClass = 'w-9 h-9 rounded-xl flex items-center justify-center shrink-0';
 
 export default function AdminQuickActions({
   role = 'admin',
@@ -93,26 +96,31 @@ export default function AdminQuickActions({
               key={action.id}
               type="button"
               onClick={() => setOpenAction(action.id)}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-smooth hover:shadow-lg ${
-                needsAttention ? 'bg-destructive/10 border-destructive/30 hover:border-destructive/60' : 'bg-card border-border hover:border-primary/50'
+              className={`${tileClass} ${
+                needsAttention ? 'bg-destructive/5 border-destructive/30 hover:border-destructive/60' : 'bg-card border-border/70 hover:border-primary/40'
               }`}
             >
-              <Icon className={`w-5 h-5 shrink-0 ${needsAttention ? 'text-destructive' : 'text-primary'}`} />
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">{action.label}</p>
+              <span className={`${iconChipClass} ${needsAttention ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'}`}>
+                <Icon className="w-[18px] h-[18px]" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-foreground truncate">{action.label}</p>
                 <p className="text-xs text-muted-foreground truncate">{action.hint}</p>
               </div>
+              {needsAttention && (
+                <span className="min-w-6 h-6 px-1.5 rounded-full bg-destructive text-destructive-foreground text-xs font-bold flex items-center justify-center shrink-0 tabular-nums">
+                  {action.count > 99 ? '99+' : action.count}
+                </span>
+              )}
             </button>
           );
         })}
-        <button
-          type="button"
-          onClick={exportCsv}
-          className="flex items-center gap-3 px-4 py-3 rounded-xl border bg-card border-border hover:border-primary/50 text-left transition-smooth hover:shadow-lg"
-        >
-          <Download className="w-5 h-5 shrink-0 text-primary" />
+        <button type="button" onClick={exportCsv} className={`${tileClass} bg-card border-border/70 hover:border-primary/40`}>
+          <span className={`${iconChipClass} bg-primary/10 text-primary`}>
+            <Download className="w-[18px] h-[18px]" />
+          </span>
           <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">Export Report</p>
+            <p className="text-sm font-semibold text-foreground truncate">Export Report</p>
             <p className="text-xs text-muted-foreground truncate">Download CSV</p>
           </div>
         </button>
@@ -120,11 +128,13 @@ export default function AdminQuickActions({
           type="button"
           onClick={onChanged}
           disabled={isRefreshing}
-          className="flex items-center gap-3 px-4 py-3 rounded-xl border bg-card border-border hover:border-primary/50 text-left transition-smooth hover:shadow-lg disabled:opacity-60"
+          className={`${tileClass} bg-card border-border/70 hover:border-primary/40 disabled:opacity-60 disabled:hover:translate-y-0`}
         >
-          <RefreshCw className={`w-5 h-5 shrink-0 text-primary ${isRefreshing ? 'animate-spin' : ''}`} />
+          <span className={`${iconChipClass} bg-primary/10 text-primary`}>
+            <RefreshCw className={`w-[18px] h-[18px] ${isRefreshing ? 'animate-spin' : ''}`} />
+          </span>
           <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">Refresh Data</p>
+            <p className="text-sm font-semibold text-foreground truncate">Refresh Data</p>
             <p className="text-xs text-muted-foreground truncate">{isRefreshing ? 'Updating...' : 'Reload all metrics'}</p>
           </div>
         </button>

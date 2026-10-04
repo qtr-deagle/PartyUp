@@ -38,14 +38,14 @@ if (mapboxToken) {
 
 function StatusPill({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    ongoing: 'bg-green-100 text-green-700',
-    open: 'bg-blue-100 text-blue-700',
-    full: 'bg-amber-100 text-amber-700',
-    completed: 'bg-gray-100 text-gray-700',
-    cancelled: 'bg-gray-100 text-gray-500',
-    draft: 'bg-gray-100 text-gray-500',
+    ongoing: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300',
+    open: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300',
+    full: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
+    completed: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300',
+    cancelled: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300',
+    draft: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300',
   };
-  return <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${styles[status] ?? 'bg-gray-100 text-gray-700'}`}>{status}</span>;
+  return <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${styles[status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300'}`}>{status}</span>;
 }
 
 // A member's phone counts as "live" if it reported a position this recently.
@@ -747,16 +747,16 @@ export default function TripMonitoringBoard() {
                                 <span
                                   className={`text-[11px] px-2 py-0.5 rounded-full font-semibold capitalize ${
                                     member.member_role === 'coordinator'
-                                      ? 'bg-purple-500/10 text-purple-500'
+                                      ? 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-300'
                                       : member.member_role === 'driver'
-                                        ? 'bg-blue-500/10 text-blue-500'
+                                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300'
                                         : 'bg-secondary text-muted-foreground'
                                   }`}
                                 >
                                   {member.member_role}
                                 </span>
                                 {isSos && <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-destructive/10 text-destructive">SOS</span>}
-                                {inWarning && <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-blue-500/10 text-blue-500">Warning Mode</span>}
+                                {inWarning && <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300">Warning Mode</span>}
                               </div>
                               <p className="text-xs text-muted-foreground mt-0.5">
                                 {member.status !== 'accepted'

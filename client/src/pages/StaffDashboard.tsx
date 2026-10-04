@@ -377,7 +377,7 @@ export default function StaffDashboard() {
                         <div className="flex items-center gap-3 min-w-0">
                           <span
                             className={`shrink-0 text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
-                              item.kind === 'ID' ? 'bg-primary/10 text-primary' : 'bg-orange-500/10 text-orange-500'
+                              item.kind === 'ID' ? 'bg-primary/10 text-primary' : 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300'
                             }`}
                           >
                             {item.kind}

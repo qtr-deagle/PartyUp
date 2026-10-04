@@ -116,13 +116,13 @@ export default function AdminPaymentIssues() {
   const getSeverityColor = (severity: string) => {
     switch (severity) {
       case 'high':
-        return 'bg-red-100 text-red-700';
+        return 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300';
       case 'medium':
-        return 'bg-orange-100 text-orange-700';
+        return 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300';
       case 'low':
-        return 'bg-yellow-100 text-yellow-700';
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300';
       default:
-        return 'bg-gray-100 text-gray-700';
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300';
     }
   };
 
@@ -256,8 +256,8 @@ export default function AdminPaymentIssues() {
                     <p className="text-xs text-muted-foreground">Payment Channel</p>
                     <p className={`text-sm font-semibold mt-1 px-2 py-1 rounded-full inline-block ${
                       issue.paymentChannel === 'GCash' 
-                        ? 'bg-blue-500/20 text-blue-700' 
-                        : 'bg-purple-500/20 text-purple-700'
+                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300' 
+                        : 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-300'
                     }`}>
                       {issue.paymentChannel}
                     </p>

@@ -2,10 +2,10 @@ import AiCheckingBadge from '@/components/AiCheckingBadge';
 import type { AiAddressFlag } from '@/lib/verification';
 
 const STYLES: Record<AiAddressFlag, string> = {
-  match: 'bg-green-500/15 text-green-700 dark:text-green-400',
-  other_bulacan_town: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400',
-  bulacan_unknown_town: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400',
-  not_bulacan: 'bg-red-500/15 text-red-700 dark:text-red-400',
+  match: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300',
+  other_bulacan_town: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300',
+  bulacan_unknown_town: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300',
+  not_bulacan: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300',
   not_found: 'bg-gray-500/15 text-muted-foreground',
   not_applicable: 'bg-gray-500/15 text-muted-foreground',
   error: 'bg-gray-500/15 text-muted-foreground',

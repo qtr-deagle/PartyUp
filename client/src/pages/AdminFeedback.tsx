@@ -90,13 +90,13 @@ export default function AdminFeedback() {
   const getFeedbackTypeColor = (type: FeedbackType) => {
     switch (type) {
       case 'trip':
-        return 'bg-blue-500/20 text-blue-700 dark:text-blue-400';
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300';
       case 'service':
-        return 'bg-purple-500/20 text-purple-700 dark:text-purple-400';
+        return 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-300';
       case 'user':
-        return 'bg-green-500/20 text-green-700 dark:text-green-400';
+        return 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300';
       default:
-        return 'bg-gray-500/20 text-gray-700 dark:text-gray-300';
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300';
     }
   };
 

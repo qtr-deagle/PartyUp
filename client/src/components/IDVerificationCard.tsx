@@ -26,7 +26,7 @@ export function IDVerificationCard({ verification, onSubmit }: IDVerificationCar
           label: 'Verified',
           color: 'bg-green-50 border-green-200',
           textColor: 'text-green-700',
-          badgeColor: 'bg-green-100 text-green-800'
+          badgeColor: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300'
         };
       case 'pending':
         return {
@@ -34,7 +34,7 @@ export function IDVerificationCard({ verification, onSubmit }: IDVerificationCar
           label: 'Verification Pending',
           color: 'bg-yellow-50 border-yellow-200',
           textColor: 'text-yellow-700',
-          badgeColor: 'bg-yellow-100 text-yellow-800'
+          badgeColor: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300'
         };
       case 'rejected':
         return {
@@ -42,7 +42,7 @@ export function IDVerificationCard({ verification, onSubmit }: IDVerificationCar
           label: 'Verification Failed',
           color: 'bg-red-50 border-red-200',
           textColor: 'text-red-700',
-          badgeColor: 'bg-red-100 text-red-800'
+          badgeColor: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300'
         };
       default:
         return {
@@ -50,7 +50,7 @@ export function IDVerificationCard({ verification, onSubmit }: IDVerificationCar
           label: 'Not Verified',
           color: 'bg-gray-50 border-gray-200',
           textColor: 'text-gray-700',
-          badgeColor: 'bg-gray-100 text-gray-800'
+          badgeColor: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300'
         };
     }
   };

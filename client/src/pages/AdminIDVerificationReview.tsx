@@ -186,17 +186,17 @@ export default function AdminIDVerificationReview() {
                             <span
                               className={`text-xs font-bold px-2.5 py-1 rounded-lg whitespace-nowrap capitalize ${
                                 v.status === 'approved'
-                                  ? 'bg-green-100 text-green-700'
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300'
                                   : v.status === 'pending'
-                                    ? 'bg-yellow-100 text-yellow-700'
-                                    : 'bg-red-100 text-red-700'
+                                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300'
+                                    : 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300'
                               }`}
                             >
                               {v.status}
                             </span>
                             <AiSimilarityBadge score={v.ai_similarity_score} flag={v.ai_flag} submittedAt={v.submitted_at} />
                             {v.ai_underage_flag && (
-                              <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-orange-100 text-orange-700 whitespace-nowrap">Age flag</span>
+                              <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300 whitespace-nowrap">Age flag</span>
                             )}
                           </div>
                         </div>

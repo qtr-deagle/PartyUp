@@ -238,10 +238,10 @@ export default function StaffVehicles() {
                         <span
                           className={`text-xs font-bold px-2.5 py-1 rounded-lg whitespace-nowrap capitalize ${
                             v.verification_status === 'approved'
-                              ? 'bg-green-100 text-green-700'
+                              ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300'
                               : v.verification_status === 'pending'
-                                ? 'bg-yellow-100 text-yellow-700'
-                                : 'bg-red-100 text-red-700'
+                                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300'
+                                : 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300'
                           }`}
                         >
                           {v.verification_status}
@@ -253,7 +253,7 @@ export default function StaffVehicles() {
                       </p>
                       {v.plate_number && <p className="text-xs text-muted-foreground mt-1">Plate: {v.plate_number}</p>}
                       {v.ownership_type === 'borrowed' && (
-                        <span className="inline-block mt-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-500">Borrowed</span>
+                        <span className="inline-block mt-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300">Borrowed</span>
                       )}
                       <p className="text-xs text-muted-foreground mt-2">
                         {v.submitted_at ? new Date(v.submitted_at).toLocaleString() : ''}
@@ -278,7 +278,7 @@ export default function StaffVehicles() {
                   {selected.plate_number && <p className="text-xs text-muted-foreground mt-1">Plate: {selected.plate_number}</p>}
                   <span
                     className={`inline-block mt-2 text-xs font-semibold px-2 py-0.5 rounded-full ${
-                      selected.ownership_type === 'borrowed' ? 'bg-yellow-500/10 text-yellow-500' : 'bg-green-500/10 text-green-500'
+                      selected.ownership_type === 'borrowed' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300' : 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300'
                     }`}
                   >
                     {selected.ownership_type === 'borrowed' ? 'Borrowed vehicle' : 'Owned by traveler'}

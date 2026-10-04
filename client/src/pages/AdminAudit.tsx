@@ -113,11 +113,11 @@ export default function AdminAudit() {
       case 'high':
         return 'bg-destructive/10 text-destructive';
       case 'medium':
-        return 'bg-orange-500/10 text-orange-600 dark:text-orange-400';
+        return 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300';
       case 'low':
-        return 'bg-green-500/10 text-green-600 dark:text-green-400';
+        return 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300';
       default:
-        return 'bg-gray-500/10 text-gray-600 dark:text-gray-300';
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300';
     }
   };
 

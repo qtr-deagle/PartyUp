@@ -53,8 +53,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 
 const ROLE_BADGE: Record<string, string> = {
   traveler: 'bg-secondary text-foreground',
-  guild_leader: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
-  admin: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
+  guild_leader: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
+  admin: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300',
 };
 
 const joinedFormat = new Intl.DateTimeFormat(undefined, { month: 'short', year: 'numeric' });

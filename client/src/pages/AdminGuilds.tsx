@@ -33,9 +33,9 @@ const AUDIENCE_LABEL: Record<RewardAudience, string> = {
 };
 
 const STATUS_STYLE: Record<RedemptionStatus, string> = {
-  pending: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400',
-  fulfilled: 'bg-green-500/20 text-green-700 dark:text-green-400',
-  rejected: 'bg-red-500/20 text-red-700 dark:text-red-400',
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300',
+  fulfilled: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300',
+  rejected: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300',
 };
 
 const EMPTY_REWARD: RewardInput = { title: '', description: '', cost: 100, audience: 'everyone', stock: null, is_active: true };

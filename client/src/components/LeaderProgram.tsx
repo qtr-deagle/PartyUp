@@ -94,7 +94,7 @@ export function LeaderApplications({ onDecided }: { onDecided: () => void }) {
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="font-semibold text-foreground">{row.display_name}</p>
-                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/15 text-amber-700 dark:text-amber-400">
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
                     {rankName(row.lifetime_points)} · {row.lifetime_points} pts
                   </span>
                   <span className="flex items-center gap-1 text-xs text-muted-foreground">

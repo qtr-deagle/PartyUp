@@ -32,14 +32,14 @@ const VIEWS: Array<{ id: View; label: string }> = [
 ];
 
 const REPORT_STATUS_STYLES: Record<ReportStatus, string> = {
-  open: 'bg-yellow-200/30 text-yellow-700 dark:text-yellow-400',
-  reviewing: 'bg-orange-500/20 text-orange-600',
+  open: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300',
+  reviewing: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300',
   resolved: 'bg-accent/20 text-accent',
   dismissed: 'bg-muted text-muted-foreground',
 };
 
 const STATUS_STYLES: Record<TicketStatus, string> = {
-  open: 'bg-yellow-200/30 text-yellow-700 dark:text-yellow-400',
+  open: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300',
   answered: 'bg-primary/20 text-primary',
   closed: 'bg-muted text-muted-foreground',
 };

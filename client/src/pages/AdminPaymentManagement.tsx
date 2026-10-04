@@ -176,23 +176,23 @@ export default function AdminPaymentManagement() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'open':
-        return 'bg-yellow-500/20 text-yellow-700';
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300';
       case 'reviewing':
-        return 'bg-blue-500/20 text-blue-700';
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300';
       case 'resolved':
-        return 'bg-green-500/20 text-green-700';
+        return 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300';
       case 'dismissed':
-        return 'bg-gray-500/20 text-gray-700';
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300';
       case 'paid':
-        return 'bg-green-500/20 text-green-700';
+        return 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300';
       case 'pending':
-        return 'bg-yellow-500/20 text-yellow-700';
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300';
       case 'refunded':
-        return 'bg-blue-500/20 text-blue-700';
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300';
       case 'demo':
-        return 'bg-gray-500/20 text-gray-700';
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300';
       default:
-        return 'bg-gray-500/20 text-gray-700';
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300';
     }
   };
 

@@ -516,14 +516,14 @@ export default function AdminPaymentManagement() {
               <div className="overflow-x-auto">
                 {/* Fixed column widths: with auto layout, sorting or paging brought
                     different text into view and every column shifted. */}
-                <table className="w-full table-fixed [&_td]:whitespace-nowrap" style={{ minWidth: 1460 }}>
+                <table className="w-full table-fixed [&_td]:whitespace-nowrap" style={{ minWidth: 1490 }}>
                   <colgroup>
                     <col style={{ width: 130 }} />
                     <col style={{ width: 180 }} />
                     {/* Trip: no width, takes the rest */}
                     <col />
                     <col style={{ width: 120 }} />
-                    <col style={{ width: 170 }} />
+                    <col style={{ width: 200 }} />
                     <col style={{ width: 120 }} />
                     <col style={{ width: 190 }} />
                     <col style={{ width: 120 }} />
@@ -535,7 +535,7 @@ export default function AdminPaymentManagement() {
                       <SortableTh label="User" sortKey="user" sort={transactionSort.sort} onSort={transactionSort.toggle} />
                       <SortableTh label="Trip" sortKey="trip" sort={transactionSort.sort} onSort={transactionSort.toggle} />
                       <SortableTh label="Amount" sortKey="amount" sort={transactionSort.sort} onSort={transactionSort.toggle} />
-                      <SortableTh label="PartyUp Fee" sortKey="fee" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <SortableTh label={`PartyUp Fee (${feePercent})`} sortKey="fee" sort={transactionSort.sort} onSort={transactionSort.toggle} />
                       <SortableTh label="Gateway" sortKey="gateway" sort={transactionSort.sort} onSort={transactionSort.toggle} />
                       <SortableTh label="Reference" sortKey="reference" sort={transactionSort.sort} onSort={transactionSort.toggle} />
                       <SortableTh label="Status" sortKey="status" sort={transactionSort.sort} onSort={transactionSort.toggle} />
@@ -576,9 +576,6 @@ export default function AdminPaymentManagement() {
                           </td>
                           <td className="px-6 py-4">
                             <span className="text-sm font-semibold text-primary">{formatPeso(partyUpFee(transaction))}</span>
-                            <span className="ml-1.5 text-xs text-muted-foreground">
-                              {transaction.trip?.trip_type === 'carpool' ? `${feePercent} on top` : feePercent}
-                            </span>
                           </td>
                           <td className="px-6 py-4">
                             <span className="text-sm font-medium text-foreground capitalize">{transaction.gateway}</span>

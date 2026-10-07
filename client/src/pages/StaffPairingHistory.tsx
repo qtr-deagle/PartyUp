@@ -4,6 +4,8 @@ import { Search, Users, TrendingUp, Filter, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import { listPairingHistory, type PairingHistoryRow } from '@/lib/pairingHistory';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
+import SortableTh from '@/components/SortableTh';
+import { useSortable } from '@/hooks/useSortable';
 
 /**
  * Staff Pairing History (View Only)
@@ -54,6 +56,20 @@ export default function StaffPairingHistory() {
 
     return matchesSearch && matchesFilter;
   });
+
+  // Click a column title: ascending, descending, then off (latest trip first).
+  const pairingSort = useSortable(
+    filteredPairings,
+    {
+      users: (p) => p.user1_name,
+      trip: (p) => p.destination,
+      date: (p) => p.start_at,
+      compatibility: (p) => Number(p.compatibility),
+      rating: (p) => (p.rating === null ? null : Number(p.rating)),
+      status: (p) => p.status,
+    },
+    { key: 'date', direction: 'desc' }
+  );
 
   const ratedPairings = pairingHistory.filter((p) => p.rating !== null);
   const completedPairings = pairingHistory.filter((p) => p.status === 'completed');
@@ -161,27 +177,36 @@ export default function StaffPairingHistory() {
             <p className="text-sm text-muted-foreground p-6">No pairings found.</p>
           ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            {/* Fixed column widths so sorting or paging doesn't shift the columns. */}
+            <table className="w-full table-fixed [&_td]:whitespace-nowrap" style={{ minWidth: 1060 }}>
+              <colgroup>
+                <col />
+                <col />
+                <col style={{ width: 170 }} />
+                <col style={{ width: 200 }} />
+                <col style={{ width: 150 }} />
+                <col style={{ width: 140 }} />
+              </colgroup>
               <thead>
                 <tr className="border-b border-border bg-secondary">
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Users</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Trip</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Date</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Compatibility</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Rating</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Status</th>
+                  <SortableTh label="Users" sortKey="users" sort={pairingSort.sort} onSort={pairingSort.toggle} />
+                  <SortableTh label="Trip" sortKey="trip" sort={pairingSort.sort} onSort={pairingSort.toggle} />
+                  <SortableTh label="Date" sortKey="date" sort={pairingSort.sort} onSort={pairingSort.toggle} />
+                  <SortableTh label="Compatibility" sortKey="compatibility" sort={pairingSort.sort} onSort={pairingSort.toggle} />
+                  <SortableTh label="Rating" sortKey="rating" sort={pairingSort.sort} onSort={pairingSort.toggle} />
+                  <SortableTh label="Status" sortKey="status" sort={pairingSort.sort} onSort={pairingSort.toggle} />
                 </tr>
               </thead>
               <tbody>
-                {filteredPairings.map((pairing) => (
+                {pairingSort.sorted.map((pairing) => (
                   <tr key={pairing.id} className="border-b border-border hover:bg-secondary/50 transition-smooth">
                     <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-foreground">{pairing.user1_name}</div>
-                      <div className="text-xs text-muted-foreground">& {pairing.user2_name}</div>
+                      <div className="truncate text-sm font-medium text-foreground">{pairing.user1_name}</div>
+                      <div className="truncate text-xs text-muted-foreground">& {pairing.user2_name}</div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm font-medium text-foreground capitalize">{pairing.trip_type}</div>
-                      <div className="text-xs text-muted-foreground">{pairing.destination}</div>
+                      <div className="truncate text-xs text-muted-foreground" title={pairing.destination}>{pairing.destination}</div>
                     </td>
                     <td className="px-6 py-4 text-sm text-foreground">
                       <div className="flex items-center gap-1 text-xs">

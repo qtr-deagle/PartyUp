@@ -1,21 +1,25 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import StaffLayout from '@/components/StaffLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { Check, Eye, EyeOff, KeyRound, Loader2, ShieldCheck, UserCircle } from 'lucide-react';
+import { Check, Eye, EyeOff, ImagePlus, KeyRound, Loader2, ShieldCheck, Shuffle, Trash2, UserCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { PASSWORD_RULES, changeOwnPassword, validateNewPassword } from '@/lib/password';
 import { roleLabel } from '@/lib/guilds';
+import { removeOwnAvatar, setIllustratedAvatar, uploadOwnAvatar } from '@/lib/avatar';
+import ConfirmActionDialog from '@/components/ConfirmActionDialog';
 
 /**
  * Account Settings (staff & admin)
  *
- * - Shows the signed-in console account
+ * - Shows the signed-in console account and its profile photo (upload one,
+ *   use an illustrated avatar, or remove it). Travelers see this photo next
+ *   to admin replies.
  * - Change password: requires the current password, then signs out every
  *   other session so a leaked password stops working everywhere
  */
 export default function AccountSettings() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const isAdmin = user?.role === 'admin';
   const Layout = isAdmin ? AdminLayout : StaffLayout;
 
@@ -34,7 +38,8 @@ export default function AccountSettings() {
               <UserCircle className="w-5 h-5" />
               Signed in as
             </h3>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
+            <AvatarEditor name={user.name} avatarUrl={user.avatar ?? null} onChanged={refreshUser} />
+            <dl className="mt-6 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
               <dt className="text-muted-foreground">Name</dt>
               <dd className="font-medium text-foreground">{user.name}</dd>
               <dt className="text-muted-foreground">Email</dt>
@@ -48,6 +53,100 @@ export default function AccountSettings() {
         <ChangePasswordCard email={user?.email ?? ''} />
       </div>
     </Layout>
+  );
+}
+
+function AvatarEditor({ name, avatarUrl, onChanged }: { name: string; avatarUrl: string | null; onChanged: () => Promise<void> }) {
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState<'upload' | 'illustrated' | 'remove' | null>(null);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
+
+  const run = async (kind: 'upload' | 'illustrated' | 'remove', action: () => Promise<unknown>, success: string) => {
+    setBusy(kind);
+    try {
+      await action();
+      await onChanged();
+      toast.success(success);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not update your photo.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const onFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = ''; // let the same file be picked again
+    if (file) void run('upload', () => uploadOwnAvatar(file), 'Profile photo updated');
+  };
+
+  const baseButton =
+    'inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium border transition-smooth disabled:opacity-50 disabled:cursor-not-allowed';
+  const buttonClass = `${baseButton} border-border text-foreground hover:bg-secondary`;
+  // Separate class list (not buttonClass + overrides): two text colors on one
+  // element resolve by stylesheet order, and text-foreground won.
+  const removeButtonClass = `${baseButton} border-destructive/40 text-destructive hover:bg-destructive/10 hover:border-destructive/60`;
+
+  return (
+    <div className="flex flex-wrap items-center gap-5">
+      <div className="relative w-20 h-20 shrink-0">
+        {avatarUrl ? (
+          <img src={avatarUrl} alt="" className="w-20 h-20 rounded-full object-cover border border-border" />
+        ) : (
+          <div className="w-20 h-20 rounded-full bg-primary/10 text-primary flex items-center justify-center text-2xl font-bold">
+            {name.trim().charAt(0).toUpperCase()}
+          </div>
+        )}
+        {busy && (
+          <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center">
+            <Loader2 className="w-6 h-6 text-white animate-spin" />
+          </div>
+        )}
+      </div>
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => fileInput.current?.click()} disabled={busy !== null} className={buttonClass}>
+            <ImagePlus className="w-4 h-4" />
+            Upload photo
+          </button>
+          {/* A fresh seed each click, so it can be rerolled until one fits. */}
+          <button
+            type="button"
+            onClick={() => void run('illustrated', () => setIllustratedAvatar(`${name}-${Date.now()}`), 'Avatar updated')}
+            disabled={busy !== null}
+            className={buttonClass}
+          >
+            <Shuffle className="w-4 h-4" />
+            {avatarUrl ? 'New illustrated avatar' : 'Use illustrated avatar'}
+          </button>
+          {avatarUrl && (
+            <button
+              type="button"
+              onClick={() => setConfirmingRemove(true)}
+              disabled={busy !== null}
+              className={removeButtonClass}
+            >
+              <Trash2 className="w-4 h-4" />
+              Remove
+            </button>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">JPG, PNG or WebP. Cropped to a square. Travelers see it next to your replies.</p>
+      </div>
+      <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={onFile} />
+      <ConfirmActionDialog
+        open={confirmingRemove}
+        onOpenChange={setConfirmingRemove}
+        tone="destructive"
+        title="Remove your profile photo?"
+        description="Your photo is deleted and your initial shows instead, here and wherever travelers see you. You can add a new one anytime."
+        confirmLabel="Remove photo"
+        onConfirm={() => {
+          setConfirmingRemove(false);
+          void run('remove', removeOwnAvatar, 'Profile photo removed');
+        }}
+      />
+    </div>
   );
 }
 

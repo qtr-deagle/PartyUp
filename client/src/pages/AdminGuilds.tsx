@@ -5,6 +5,13 @@ import GuildEmblem from '@/components/GuildEmblem';
 import { Check, ChevronRight, Coins, Edit2, Gift, Plus, Trash2, Trophy, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
+import { useClientPagination } from '@/hooks/usePagination';
+import { useSortable } from '@/hooks/useSortable';
+import SortableTh from '@/components/SortableTh';
+import TablePagination from '@/components/TablePagination';
+import ConfirmActionDialog from '@/components/ConfirmActionDialog';
+import { instantUndoable, runUndoable, usePendingUndoKeys } from '@/lib/undoable';
+import { formatDateTime } from '@/lib/datetime';
 import {
   adjustPointsByEmail,
   deleteGuild,
@@ -56,7 +63,7 @@ export default function AdminGuilds() {
   const [standings, setStandings] = useState<GuildStanding[]>([]);
   const [period, setPeriod] = useState<LeaderboardPeriod>('month');
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmitting = false;
 
   const [handling, setHandling] = useState<{ row: RedemptionRow; status: 'fulfilled' | 'rejected' } | null>(null);
   const [handleNotes, setHandleNotes] = useState('');
@@ -64,6 +71,7 @@ export default function AdminGuilds() {
   const [disbanding, setDisbanding] = useState<Pick<GuildStanding, 'guild_id' | 'name' | 'member_count'> | null>(null);
   const [viewingGuildId, setViewingGuildId] = useState<string | null>(null);
   const [adjust, setAdjust] = useState({ email: '', amount: '', note: '' });
+  const [confirmAdjust, setConfirmAdjust] = useState(false);
 
   const load = useCallback(
     async (silent = false) => {
@@ -91,28 +99,45 @@ export default function AdminGuilds() {
 
   const pendingCount = useMemo(() => redemptions.filter((row) => row.status === 'pending').length, [redemptions]);
 
-  const submitHandle = async () => {
+  const pendingKeys = usePendingUndoKeys();
+  const shownRedemptions = redemptions.filter((row) => !pendingKeys.has(`redemption:${row.id}`));
+  // Click a column title: ascending, descending, then off (newest first).
+  const redemptionSort = useSortable(
+    shownRedemptions,
+    {
+      reward: (r) => r.reward?.title,
+      requester: (r) => r.user?.display_name,
+      cost: (r) => Number(r.cost),
+      status: (r) => r.status,
+      requested: (r) => r.created_at,
+    },
+    { key: 'requested', direction: 'desc' }
+  );
+  const redemptionsPage = useClientPagination(redemptionSort.sorted, [statusFilter, redemptionSort.sort]);
+
+  const submitHandle = () => {
     if (!handling) return;
     if (handling.status === 'rejected' && !handleNotes.trim()) {
       toast.error('Add a reason so the user knows why it was declined.');
       return;
     }
-    setIsSubmitting(true);
-    const { error } = await handleRedemption(handling.row.id, handling.status, handleNotes);
-    setIsSubmitting(false);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    toast.success(handling.status === 'fulfilled' ? 'Marked as fulfilled' : `Declined and refunded ${handling.row.cost} coins`);
+    const { row, status } = handling;
+    const notes = handleNotes;
     setHandling(null);
     setHandleNotes('');
-    void load(true);
+    runUndoable({
+      key: `redemption:${row.id}`,
+      message: status === 'fulfilled' ? `Fulfilling "${row.reward?.title ?? 'reward'}"…` : `Declining "${row.reward?.title ?? 'reward'}"…`,
+      commit: () => handleRedemption(row.id, status, notes),
+      onCommitted: () => void load(true),
+      success: status === 'fulfilled' ? 'Marked as fulfilled' : `Declined and refunded ${row.cost} coins`,
+      error: 'Could not update the redemption',
+    });
   };
 
-  const submitReward = async () => {
+  const submitReward = () => {
     if (!editingReward) return;
-    const { values } = editingReward;
+    const { values, id } = editingReward;
     if (values.title.trim().length < 2) {
       toast.error('Give the reward a title.');
       return;
@@ -121,44 +146,56 @@ export default function AdminGuilds() {
       toast.error('Cost must be a whole number above 0.');
       return;
     }
-    setIsSubmitting(true);
-    const { error } = await saveReward(values, editingReward.id);
-    setIsSubmitting(false);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    toast.success(editingReward.id ? 'Reward updated' : 'Reward added');
     setEditingReward(null);
-    void load(true);
+    runUndoable({
+      key: `reward-save:${id ?? values.title.trim().toLowerCase()}`,
+      message: id ? `Saving "${values.title.trim()}"…` : `Adding "${values.title.trim()}"…`,
+      commit: () => saveReward(values, id),
+      onCommitted: () => void load(true),
+      success: id ? 'Reward updated' : 'Reward added',
+      error: id ? 'Could not update reward' : 'Could not add reward',
+    });
   };
 
-  const toggleReward = async (reward: GuildReward) => {
-    const { error } = await saveReward(
-      { title: reward.title, description: reward.description ?? '', cost: reward.cost, audience: reward.audience, stock: reward.stock, is_active: !reward.is_active },
-      reward.id
-    );
-    if (error) toast.error(error.message);
-    else void load(true);
-  };
+  const rewardInput = (reward: GuildReward, isActive: boolean): RewardInput => ({
+    title: reward.title,
+    description: reward.description ?? '',
+    cost: reward.cost,
+    audience: reward.audience,
+    stock: reward.stock,
+    is_active: isActive,
+  });
 
+  // A silent catalog toggle: save now, Undo flips it back.
+  const toggleReward = (reward: GuildReward) =>
+    instantUndoable({
+      key: `reward-toggle:${reward.id}`,
+      run: () => saveReward(rewardInput(reward, !reward.is_active), reward.id),
+      revert: () => saveReward(rewardInput(reward, reward.is_active), reward.id),
+      success: reward.is_active ? `"${reward.title}" hidden from the catalog` : `"${reward.title}" is visible again`,
+      error: 'Could not update reward',
+      onDone: () => void load(true),
+    });
+
+  // Disbanding can't be undone, so it's confirm-only.
   const submitDisband = async () => {
     if (!disbanding) return;
-    setIsSubmitting(true);
     const { error } = await deleteGuild(disbanding);
-    setIsSubmitting(false);
     if (error) {
       toast.error(error.message);
-      return;
+      return false;
     }
     toast.success(`${disbanding.name} was disbanded`);
     if (viewingGuildId === disbanding.guild_id) setViewingGuildId(null);
-    setDisbanding(null);
     void load(true);
   };
 
-  const submitAdjust = async () => {
+  const submitAdjust = () => {
     const amount = Number(adjust.amount);
+    if (!adjust.email.trim()) {
+      toast.error("Enter the user's email.");
+      return;
+    }
     if (!Number.isInteger(amount) || amount === 0) {
       toast.error('Amount must be a whole number, positive or negative.');
       return;
@@ -167,15 +204,24 @@ export default function AdminGuilds() {
       toast.error('Add a reason for the adjustment.');
       return;
     }
-    setIsSubmitting(true);
-    const result = await adjustPointsByEmail(adjust.email, amount, adjust.note);
-    setIsSubmitting(false);
-    if (result.error) {
-      toast.error(result.error.message);
-      return;
-    }
-    toast.success(`${amount > 0 ? 'Added' : 'Removed'} ${Math.abs(amount)} points ${amount > 0 ? 'to' : 'from'} ${result.displayName}`);
+    setConfirmAdjust(true);
+  };
+
+  const applyAdjust = () => {
+    const amount = Number(adjust.amount);
+    const { email, note } = adjust;
     setAdjust({ email: '', amount: '', note: '' });
+    const verb = amount > 0 ? `Adding ${amount} points to` : `Removing ${Math.abs(amount)} points from`;
+    runUndoable({
+      key: `points:${email.trim().toLowerCase()}:${Date.now()}`,
+      message: `${verb} ${email.trim()}…`,
+      commit: async () => {
+        const result = await adjustPointsByEmail(email, amount, note);
+        return { error: result.error };
+      },
+      success: `${amount > 0 ? 'Added' : 'Removed'} ${Math.abs(amount)} points ${amount > 0 ? 'to' : 'from'} ${email.trim()}`,
+      error: 'Could not adjust points',
+    });
   };
 
   const tabs: { id: Tab; label: string; icon: typeof Gift; badge?: number }[] = [
@@ -226,16 +272,25 @@ export default function AdminGuilds() {
               <option value="rejected">Declined</option>
               <option value="">All</option>
             </select>
-            <div className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
+            <div data-paginated className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full">
+                {/* Fixed column widths so sorting or paging doesn't shift the columns. */}
+                <table className="w-full table-fixed [&_td]:whitespace-nowrap" style={{ minWidth: 1160 }}>
+                  <colgroup>
+                    <col />
+                    <col style={{ width: 240 }} />
+                    <col style={{ width: 120 }} />
+                    <col style={{ width: 170 }} />
+                    <col style={{ width: 210 }} />
+                    <col style={{ width: 220 }} />
+                  </colgroup>
                   <thead>
                     <tr className="border-b border-border bg-secondary">
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Reward</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Requested by</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Cost</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Status</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Requested</th>
+                      <SortableTh label="Reward" sortKey="reward" sort={redemptionSort.sort} onSort={redemptionSort.toggle} />
+                      <SortableTh label="Requested by" sortKey="requester" sort={redemptionSort.sort} onSort={redemptionSort.toggle} />
+                      <SortableTh label="Cost" sortKey="cost" sort={redemptionSort.sort} onSort={redemptionSort.toggle} />
+                      <SortableTh label="Status" sortKey="status" sort={redemptionSort.sort} onSort={redemptionSort.toggle} />
+                      <SortableTh label="Requested" sortKey="requested" sort={redemptionSort.sort} onSort={redemptionSort.toggle} />
                       <th className="px-6 py-4 text-right text-sm font-bold text-foreground">Actions</th>
                     </tr>
                   </thead>
@@ -244,17 +299,19 @@ export default function AdminGuilds() {
                       <tr>
                         <td colSpan={6} className="px-6 py-8 text-center text-sm text-muted-foreground">Loading...</td>
                       </tr>
-                    ) : redemptions.length === 0 ? (
+                    ) : shownRedemptions.length === 0 ? (
                       <tr>
                         <td colSpan={6} className="px-6 py-8 text-center text-sm text-muted-foreground">No redemptions here.</td>
                       </tr>
                     ) : (
-                      redemptions.map((row) => (
+                      redemptionsPage.pageItems.map((row) => (
                         <tr key={row.id} className="border-b border-border last:border-0">
-                          <td className="px-6 py-4 text-sm font-medium text-foreground">{row.reward?.title ?? 'Reward'}</td>
+                          <td className="px-6 py-4 text-sm font-medium text-foreground truncate" title={row.reward?.title ?? undefined}>
+                            {row.reward?.title ?? 'Reward'}
+                          </td>
                           <td className="px-6 py-4 text-sm">
-                            <p className="font-medium text-foreground">{row.user?.display_name ?? 'Unknown'}</p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="truncate font-medium text-foreground">{row.user?.display_name ?? 'Unknown'}</p>
+                            <p className="truncate text-xs text-muted-foreground">
                               {row.user?.email ?? ''} · {roleLabel(row.user?.role)}
                             </p>
                           </td>
@@ -263,9 +320,9 @@ export default function AdminGuilds() {
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_STYLE[row.status]}`}>
                               {row.status === 'rejected' ? 'declined' : row.status}
                             </span>
-                            {row.admin_notes && <p className="mt-1 text-xs text-muted-foreground">{row.admin_notes}</p>}
+                            {row.admin_notes && <p className="mt-1 truncate text-xs text-muted-foreground" title={row.admin_notes}>{row.admin_notes}</p>}
                           </td>
-                          <td className="px-6 py-4 text-sm text-muted-foreground">{new Date(row.created_at).toLocaleString()}</td>
+                          <td className="px-6 py-4 text-sm text-muted-foreground">{formatDateTime(row.created_at)}</td>
                           <td className="px-6 py-4 text-right">
                             {row.status === 'pending' && (
                               <div className="flex justify-end gap-2">
@@ -290,6 +347,7 @@ export default function AdminGuilds() {
                   </tbody>
                 </table>
               </div>
+              <TablePagination pagination={redemptionsPage} itemLabel="redemptions" />
             </div>
           </div>
         )}
@@ -408,8 +466,7 @@ export default function AdminGuilds() {
             <input type="number" placeholder="Amount (e.g. 50 or -20)" value={adjust.amount} onChange={(e) => setAdjust({ ...adjust, amount: e.target.value })} className={inputClass} />
             <input type="text" placeholder="Reason (shown in their points history)" value={adjust.note} onChange={(e) => setAdjust({ ...adjust, note: e.target.value })} className={inputClass} />
             <button
-              onClick={() => void submitAdjust()}
-              disabled={isSubmitting}
+              onClick={submitAdjust}
               className="w-full px-4 py-2.5 bg-primary text-primary-foreground rounded-lg font-medium hover:shadow-lg transition-smooth disabled:opacity-50"
             >
               Apply Adjustment
@@ -558,36 +615,34 @@ export default function AdminGuilds() {
       {/* Guild inspector */}
       {viewingGuildId && <GuildDetailDialog guildId={viewingGuildId} onClose={() => setViewingGuildId(null)} onDisband={setDisbanding} />}
 
-      {/* Disband confirmation */}
-      {disbanding && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card rounded-2xl max-w-md w-full shadow-elevation-3 border border-border">
-            <div className="p-6 border-b border-border">
-              <h3 className="text-lg font-bold text-foreground">Disband {disbanding.name}?</h3>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-muted-foreground">
-                All {disbanding.member_count} members are removed from the guild. Everyone keeps their personal points and coins. This can't be undone.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setDisbanding(null)}
-                  className="flex-1 border border-border text-foreground py-2.5 rounded-lg hover:bg-secondary font-semibold transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => void submitDisband()}
-                  disabled={isSubmitting}
-                  className="flex-1 bg-destructive text-white py-2.5 rounded-lg disabled:opacity-50 font-semibold transition-colors hover:bg-destructive/90"
-                >
-                  Disband
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Disband confirmation (no Undo: the guild is deleted) */}
+      <ConfirmActionDialog
+        open={disbanding !== null}
+        onOpenChange={(open) => !open && setDisbanding(null)}
+        tone="destructive"
+        title={`Disband ${disbanding?.name ?? 'guild'}?`}
+        description={`All ${disbanding?.member_count ?? 0} members are removed from the guild and notified. Everyone keeps their personal points and coins. This can't be undone.`}
+        typeToConfirm={disbanding?.name}
+        confirmLabel="Disband guild"
+        onConfirm={submitDisband}
+      />
+
+      {/* Adjust points confirmation */}
+      <ConfirmActionDialog
+        open={confirmAdjust}
+        onOpenChange={setConfirmAdjust}
+        title={Number(adjust.amount) > 0 ? `Give ${adjust.amount} points?` : `Remove ${Math.abs(Number(adjust.amount))} points?`}
+        description={
+          <>
+            {Number(adjust.amount) > 0 ? 'Adds' : 'Removes'}{' '}
+            <span className="font-medium text-foreground">{Math.abs(Number(adjust.amount))} points</span>{' '}
+            {Number(adjust.amount) > 0 ? 'to' : 'from'} <span className="font-medium text-foreground">{adjust.email.trim()}</span>.
+            Reason: &ldquo;{adjust.note.trim()}&rdquo;. It shows in their points history and the Audit Log.
+          </>
+        }
+        confirmLabel="Apply adjustment"
+        onConfirm={applyAdjust}
+      />
     </AdminLayout>
   );
 }

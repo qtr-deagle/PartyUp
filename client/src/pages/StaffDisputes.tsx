@@ -4,6 +4,8 @@ import { ImageLightbox } from '@/components/ImageLightbox';
 import { Camera, Search, AlertTriangle, CheckCircle, XCircle, Eye } from 'lucide-react';
 import { getReportEvidenceUrl, listReports, updateReportStatus, type ReportRow, type ReportStatus } from '@/lib/reports';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
+import SortableTh from '@/components/SortableTh';
+import { useSortable } from '@/hooks/useSortable';
 
 /**
  * Staff User Reports - Review Community-Reported Users
@@ -49,6 +51,19 @@ export default function StaffDisputes() {
           (report.reporter?.display_name ?? '').toLowerCase().includes(searchTerm.toLowerCase())
       ),
     [reports, searchTerm]
+  );
+
+  // Click a column title: ascending, descending, then off (newest first).
+  const reportSort = useSortable(
+    filteredReports,
+    {
+      reporter: (r) => r.reporter?.display_name,
+      reported: (r) => r.reported_user?.display_name,
+      reason: (r) => `${r.report_type} ${r.details}`,
+      time: (r) => r.created_at,
+      status: (r) => r.status,
+    },
+    { key: 'time', direction: 'desc' }
   );
 
   const handleInvestigate = async (report: ReportRow) => {
@@ -101,14 +116,23 @@ export default function StaffDisputes() {
         {/* User Reports Table */}
         <div className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            {/* Fixed column widths so sorting or paging doesn't shift the columns. */}
+            <table className="w-full table-fixed [&_td]:whitespace-nowrap" style={{ minWidth: 1080 }}>
+              <colgroup>
+                <col style={{ width: 180 }} />
+                <col style={{ width: 180 }} />
+                <col />
+                <col style={{ width: 210 }} />
+                <col style={{ width: 140 }} />
+                <col style={{ width: 170 }} />
+              </colgroup>
               <thead className="border-b border-border bg-secondary">
                 <tr>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Reporter</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Reported User</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Reason</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Time</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Status</th>
+                  <SortableTh label="Reporter" sortKey="reporter" sort={reportSort.sort} onSort={reportSort.toggle} />
+                  <SortableTh label="Reported User" sortKey="reported" sort={reportSort.sort} onSort={reportSort.toggle} />
+                  <SortableTh label="Reason" sortKey="reason" sort={reportSort.sort} onSort={reportSort.toggle} />
+                  <SortableTh label="Time" sortKey="time" sort={reportSort.sort} onSort={reportSort.toggle} />
+                  <SortableTh label="Status" sortKey="status" sort={reportSort.sort} onSort={reportSort.toggle} />
                   <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Action</th>
                 </tr>
               </thead>
@@ -126,11 +150,11 @@ export default function StaffDisputes() {
                     </td>
                   </tr>
                 ) : (
-                  filteredReports.map((report) => (
+                  reportSort.sorted.map((report) => (
                     <tr key={report.id} className="border-b border-border hover:bg-secondary/50 transition-colors">
-                      <td className="px-6 py-4 text-sm font-medium text-foreground">{report.reporter?.display_name ?? 'Unknown'}</td>
-                      <td className="px-6 py-4 text-sm text-muted-foreground">{report.reported_user?.display_name ?? '—'}</td>
-                      <td className="px-6 py-4 text-sm text-muted-foreground max-w-xs truncate" title={report.details}>
+                      <td className="px-6 py-4 text-sm font-medium text-foreground truncate">{report.reporter?.display_name ?? 'Unknown'}</td>
+                      <td className="px-6 py-4 text-sm text-muted-foreground truncate">{report.reported_user?.display_name ?? '—'}</td>
+                      <td className="px-6 py-4 text-sm text-muted-foreground truncate" title={report.details}>
                         <span className="capitalize font-medium text-foreground">{report.report_type}</span> — {report.details}
                       </td>
                       <td className="px-6 py-4 text-sm text-muted-foreground">{new Date(report.created_at).toLocaleString()}</td>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'wouter';
-import { AlertCircle, Car, CheckCircle, Download, ExternalLink, RefreshCw, ShieldCheck, Siren, UserPlus, XCircle } from 'lucide-react';
+import { AlertCircle, Car, CheckCircle, Download, ExternalLink, ShieldCheck, Siren, UserPlus, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import AiAddressBadge from '@/components/AiAddressBadge';
@@ -10,9 +10,14 @@ import { useAiResultPoll } from '@/hooks/useAiResultPoll';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
 import { getSignedImageUrl, listIdVerifications, reviewIdVerification, type IdVerificationRow } from '@/lib/verification';
 import { listReports, updateReportStatus, type ReportRow } from '@/lib/reports';
-import { resolveSosAlert, type SosAlertDetail } from '@/lib/sos';
+import { type SosAlertDetail } from '@/lib/sos';
+import ConfirmActionDialog from '@/components/ConfirmActionDialog';
+import ResolveSosDialog, { useSosResolving } from '@/components/sos/ResolveSosDialog';
+import { runUndoable, usePendingUndoKeys } from '@/lib/undoable';
+import { formatDateTime } from '@/lib/datetime';
 import { promoteToStaff, type StaffRole } from '@/lib/adminStaff';
 import { getVehiclePhotoUrl, listVehicles, reviewVehicleVerification, type VehicleRow } from '@/lib/vehicles';
+import DriverLicensePanel from '@/components/DriverLicensePanel';
 
 type ActionId = 'id' | 'vehicle' | 'report' | 'sos' | 'staff';
 type Role = 'admin' | 'guild_leader';
@@ -28,7 +33,6 @@ interface AdminQuickActionsProps {
   getExportRows: () => (string | number)[][];
   /** Called after any action changes data, so the dashboard can reload. */
   onChanged: () => void;
-  isRefreshing: boolean;
 }
 
 const inputClass =
@@ -47,7 +51,6 @@ export default function AdminQuickActions({
   sosAlerts,
   getExportRows,
   onChanged,
-  isRefreshing,
 }: AdminQuickActionsProps) {
   const [openAction, setOpenAction] = useState<ActionId | null>(null);
   const reportsHref = role === 'admin' ? '/admin/support?view=reports' : '/staff/disputes';
@@ -69,19 +72,16 @@ export default function AdminQuickActions({
 
   const actions = [
     { id: 'id' as const, label: 'Review Next ID', hint: pendingIdCount > 0 ? `${pendingIdCount} pending` : 'Queue is clear', count: pendingIdCount, icon: ShieldCheck },
-    ...(role === 'guild_leader'
-      ? [
-          {
-            id: 'vehicle' as const,
-            label: 'Review Next Vehicle',
-            hint: pendingVehicleCount > 0 ? `${pendingVehicleCount} pending` : 'Queue is clear',
-            count: pendingVehicleCount,
-            icon: Car,
-          },
-        ]
-      : []),
+    {
+      id: 'vehicle' as const,
+      label: 'Review Next Vehicle',
+      hint: pendingVehicleCount > 0 ? `${pendingVehicleCount} pending` : 'Queue is clear',
+      count: pendingVehicleCount,
+      icon: Car,
+    },
     { id: 'report' as const, label: 'Triage Reports', hint: openReportCount > 0 ? `${openReportCount} open` : 'No open reports', count: openReportCount, icon: AlertCircle },
-    { id: 'sos' as const, label: 'Resolve SOS', hint: sosAlerts.length > 0 ? `${sosAlerts.length} active` : 'No active alerts', count: sosAlerts.length, icon: Siren },
+    // SOS stays red when active: it's an emergency, not just a queue.
+    { id: 'sos' as const, label: 'Resolve SOS', hint: sosAlerts.length > 0 ? `${sosAlerts.length} active` : 'No active alerts', count: sosAlerts.length, icon: Siren, urgent: true },
     ...(role === 'admin' ? [{ id: 'staff' as const, label: 'Add Guild Leader', hint: 'Promote by email', count: 0, icon: UserPlus }] : []),
   ];
 
@@ -91,16 +91,29 @@ export default function AdminQuickActions({
         {actions.map((action) => {
           const Icon = action.icon;
           const needsAttention = action.count > 0;
+          // Waiting work is orange (pending); red is kept for danger (active SOS).
+          const urgent = 'urgent' in action && action.urgent;
+          const tone = urgent
+            ? {
+                tile: 'bg-destructive/5 border-destructive/30 hover:border-destructive/60',
+                chip: 'bg-destructive/10 text-destructive',
+                badge: 'bg-destructive text-destructive-foreground',
+              }
+            : {
+                tile: 'bg-orange-500/5 border-orange-500/30 hover:border-orange-500/60',
+                chip: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+                badge: 'bg-orange-500 text-white',
+              };
           return (
             <button
               key={action.id}
               type="button"
               onClick={() => setOpenAction(action.id)}
               className={`${tileClass} ${
-                needsAttention ? 'bg-destructive/5 border-destructive/30 hover:border-destructive/60' : 'bg-card border-border/70 hover:border-primary/40'
+                needsAttention ? tone.tile : 'bg-card border-border/70 hover:border-primary/40'
               }`}
             >
-              <span className={`${iconChipClass} ${needsAttention ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'}`}>
+              <span className={`${iconChipClass} ${needsAttention ? tone.chip : 'bg-primary/10 text-primary'}`}>
                 <Icon className="w-[18px] h-[18px]" />
               </span>
               <div className="min-w-0 flex-1">
@@ -108,7 +121,7 @@ export default function AdminQuickActions({
                 <p className="text-xs text-muted-foreground truncate">{action.hint}</p>
               </div>
               {needsAttention && (
-                <span className="min-w-6 h-6 px-1.5 rounded-full bg-destructive text-destructive-foreground text-xs font-bold flex items-center justify-center shrink-0 tabular-nums">
+                <span className={`min-w-6 h-6 px-1.5 rounded-full ${tone.badge} text-xs font-bold flex items-center justify-center shrink-0 tabular-nums`}>
                   {action.count > 99 ? '99+' : action.count}
                 </span>
               )}
@@ -122,20 +135,6 @@ export default function AdminQuickActions({
           <div className="min-w-0">
             <p className="text-sm font-semibold text-foreground truncate">Export Report</p>
             <p className="text-xs text-muted-foreground truncate">Download CSV</p>
-          </div>
-        </button>
-        <button
-          type="button"
-          onClick={onChanged}
-          disabled={isRefreshing}
-          className={`${tileClass} bg-card border-border/70 hover:border-primary/40 disabled:opacity-60 disabled:hover:translate-y-0`}
-        >
-          <span className={`${iconChipClass} bg-primary/10 text-primary`}>
-            <RefreshCw className={`w-[18px] h-[18px] ${isRefreshing ? 'animate-spin' : ''}`} />
-          </span>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground truncate">Refresh Data</p>
-            <p className="text-xs text-muted-foreground truncate">{isRefreshing ? 'Updating...' : 'Reload all metrics'}</p>
           </div>
         </button>
       </div>
@@ -155,13 +154,16 @@ export default function AdminQuickActions({
 
 /** Oldest pending ID first; after each decision the next one loads in place. */
 function ReviewIdAction({ role, onChanged }: { role: Role; onChanged: () => void }) {
-  const [queue, setQueue] = useState<IdVerificationRow[] | null>(null);
+  const [rawQueue, setQueue] = useState<IdVerificationRow[] | null>(null);
+  const pendingKeys = usePendingUndoKeys();
+  // Rows inside their Undo window drop out; Undo brings them back.
+  const queue = rawQueue?.filter((row) => !pendingKeys.has(`id-review:${row.id}`)) ?? null;
+  const [confirmApprove, setConfirmApprove] = useState(false);
   const [images, setImages] = useState<{ front: string | null; back: string | null; selfie: string | null }>({ front: null, back: null, selfie: null });
   const [rejectReason, setRejectReason] = useState('');
   const [otherReason, setOtherReason] = useState('');
   // Picking "Other" requires typing the reason; that text is what gets saved.
   const finalRejectReason = rejectReason === 'Other' ? otherReason.trim() : rejectReason;
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const loadQueue = useCallback(async () => {
     const { data, error } = await listIdVerifications('pending');
@@ -175,7 +177,7 @@ function ReviewIdAction({ role, onChanged }: { role: Role; onChanged: () => void
 
   // Live: new submissions join the queue and AI results replace "AI: pending".
   useTableRealtime('id_verifications', () => void loadQueue());
-  useAiResultPoll(queue, () => void loadQueue());
+  useAiResultPoll(rawQueue, () => void loadQueue());
 
   const current = queue?.[0] ?? null;
   const currentId = current?.id ?? null;
@@ -199,19 +201,22 @@ function ReviewIdAction({ role, onChanged }: { role: Role; onChanged: () => void
     };
   }, [currentId, frontPath, backPath, selfiePath]);
 
-  const decide = async (decision: 'approved' | 'rejected') => {
+  // Held for the Undo window (same key as the ID review page), so an
+  // undone decision never notifies or emails the traveler.
+  const decide = (decision: 'approved' | 'rejected') => {
     if (!current) return;
-    setIsSubmitting(true);
-    const notes = decision === 'approved' ? `Approved by ${role} after manual review.` : finalRejectReason;
-    const { error } = await reviewIdVerification(current.id, decision, notes);
-    setIsSubmitting(false);
-    if (error) {
-      toast.error(`Failed to update verification: ${error.message}`);
-      return;
-    }
-    toast.success(decision === 'approved' ? 'ID approved' : 'ID rejected');
-    setQueue((q) => (q ? q.slice(1) : q));
-    onChanged();
+    const row = current;
+    const name = row.profiles?.display_name ?? 'this traveler';
+    const notes = decision === 'approved' ? `Approved by ${role === 'admin' ? 'an admin' : 'a Guild Leader'} after manual review.` : finalRejectReason;
+    runUndoable({
+      key: `id-review:${row.id}`,
+      message: decision === 'approved' ? `Approving ${name}'s ID…` : `Rejecting ${name}'s ID…`,
+      description: 'They get a notification and an email once this saves.',
+      commit: () => reviewIdVerification(row.id, decision, notes),
+      onCommitted: onChanged,
+      success: decision === 'approved' ? `${name}'s ID approved` : `${name}'s ID rejected`,
+      error: decision === 'approved' ? 'Failed to approve ID' : 'Failed to reject ID',
+    });
   };
 
   if (queue === null) {
@@ -232,7 +237,7 @@ function ReviewIdAction({ role, onChanged }: { role: Role; onChanged: () => void
       <DialogHeader>
         <DialogTitle>Review Next ID</DialogTitle>
         <DialogDescription>
-          {current.profiles?.display_name ?? 'Unknown user'} · {current.document_type.replace('_', ' ')} · submitted {new Date(current.submitted_at).toLocaleString()} ·{' '}
+          {current.profiles?.display_name ?? 'Unknown user'} · {current.document_type.replace('_', ' ')} · submitted {formatDateTime(current.submitted_at)} ·{' '}
           {queue.length} in queue
         </DialogDescription>
       </DialogHeader>
@@ -294,22 +299,32 @@ function ReviewIdAction({ role, onChanged }: { role: Role; onChanged: () => void
       )}
 
       <DialogFooter>
-        <button onClick={() => decide('rejected')} disabled={!finalRejectReason || isSubmitting} className={`${primaryButton} bg-red-600 hover:bg-red-700 flex items-center gap-2`}>
+        <button onClick={() => decide('rejected')} disabled={!finalRejectReason} className={`${primaryButton} bg-red-600 hover:bg-red-700 flex items-center gap-2`}>
           <XCircle className="w-4 h-4" /> Reject
         </button>
-        <button onClick={() => decide('approved')} disabled={isSubmitting} className={`${primaryButton} bg-green-600 hover:bg-green-700 flex items-center gap-2`}>
+        <button onClick={() => setConfirmApprove(true)} className={`${primaryButton} bg-green-600 hover:bg-green-700 flex items-center gap-2`}>
           <CheckCircle className="w-4 h-4" /> Approve
         </button>
       </DialogFooter>
+
+      <ConfirmActionDialog
+        open={confirmApprove}
+        onOpenChange={setConfirmApprove}
+        title={`Approve ${current.profiles?.display_name ?? 'this'}'s ID?`}
+        description="Make sure the name, photo and Bulacan address match. They'll be verified, notified and emailed, and can join trips right away."
+        confirmLabel="Approve ID"
+        onConfirm={() => decide('approved')}
+      />
     </>
   );
 }
 
 /** Oldest open report first: resolve or dismiss with notes, or skip to the next. */
 function TriageReportAction({ reportsHref, onChanged }: { reportsHref: string; onChanged: () => void }) {
-  const [queue, setQueue] = useState<ReportRow[] | null>(null);
-  const [notes, setNotes] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [rawQueue, setQueue] = useState<ReportRow[] | null>(null);
+  const pendingKeys = usePendingUndoKeys();
+  const queue = rawQueue?.filter((row) => !pendingKeys.has(`report:${row.id}`)) ?? null;
+  const [deciding, setDeciding] = useState<'resolved' | 'dismissed' | null>(null);
   // Skipped reports stay out of the queue when a live refetch brings them back.
   const skippedRef = useRef(new Set<string>());
 
@@ -328,23 +343,26 @@ function TriageReportAction({ reportsHref, onChanged }: { reportsHref: string; o
   const current = queue?.[0] ?? null;
 
   const next = () => {
-    setNotes('');
-    if (current) skippedRef.current.add(current.id);
-    setQueue((q) => (q ? q.slice(1) : q));
+    if (!current) return;
+    const skippedId = current.id;
+    skippedRef.current.add(skippedId);
+    setQueue((q) => (q ? q.filter((r) => r.id !== skippedId) : q));
   };
 
-  const decide = async (status: 'resolved' | 'dismissed') => {
+  // Held for the Undo window (same key as the Support page), so an undone
+  // decision never messages the reporter.
+  const decide = (status: 'resolved' | 'dismissed', notes: string) => {
     if (!current) return;
-    setIsSubmitting(true);
-    const { error } = await updateReportStatus(current.id, status, notes);
-    setIsSubmitting(false);
-    if (error) {
-      toast.error(`Failed to update report: ${error.message}`);
-      return;
-    }
-    toast.success(status === 'resolved' ? 'Report resolved' : 'Report dismissed');
-    next();
-    onChanged();
+    const report = current;
+    runUndoable({
+      key: `report:${report.id}`,
+      message: status === 'resolved' ? 'Resolving report…' : 'Dismissing report…',
+      description: 'The reporter is told once this saves.',
+      commit: () => updateReportStatus(report.id, status, notes),
+      onCommitted: onChanged,
+      success: status === 'resolved' ? 'Report resolved. The reporter got a reply.' : 'Report dismissed. The reporter got a reply.',
+      error: 'Failed to update report',
+    });
   };
 
   if (queue === null) {
@@ -359,7 +377,7 @@ function TriageReportAction({ reportsHref, onChanged }: { reportsHref: string; o
       <DialogHeader>
         <DialogTitle className="capitalize">{current.report_type} report</DialogTitle>
         <DialogDescription>
-          Filed {new Date(current.created_at).toLocaleString()} · {queue.length} open
+          Filed {formatDateTime(current.created_at)} · {queue.length} open
         </DialogDescription>
       </DialogHeader>
 
@@ -372,42 +390,42 @@ function TriageReportAction({ reportsHref, onChanged }: { reportsHref: string; o
       </div>
       <p className="text-sm text-foreground whitespace-pre-wrap">{current.details}</p>
 
-      <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Resolution notes (optional)" className={inputClass} />
-
       <DialogFooter>
-        <button onClick={next} disabled={isSubmitting} className={secondaryButton}>
+        <button onClick={next} className={secondaryButton}>
           Skip
         </button>
-        <button onClick={() => decide('dismissed')} disabled={isSubmitting} className={`${primaryButton} bg-slate-600 hover:bg-slate-700`}>
+        <button onClick={() => setDeciding('dismissed')} className={`${primaryButton} bg-slate-600 hover:bg-slate-700`}>
           Dismiss
         </button>
-        <button onClick={() => decide('resolved')} disabled={isSubmitting} className={`${primaryButton} bg-green-600 hover:bg-green-700`}>
+        <button onClick={() => setDeciding('resolved')} className={`${primaryButton} bg-green-600 hover:bg-green-700`}>
           Resolve
         </button>
       </DialogFooter>
+
+      <ConfirmActionDialog
+        open={deciding !== null}
+        onOpenChange={(open) => !open && setDeciding(null)}
+        tone={deciding === 'dismissed' ? 'destructive' : 'default'}
+        title={deciding === 'resolved' ? 'Resolve this report?' : 'Dismiss this report?'}
+        description={
+          deciding === 'resolved'
+            ? 'The report is closed as handled and the reporter gets your notes as a reply.'
+            : 'The report is closed with no action and the reporter gets your notes as a reply.'
+        }
+        notes={{ label: 'Notes for the reporter', required: true, placeholder: 'What was done? The reporter sees this in their ticket.' }}
+        confirmLabel={deciding === 'resolved' ? 'Resolve report' : 'Dismiss report'}
+        onConfirm={(notes) => {
+          if (deciding) decide(deciding, notes);
+        }}
+      />
     </>
   );
 }
 
 /** Active alerts come from the dashboard's realtime hook, so resolved ones drop out on their own. */
 function ResolveSosAction({ alerts, sosHref }: { alerts: SosAlertDetail[]; sosHref: string }) {
-  const [resolvingId, setResolvingId] = useState<string | null>(null);
-  const [notes, setNotes] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const resolve = async () => {
-    if (!resolvingId) return;
-    setIsSubmitting(true);
-    const { error } = await resolveSosAlert(resolvingId, notes);
-    setIsSubmitting(false);
-    if (error) {
-      toast.error(`Failed to resolve SOS: ${error.message}`);
-      return;
-    }
-    toast.success('SOS alert resolved');
-    setResolvingId(null);
-    setNotes('');
-  };
+  const [resolving, setResolving] = useState<SosAlertDetail | null>(null);
+  const isResolving = useSosResolving();
 
   if (alerts.length === 0) {
     return <EmptyAction title="Resolve SOS" message="No active SOS alerts right now." linkLabel="Open SOS Center" linkHref={sosHref} />;
@@ -433,7 +451,7 @@ function ResolveSosAction({ alerts, sosHref }: { alerts: SosAlertDetail[]; sosHr
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-foreground truncate">{alert.profile?.display_name ?? 'Unknown user'}</p>
                 <p className="text-xs text-muted-foreground truncate">
-                  {new Date(alert.created_at).toLocaleString()}
+                  {formatDateTime(alert.created_at)}
                   {alert.trip ? ` · ${alert.trip.origin} → ${alert.trip.destination}` : ''}
                   {alert.profile?.phone ? ` · ${alert.profile.phone}` : ''}
                 </p>
@@ -449,29 +467,23 @@ function ResolveSosAction({ alerts, sosHref }: { alerts: SosAlertDetail[]; sosHr
                     Map <ExternalLink className="w-3 h-3" />
                   </a>
                 )}
-                {resolvingId !== alert.id && (
-                  <button onClick={() => { setResolvingId(alert.id); setNotes(''); }} className={`${primaryButton} bg-green-600 hover:bg-green-700 py-1.5`}>
+                {isResolving(alert.id) ? (
+                  <span className="px-3 py-1.5 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 text-xs font-semibold">Resolving…</span>
+                ) : (
+                  <button onClick={() => setResolving(alert)} className={`${primaryButton} bg-destructive hover:bg-destructive/90 py-1.5`}>
                     Resolve
                   </button>
                 )}
               </div>
             </div>
-            {resolvingId === alert.id && (
-              <div className="mt-3 space-y-2">
-                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="How was it resolved? (e.g. called traveler, confirmed safe)" className={inputClass} />
-                <div className="flex justify-end gap-2">
-                  <button onClick={() => setResolvingId(null)} className={secondaryButton}>
-                    Cancel
-                  </button>
-                  <button onClick={resolve} disabled={isSubmitting || !notes.trim()} className={`${primaryButton} bg-green-600 hover:bg-green-700`}>
-                    Confirm resolved
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         ))}
       </div>
+
+      <ResolveSosDialog
+        alert={resolving ? { id: resolving.id, created_at: resolving.created_at, name: resolving.profile?.display_name ?? null } : null}
+        onClose={() => setResolving(null)}
+      />
     </>
   );
 }
@@ -493,7 +505,6 @@ function ReviewVehicleAction({ onChanged }: { onChanged: () => void }) {
   const [otherReason, setOtherReason] = useState('');
   // Picking "Other" requires typing the reason; that text is what gets saved.
   const finalRejectReason = rejectReason === 'Other' ? otherReason.trim() : rejectReason;
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const loadQueue = useCallback(async () => {
     const { data, error } = await listVehicles('pending');
@@ -542,19 +553,22 @@ function ReviewVehicleAction({ onChanged }: { onChanged: () => void }) {
     };
   }, [currentId]);
 
-  const decide = async (decision: 'approved' | 'rejected') => {
+  const decide = (decision: 'approved' | 'rejected') => {
     if (!current) return;
-    setIsSubmitting(true);
-    const notes = decision === 'approved' ? 'Approved by a Guild Leader after manual review.' : finalRejectReason;
-    const { error } = await reviewVehicleVerification(current.id, decision, notes);
-    setIsSubmitting(false);
-    if (error) {
-      toast.error(`Failed to update vehicle: ${error.message}`);
-      return;
-    }
-    toast.success(decision === 'approved' ? 'Vehicle approved' : 'Vehicle rejected');
-    setQueue((q) => (q ? q.slice(1) : q));
-    onChanged();
+    const row = current;
+    const name = row.profiles?.display_name ?? 'this traveler';
+    const notes = decision === 'approved' ? 'Approved by an admin after manual review.' : finalRejectReason;
+    runUndoable({
+      key: `vehicle-review:${row.id}`,
+      message: decision === 'approved' ? `Approving ${name}'s vehicle…` : `Rejecting ${name}'s vehicle…`,
+      description: 'They get a notification and an email once this saves.',
+      onHide: () => setQueue((q) => (q ? q.filter((v) => v.id !== row.id) : q)),
+      onRestore: () => setQueue((q) => (q ? [row, ...q.filter((v) => v.id !== row.id)] : q)),
+      commit: () => reviewVehicleVerification(row.id, decision, notes),
+      onCommitted: onChanged,
+      success: decision === 'approved' ? 'Vehicle approved' : 'Vehicle rejected',
+      error: decision === 'approved' ? 'Failed to approve vehicle' : 'Failed to reject vehicle',
+    });
   };
 
   if (queue === null) {
@@ -569,7 +583,7 @@ function ReviewVehicleAction({ onChanged }: { onChanged: () => void }) {
       <DialogHeader>
         <DialogTitle>Review Next Vehicle</DialogTitle>
         <DialogDescription>
-          {current.profiles?.display_name ?? 'Unknown user'} · submitted {current.submitted_at ? new Date(current.submitted_at).toLocaleString() : '—'} ·{' '}
+          {current.profiles?.display_name ?? 'Unknown user'} · submitted {current.submitted_at ? formatDateTime(current.submitted_at) : '—'} ·{' '}
           {queue.length} in queue
         </DialogDescription>
       </DialogHeader>
@@ -598,6 +612,11 @@ function ReviewVehicleAction({ onChanged }: { onChanged: () => void }) {
         ))}
       </div>
 
+      {/* Approving the vehicle also approves this pending license. */}
+      <div className="border-t border-border pt-4">
+        <DriverLicensePanel key={current.user_id} userId={current.user_id} onOpenImage={(src) => window.open(src, '_blank', 'noreferrer')} />
+      </div>
+
       <select value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} className={inputClass}>
         <option value="">Rejection reason (required to reject)...</option>
         {VEHICLE_REJECT_REASONS.map((reason) => (
@@ -618,10 +637,10 @@ function ReviewVehicleAction({ onChanged }: { onChanged: () => void }) {
       )}
 
       <DialogFooter>
-        <button onClick={() => decide('rejected')} disabled={!finalRejectReason || isSubmitting} className={`${primaryButton} bg-red-600 hover:bg-red-700 flex items-center gap-2`}>
+        <button onClick={() => decide('rejected')} disabled={!finalRejectReason} className={`${primaryButton} bg-red-600 hover:bg-red-700 flex items-center gap-2`}>
           <XCircle className="w-4 h-4" /> Reject
         </button>
-        <button onClick={() => decide('approved')} disabled={isSubmitting} className={`${primaryButton} bg-green-600 hover:bg-green-700 flex items-center gap-2`}>
+        <button onClick={() => decide('approved')} className={`${primaryButton} bg-green-600 hover:bg-green-700 flex items-center gap-2`}>
           <CheckCircle className="w-4 h-4" /> Approve
         </button>
       </DialogFooter>
@@ -632,19 +651,24 @@ function ReviewVehicleAction({ onChanged }: { onChanged: () => void }) {
 function AddStaffAction({ onDone, onChanged }: { onDone: () => void; onChanged: () => void }) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<StaffRole>('guild_leader');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const target = email.trim();
 
-  const submit = async (e: FormEvent) => {
+  const submit = (e: FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    const { error } = await promoteToStaff(email, role);
-    setIsSubmitting(false);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    toast.success(`${email.trim()} is now ${role}`);
-    onChanged();
+    if (target) setConfirming(true);
+  };
+
+  const promote = () => {
+    const label = role === 'admin' ? 'an admin' : 'a Guild Leader';
+    runUndoable({
+      key: `promote:${target.toLowerCase()}`,
+      message: `Making ${target} ${label}…`,
+      commit: () => promoteToStaff(target, role),
+      onCommitted: onChanged,
+      success: `${target} is now ${label}`,
+      error: 'Could not promote',
+    });
     onDone();
   };
 
@@ -656,14 +680,29 @@ function AddStaffAction({ onDone, onChanged }: { onDone: () => void; onChanged: 
       </DialogHeader>
       <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@example.com" className={inputClass} autoFocus />
       <select value={role} onChange={(e) => setRole(e.target.value as StaffRole)} className={inputClass}>
-        <option value="guild_leader">Guild Leader: reviews reports, IDs and SOS, runs a guild</option>
-        <option value="admin">Admin: full access</option>
+        <option value="guild_leader">Guild Leader: founds and runs a guild</option>
+        <option value="admin">Admin: full access to this console</option>
       </select>
       <DialogFooter>
-        <button type="submit" disabled={isSubmitting || !email.trim()} className={`${primaryButton} bg-primary hover:bg-primary/90`}>
+        <button type="submit" disabled={!target} className={`${primaryButton} bg-primary hover:bg-primary/90`}>
           Promote
         </button>
       </DialogFooter>
+
+      <ConfirmActionDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        tone={role === 'admin' ? 'destructive' : 'default'}
+        title={role === 'admin' ? 'Give full admin access?' : 'Make this traveler a Guild Leader?'}
+        description={
+          role === 'admin'
+            ? 'Admins can see ID documents, change roles and run the platform. They leave any guild they are in.'
+            : `${target} skips the application and can found and run a guild right away.`
+        }
+        typeToConfirm={role === 'admin' ? target : undefined}
+        confirmLabel={role === 'admin' ? 'Make admin' : 'Make Guild Leader'}
+        onConfirm={promote}
+      />
     </form>
   );
 }

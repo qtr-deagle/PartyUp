@@ -7,6 +7,11 @@ import GuildAuditLogDialog from '@/components/GuildAuditLogDialog';
 import GuildEmblem from '@/components/GuildEmblem';
 import { ImageLightbox } from '@/components/ImageLightbox';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
+import { useClientPagination } from '@/hooks/usePagination';
+import TablePagination from '@/components/TablePagination';
+import ConfirmActionDialog from '@/components/ConfirmActionDialog';
+import { instantUndoable, runUndoable } from '@/lib/undoable';
+import { formatDateTime } from '@/lib/datetime';
 import { updateReportStatus, type ReportStatus } from '@/lib/reports';
 import {
   getTicketMessages,
@@ -56,17 +61,20 @@ export default function AdminSupport() {
     return requested === 'reports' || requested === 'questions' ? requested : 'all';
   });
   const [decision, setDecision] = useState<{ status: ReportStatus; notes: string } | null>(null);
-  const [isDeciding, setIsDeciding] = useState(false);
+  const [reportPatch, setReportPatch] = useState<Record<string, ReportStatus>>({});
+  const [confirmReply, setConfirmReply] = useState(false);
   const [auditGuild, setAuditGuild] = useState<SupportTicketRow['guild']>(null);
   const [tickets, setTickets] = useState<SupportTicketRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<TicketStatus | 'all'>('open');
+  // ?report=<id> (from the dashboard's Recent Open Reports) opens that
+  // report's ticket. Its ticket may already be answered, so show all statuses.
+  const [linkedReportId, setLinkedReportId] = useState(() => new URLSearchParams(search).get('report'));
+  const [statusFilter, setStatusFilter] = useState<TicketStatus | 'all'>(() => (linkedReportId ? 'all' : 'open'));
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<TicketMessageRow[]>([]);
   const [photos, setPhotos] = useState<string[]>([]);
   const [reply, setReply] = useState('');
-  const [isSending, setIsSending] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   const loadTickets = useCallback(async (status: TicketStatus | 'all', silent = false) => {
@@ -87,7 +95,20 @@ export default function AdminSupport() {
     void loadTickets(statusFilter);
   }, [statusFilter, loadTickets]);
 
-  const selected = tickets.find((ticket) => ticket.id === selectedId) ?? null;
+  useEffect(() => {
+    if (!linkedReportId || isLoading) return;
+    const linked = tickets.find((ticket) => ticket.report_id === linkedReportId);
+    if (linked) setSelectedId(linked.id);
+    else toast.error('That report could not be found.');
+    setLinkedReportId(null);
+  }, [linkedReportId, isLoading, tickets]);
+
+  const selectedRaw = tickets.find((ticket) => ticket.id === selectedId) ?? null;
+  // Show a held report decision right away.
+  const selected =
+    selectedRaw?.report && reportPatch[selectedRaw.report.id]
+      ? { ...selectedRaw, report: { ...selectedRaw.report, status: reportPatch[selectedRaw.report.id] } }
+      : selectedRaw;
   const selectedPhotoKey = selected?.evidence_paths.join('|') ?? '';
 
   useEffect(() => {
@@ -121,45 +142,64 @@ export default function AdminSupport() {
         (ticket.guild?.name ?? '').toLowerCase().includes(term))
     );
   }, [tickets, searchTerm, view]);
+  const ticketsPage = useClientPagination(filteredTickets, [searchTerm, view, statusFilter]);
 
+  // A sent message can't be unsent, so replies are confirm-only.
   const handleReply = async () => {
-    if (!selected || !reply.trim()) return;
-    setIsSending(true);
-    const { error } = await replyToTicket(selected.id, reply);
-    setIsSending(false);
+    if (!selected || !reply.trim()) return false;
+    const ticketId = selected.id;
+    const { error } = await replyToTicket(ticketId, reply);
     if (error) {
       toast.error(`Failed to send reply: ${error.message}`);
-      return;
+      return false;
     }
     setReply('');
     toast.success('Reply sent. The traveler was notified.');
-    await Promise.all([loadMessages(selected.id), loadTickets(statusFilter, true)]);
+    await Promise.all([loadMessages(ticketId), loadTickets(statusFilter, true)]);
   };
 
   // Report decisions go to reports (points, payments, counts) and the
-  // database replies to the reporter in this ticket.
-  const handleDecision = async (status: ReportStatus, notes?: string) => {
+  // database replies to the reporter in this ticket. Held for the Undo
+  // window so an undone decision never messages the reporter.
+  const handleDecision = (status: ReportStatus, notes?: string) => {
     if (!selected?.report) return;
-    setIsDeciding(true);
-    const { error } = await updateReportStatus(selected.report.id, status, notes ?? selected.report.resolution_notes ?? undefined);
-    setIsDeciding(false);
-    if (error) {
-      toast.error(`Failed to update report: ${error.message}`);
-      return;
-    }
-    setDecision(null);
-    toast.success(status === 'reviewing' ? 'Marked as investigating. The reporter was told.' : 'Report updated. The reporter got a reply.');
-    await Promise.all([loadTickets(statusFilter, true), loadMessages(selected.id)]);
+    const ticketId = selected.id;
+    const report = selected.report;
+    const label = status === 'reviewing' ? 'Marking as investigating' : status === 'resolved' ? 'Resolving report' : 'Dismissing report';
+    runUndoable({
+      key: `report:${report.id}`,
+      message: `${label}…`,
+      description: 'The reporter is told once this saves.',
+      onHide: () => setReportPatch((prev) => ({ ...prev, [report.id]: status })),
+      onRestore: () => setReportPatch(({ [report.id]: _, ...rest }) => rest),
+      commit: () => updateReportStatus(report.id, status, notes ?? report.resolution_notes ?? undefined),
+      onCommitted: () =>
+        void Promise.all([loadTickets(statusFilter, true), loadMessages(ticketId)]).then(() =>
+          setReportPatch(({ [report.id]: _, ...rest }) => rest)
+        ),
+      success:
+        status === 'reviewing'
+          ? 'Marked as investigating. The reporter was told.'
+          : status === 'resolved'
+            ? 'Report resolved. The reporter got a reply.'
+            : 'Report dismissed. The reporter got a reply.',
+      error: 'Failed to update report',
+    });
   };
 
-  const handleStatus = async (status: TicketStatus) => {
+  // Close/reopen is a silent status flip, so it saves now and Undo flips it back.
+  const handleStatus = (status: TicketStatus) => {
     if (!selected) return;
-    const { error } = await setTicketStatus(selected.id, status);
-    if (error) {
-      toast.error(`Failed to update ticket: ${error.message}`);
-      return;
-    }
-    await loadTickets(statusFilter, true);
+    const ticket = selected;
+    const previous = ticket.status;
+    void instantUndoable({
+      key: `ticket-status:${ticket.id}`,
+      run: () => setTicketStatus(ticket.id, status),
+      revert: () => setTicketStatus(ticket.id, previous),
+      success: status === 'closed' ? `Closed "${ticket.subject}"` : `Reopened "${ticket.subject}"`,
+      error: 'Failed to update ticket',
+      onDone: () => void loadTickets(statusFilter, true),
+    });
   };
 
   return (
@@ -211,14 +251,15 @@ export default function AdminSupport() {
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
           {/* Ticket list */}
-          <div className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
+          <div data-paginated className="self-start bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
             {isLoading ? (
               <p className="px-6 py-8 text-center text-sm text-muted-foreground">Loading...</p>
             ) : filteredTickets.length === 0 ? (
               <p className="px-6 py-8 text-center text-sm text-muted-foreground">No tickets found</p>
             ) : (
-              <ul className="divide-y divide-border max-h-[70vh] overflow-y-auto">
-                {filteredTickets.map((ticket) => (
+              <>
+              <ul className="divide-y divide-border">
+                {ticketsPage.pageItems.map((ticket) => (
                   <li key={ticket.id}>
                     <button
                       onClick={() => {
@@ -235,12 +276,14 @@ export default function AdminSupport() {
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {ticket.report && <span className="font-semibold text-destructive capitalize">{ticket.report.report_type} report · </span>}
-                        {ticket.user?.display_name ?? 'Unknown'} · {TICKET_CATEGORY_LABELS[ticket.category]} · {new Date(ticket.last_message_at).toLocaleString()}
+                        {ticket.user?.display_name ?? 'Unknown'} · {TICKET_CATEGORY_LABELS[ticket.category]} · {formatDateTime(ticket.last_message_at)}
                       </p>
                     </button>
                   </li>
                 ))}
               </ul>
+              <TablePagination pagination={ticketsPage} itemLabel="tickets" compact />
+              </>
             )}
           </div>
 
@@ -254,7 +297,7 @@ export default function AdminSupport() {
                   <div>
                     <h2 className="text-xl font-bold text-foreground">{selected.subject}</h2>
                     <p className="text-sm text-muted-foreground">
-                      {selected.user?.display_name ?? 'Unknown'} · {TICKET_CATEGORY_LABELS[selected.category]} · opened {new Date(selected.created_at).toLocaleString()}
+                      {selected.user?.display_name ?? 'Unknown'} · {TICKET_CATEGORY_LABELS[selected.category]} · opened {formatDateTime(selected.created_at)}
                     </p>
                   </div>
                   <div className="flex gap-2 shrink-0">
@@ -300,44 +343,21 @@ export default function AdminSupport() {
                     {selected.report.resolution_notes && (
                       <p className="text-xs text-muted-foreground whitespace-pre-wrap">Notes: {selected.report.resolution_notes}</p>
                     )}
-                    {(selected.report.status === 'open' || selected.report.status === 'reviewing') &&
-                      (decision ? (
-                        <div className="space-y-2">
-                          <textarea
-                            value={decision.notes}
-                            onChange={(e) => setDecision({ ...decision, notes: e.target.value })}
-                            rows={3}
-                            placeholder="What was done? The reporter sees this in their ticket."
-                            className="w-full bg-card border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                          />
-                          <div className="flex gap-2">
-                            <button onClick={() => setDecision(null)} className="flex-1 border border-border py-2 rounded-lg text-sm font-semibold hover:bg-secondary">
-                              Cancel
-                            </button>
-                            <button
-                              onClick={() => handleDecision(decision.status, decision.notes)}
-                              disabled={isDeciding}
-                              className={`flex-1 text-white py-2 rounded-lg text-sm font-semibold disabled:opacity-50 ${decision.status === 'resolved' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
-                            >
-                              {decision.status === 'resolved' ? 'Resolve report' : 'Dismiss report'}
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex gap-2 flex-wrap">
-                          {selected.report.status === 'open' && (
-                            <button onClick={() => handleDecision('reviewing')} disabled={isDeciding} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-semibold hover:bg-secondary disabled:opacity-50">
-                              <Eye className="w-4 h-4 text-primary" /> Investigate
-                            </button>
-                          )}
-                          <button onClick={() => setDecision({ status: 'resolved', notes: '' })} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-semibold hover:bg-secondary">
-                            <CheckCircle className="w-4 h-4 text-green-600" /> Resolve
+                    {(selected.report.status === 'open' || selected.report.status === 'reviewing') && (
+                      <div className="flex gap-2 flex-wrap">
+                        {selected.report.status === 'open' && (
+                          <button onClick={() => handleDecision('reviewing')} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-semibold hover:bg-secondary">
+                            <Eye className="w-4 h-4 text-primary" /> Investigate
                           </button>
-                          <button onClick={() => setDecision({ status: 'dismissed', notes: '' })} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-semibold hover:bg-secondary">
-                            <XCircle className="w-4 h-4 text-destructive" /> Dismiss
-                          </button>
-                        </div>
-                      ))}
+                        )}
+                        <button onClick={() => setDecision({ status: 'resolved', notes: '' })} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-semibold hover:bg-secondary">
+                          <CheckCircle className="w-4 h-4 text-green-600" /> Resolve
+                        </button>
+                        <button onClick={() => setDecision({ status: 'dismissed', notes: '' })} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-semibold hover:bg-secondary">
+                          <XCircle className="w-4 h-4 text-destructive" /> Dismiss
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -359,7 +379,7 @@ export default function AdminSupport() {
                           {message.from_staff ? `PartyUp (${message.sender?.display_name ?? 'admin'})` : (message.sender?.display_name ?? 'Traveler')}
                         </p>
                         <p className="text-sm whitespace-pre-wrap">{message.body}</p>
-                        <p className={`text-[11px] mt-1 ${message.from_staff ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>{new Date(message.created_at).toLocaleString()}</p>
+                        <p className={`text-[11px] mt-1 ${message.from_staff ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>{formatDateTime(message.created_at)}</p>
                       </div>
                     </div>
                   ))}
@@ -375,12 +395,12 @@ export default function AdminSupport() {
                     className="flex-1 bg-secondary border border-border rounded-lg px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary transition-colors"
                   />
                   <button
-                    onClick={handleReply}
-                    disabled={isSending || !reply.trim()}
+                    onClick={() => setConfirmReply(true)}
+                    disabled={!reply.trim()}
                     className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Send className="w-4 h-4" />
-                    {isSending ? 'Sending...' : 'Send'}
+                    Send
                   </button>
                 </div>
               </div>
@@ -388,6 +408,40 @@ export default function AdminSupport() {
           </div>
         </div>
       </div>
+
+      {/* Resolve / dismiss a report */}
+      <ConfirmActionDialog
+        open={decision !== null}
+        onOpenChange={(open) => !open && setDecision(null)}
+        tone={decision?.status === 'dismissed' ? 'destructive' : 'default'}
+        title={decision?.status === 'resolved' ? 'Resolve this report?' : 'Dismiss this report?'}
+        description={
+          decision?.status === 'resolved'
+            ? 'The report is closed as handled and the reporter gets your notes as a reply.'
+            : 'The report is closed with no action and the reporter gets your notes as a reply.'
+        }
+        notes={{
+          label: 'Notes for the reporter',
+          required: true,
+          placeholder: 'What was done? The reporter sees this in their ticket.',
+        }}
+        confirmLabel={decision?.status === 'resolved' ? 'Resolve report' : 'Dismiss report'}
+        onConfirm={(notes) => {
+          if (decision) handleDecision(decision.status, notes);
+        }}
+      />
+
+      {/* Reply (confirm only: messages can't be unsent) */}
+      <ConfirmActionDialog
+        open={confirmReply}
+        onOpenChange={setConfirmReply}
+        title={`Send this reply to ${selected?.user?.display_name ?? 'the traveler'}?`}
+        description="They get a notification right away, and a sent message can't be taken back."
+        confirmLabel="Send reply"
+        onConfirm={handleReply}
+      >
+        <p className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg bg-secondary px-3 py-2 text-sm text-foreground">{reply.trim()}</p>
+      </ConfirmActionDialog>
 
       <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
       <GuildAuditLogDialog guild={auditGuild} onClose={() => setAuditGuild(null)} />

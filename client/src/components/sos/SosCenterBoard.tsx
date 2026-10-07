@@ -6,8 +6,10 @@ import { CheckCircle2, Clock, Crosshair, History, MapPin, Phone, PhoneCall, Plan
 import { toast } from 'sonner';
 import { Link, useLocation, useSearch } from 'wouter';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getSosTrail, listSosAlerts, resolveSosAlert, type SosAlertDetail, type TrailPoint } from '@/lib/sos';
+import { getSosTrail, listSosAlerts, type SosAlertDetail, type TrailPoint } from '@/lib/sos';
 import { useActiveSosAlerts, useLivePositions } from '@/hooks/useSosRealtime';
+import ResolveSosDialog, { useSosResolving } from '@/components/sos/ResolveSosDialog';
+import { formatDateTime } from '@/lib/datetime';
 
 const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
 if (mapboxToken) {
@@ -79,7 +81,7 @@ const RESPONSE_STEPS = [
   { title: 'Call the traveler', body: 'Use the phone number on the alert. No answer or signal lost? Treat it as urgent.' },
   { title: 'Coordinate with trusted contacts', body: 'They were notified automatically. Ask if they have already reached the traveler.' },
   { title: 'Escalate if needed', body: 'If the traveler is in danger or unreachable, call 911 and share the coordinates.' },
-  { title: 'Resolve with notes', body: 'Record what happened. Resolving stops live location sharing on their phone.' },
+  { title: 'Resolve with notes', body: 'Confirm they are safe, then record what happened. Resolving stops live location sharing on their phone.' },
 ];
 
 function useNow(intervalMs = 1000) {
@@ -113,8 +115,7 @@ export default function SosCenterBoard() {
   const mapRef = useRef<MapRef | null>(null);
 
   const [resolving, setResolving] = useState<SosAlertDetail | null>(null);
-  const [resolutionNotes, setResolutionNotes] = useState('');
-  const [isResolving, setIsResolving] = useState(false);
+  const isResolving = useSosResolving();
 
   useEffect(() => {
     if (requestedAlertId) {
@@ -208,20 +209,6 @@ export default function SosCenterBoard() {
     [origin?.latitude, origin?.longitude, trail] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  async function handleResolve() {
-    if (!resolving) return;
-    setIsResolving(true);
-    const { error } = await resolveSosAlert(resolving.id, resolutionNotes);
-    setIsResolving(false);
-    if (error) {
-      toast.error('Failed to resolve SOS alert');
-      return;
-    }
-    toast.success('SOS alert marked resolved');
-    setResolving(null);
-    setResolutionNotes('');
-  }
-
   const lastUpdate = livePosition?.updatedAt ?? null;
   const isStale = isLive && (!lastUpdate || now - new Date(lastUpdate).getTime() > STALE_AFTER_MS);
 
@@ -280,7 +267,7 @@ export default function SosCenterBoard() {
           iconClass="bg-blue-500/10"
           label="Last alert"
           value={stats.latest ? formatAgo(stats.latest, now) : '—'}
-          hint={stats.latest ? new Date(stats.latest).toLocaleString() : 'No alerts on record'}
+          hint={stats.latest ? formatDateTime(stats.latest) : 'No alerts on record'}
         />
       </div>
 
@@ -432,10 +419,15 @@ export default function SosCenterBoard() {
                       {selected.profile?.display_name ?? 'Unknown user'}
                     </h3>
                     <p className="text-sm text-muted-foreground">
-                      {selected.trigger_reason === 'manual' ? 'Pressed SOS' : 'Auto-escalated from Warning Mode'} · {new Date(selected.created_at).toLocaleString()}
+                      {selected.trigger_reason === 'manual' ? 'Pressed SOS' : 'Auto-escalated from Warning Mode'} · {formatDateTime(selected.created_at)}
                     </p>
                   </div>
-                  {isLive && (
+                  {isLive && isResolving(selected.id) && (
+                    <span className="px-3 py-1.5 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 text-sm font-semibold">
+                      Resolving… (Undo in the toast)
+                    </span>
+                  )}
+                  {isLive && !isResolving(selected.id) && (
                     <button
                       onClick={() => setResolving(selected)}
                       className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg text-sm font-semibold hover:opacity-90 transition-smooth"
@@ -481,7 +473,7 @@ export default function SosCenterBoard() {
                 )}
                 {!isLive && (
                   <p className="text-sm text-foreground">
-                    {selected.resolved_at && `Resolved ${new Date(selected.resolved_at).toLocaleString()}`}
+                    {selected.resolved_at && `Resolved ${formatDateTime(selected.resolved_at)}`}
                     {alertDuration(selected) !== null && ` · active for ${formatDuration(alertDuration(selected)!)}`}
                     {selected.resolution_notes && <span className="block text-muted-foreground mt-1">Notes: {selected.resolution_notes}</span>}
                   </p>
@@ -551,46 +543,10 @@ export default function SosCenterBoard() {
         </div>
       </div>
 
-      {resolving && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card rounded-2xl max-w-md w-full shadow-elevation-3 border border-border">
-            <div className="p-6 border-b border-border">
-              <h3 className="text-lg font-bold text-foreground">Resolve SOS from {resolving.profile?.display_name ?? 'this traveler'}</h3>
-              <p className="text-sm text-muted-foreground mt-1">This stops live location sharing on their phone.</p>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-foreground mb-2">Resolution notes (optional)</label>
-                <textarea
-                  value={resolutionNotes}
-                  onChange={(e) => setResolutionNotes(e.target.value)}
-                  rows={3}
-                  className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary transition-colors"
-                  placeholder="What happened / how this was handled..."
-                />
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => {
-                    setResolving(null);
-                    setResolutionNotes('');
-                  }}
-                  className="flex-1 border border-border text-foreground py-2.5 rounded-lg hover:bg-secondary font-semibold transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleResolve}
-                  disabled={isResolving}
-                  className="flex-1 bg-destructive text-destructive-foreground py-2.5 rounded-lg hover:opacity-90 disabled:opacity-50 font-semibold transition-colors"
-                >
-                  {isResolving ? 'Resolving...' : 'Mark Resolved'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ResolveSosDialog
+        alert={resolving ? { id: resolving.id, created_at: resolving.created_at, name: resolving.profile?.display_name ?? null } : null}
+        onClose={() => setResolving(null)}
+      />
     </div>
   );
 }

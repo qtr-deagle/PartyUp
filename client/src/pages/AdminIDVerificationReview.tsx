@@ -6,13 +6,21 @@ import { listIdVerifications, getSignedImageUrl, reviewIdVerification, type IdVe
 import LegalNameCheck from '@/components/LegalNameCheck';
 import { useAiResultPoll } from '@/hooks/useAiResultPoll';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
+import { useClientPagination } from '@/hooks/usePagination';
+import TablePagination from '@/components/TablePagination';
 import AiAddressBadge from '@/components/AiAddressBadge';
 import AiSimilarityBadge from '@/components/AiSimilarityBadge';
+import ConfirmActionDialog from '@/components/ConfirmActionDialog';
+import { runUndoable } from '@/lib/undoable';
+import { formatDateTime } from '@/lib/datetime';
 
 type FilterStatus = 'all' | VerificationStatus;
 
 export default function AdminIDVerificationReview() {
-  const [verifications, setVerifications] = useState<IdVerificationRow[]>([]);
+  const [rawVerifications, setVerifications] = useState<IdVerificationRow[]>([]);
+  // Decisions still inside their Undo window, shown as if saved.
+  const [statusPatch, setStatusPatch] = useState<Record<string, VerificationStatus>>({});
+  const [confirmApprove, setConfirmApprove] = useState<IdVerificationRow | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [images, setImages] = useState<{ front: string | null; back: string | null; selfie: string | null }>({ front: null, back: null, selfie: null });
@@ -20,7 +28,6 @@ export default function AdminIDVerificationReview() {
   const [otherReason, setOtherReason] = useState('');
   const [showRejectionModal, setShowRejectionModal] = useState(false);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('pending');
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   // `silent` refreshes (realtime / tab focus) keep the list on screen instead of
@@ -38,7 +45,17 @@ export default function AdminIDVerificationReview() {
   }, [filterStatus, loadQueue]);
 
   useTableRealtime('id_verifications', () => void loadQueue(filterStatus, true));
-  useAiResultPoll(verifications, () => void loadQueue(filterStatus, true));
+  useAiResultPoll(rawVerifications, () => void loadQueue(filterStatus, true));
+
+  const verifications = useMemo(
+    () =>
+      rawVerifications
+        .map((v) => (statusPatch[v.id] ? { ...v, status: statusPatch[v.id] } : v))
+        .filter((v) => filterStatus === 'all' || v.status === filterStatus),
+    [rawVerifications, statusPatch, filterStatus]
+  );
+
+  const queuePage = useClientPagination(verifications, [filterStatus]);
 
   const selected = verifications.find((v) => v.id === selectedId) ?? null;
   const frontPath = selected?.front_image_path ?? null;
@@ -62,14 +79,30 @@ export default function AdminIDVerificationReview() {
     };
   }, [hasSelected, selectedId, frontPath, backPath, selfiePath]);
 
-  const handleApprove = async (id: string) => {
-    setIsSubmitting(true);
-    const { error } = await reviewIdVerification(id, 'approved', 'Approved by admin after manual review.');
-    setIsSubmitting(false);
-    if (!error) {
-      setSelectedId(null);
-      await loadQueue(filterStatus);
-    }
+  // Reviews notify and email the traveler, so they're held for the Undo
+  // window: Undo means the decision never reached them.
+  const review = (row: IdVerificationRow, decision: 'approved' | 'rejected', notes: string) => {
+    const name = row.profiles?.display_name ?? 'this traveler';
+    runUndoable({
+      key: `id-review:${row.id}`,
+      message: decision === 'approved' ? `Approving ${name}'s ID…` : `Rejecting ${name}'s ID…`,
+      description: 'They get a notification and an email once this saves.',
+      onHide: () => {
+        setStatusPatch((prev) => ({ ...prev, [row.id]: decision }));
+        setSelectedId((current) => (current === row.id ? null : current));
+      },
+      onRestore: () => setStatusPatch(({ [row.id]: _, ...rest }) => rest),
+      commit: () => reviewIdVerification(row.id, decision, notes),
+      onCommitted: () =>
+        void loadQueue(filterStatus, true).then(() => setStatusPatch(({ [row.id]: _, ...rest }) => rest)),
+      success: decision === 'approved' ? `${name}'s ID approved` : `${name}'s ID rejected`,
+      error: decision === 'approved' ? 'Failed to approve ID' : 'Failed to reject ID',
+    });
+  };
+
+  const handleApprove = (id: string) => {
+    const row = verifications.find((v) => v.id === id);
+    if (row) setConfirmApprove(row);
   };
 
   const handleRejectClick = (id: string) => {
@@ -80,18 +113,13 @@ export default function AdminIDVerificationReview() {
   // Picking "Other" requires typing the reason; that text is what gets saved.
   const finalRejectionReason = rejectionReason === 'Other' ? otherReason.trim() : rejectionReason;
 
-  const handleRejectSubmit = async () => {
-    if (!selectedId || !finalRejectionReason) return;
-    setIsSubmitting(true);
-    const { error } = await reviewIdVerification(selectedId, 'rejected', finalRejectionReason);
-    setIsSubmitting(false);
-    if (!error) {
-      setShowRejectionModal(false);
-      setRejectionReason('');
-      setOtherReason('');
-      setSelectedId(null);
-      await loadQueue(filterStatus);
-    }
+  const handleRejectSubmit = () => {
+    const row = verifications.find((v) => v.id === selectedId);
+    if (!row || !finalRejectionReason) return;
+    review(row, 'rejected', finalRejectionReason);
+    setShowRejectionModal(false);
+    setRejectionReason('');
+    setOtherReason('');
   };
 
   const stats = useMemo(() => {
@@ -160,15 +188,16 @@ export default function AdminIDVerificationReview() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1">
             <h2 className="text-lg font-bold text-foreground mb-4">Queue ({verifications.length})</h2>
-            <div className="bg-card rounded-2xl p-4 shadow-elevation-2 border border-border">
+            <div data-paginated className="bg-card rounded-2xl p-4 shadow-elevation-2 border border-border">
               {isLoading ? (
                 <p className="text-sm text-muted-foreground text-center py-4">Loading...</p>
               ) : (
-                <div className="space-y-2 max-h-96 overflow-y-auto">
+                <>
+                <div className="space-y-2">
                   {verifications.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-4">No verifications to review</p>
                   ) : (
-                    verifications.map((v) => (
+                    queuePage.pageItems.map((v) => (
                       <button
                         key={v.id}
                         onClick={() => setSelectedId(v.id)}
@@ -180,7 +209,7 @@ export default function AdminIDVerificationReview() {
                           <div className="flex-1">
                             <p className="font-semibold text-foreground">{v.profiles?.display_name ?? 'Unknown user'}</p>
                             <p className="text-xs text-muted-foreground mt-1">{v.profiles?.email}</p>
-                            <p className="text-xs text-muted-foreground mt-2">{new Date(v.submitted_at).toLocaleString()}</p>
+                            <p className="text-xs text-muted-foreground mt-2">{formatDateTime(v.submitted_at)}</p>
                           </div>
                           <div className="flex flex-col items-end gap-1 ml-2">
                             <span
@@ -204,6 +233,8 @@ export default function AdminIDVerificationReview() {
                     ))
                   )}
                 </div>
+                <TablePagination pagination={queuePage} itemLabel="verifications" compact className="mt-3 px-1 pt-3 pb-0" />
+                </>
               )}
             </div>
           </div>
@@ -305,7 +336,7 @@ export default function AdminIDVerificationReview() {
                 <div className="bg-secondary rounded-lg p-3 space-y-2 border border-border">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Submitted:</span>
-                    <span className="font-medium text-foreground">{new Date(selected.submitted_at).toLocaleString()}</span>
+                    <span className="font-medium text-foreground">{formatDateTime(selected.submitted_at)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Status:</span>
@@ -323,7 +354,7 @@ export default function AdminIDVerificationReview() {
                   <div className="flex gap-3 pt-4 border-t border-border">
                     <button
                       onClick={() => handleApprove(selected.id)}
-                      disabled={isSubmitting}
+                      
                       className="flex-1 bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 font-semibold transition-smooth hover:shadow-lg flex items-center justify-center gap-2"
                     >
                       <CheckCircle className="w-5 h-5" />
@@ -331,7 +362,7 @@ export default function AdminIDVerificationReview() {
                     </button>
                     <button
                       onClick={() => handleRejectClick(selected.id)}
-                      disabled={isSubmitting}
+                      
                       className="flex-1 bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 disabled:opacity-50 font-semibold transition-smooth hover:shadow-lg flex items-center justify-center gap-2"
                     >
                       <XCircle className="w-5 h-5" />
@@ -393,7 +424,7 @@ export default function AdminIDVerificationReview() {
                 </button>
                 <button
                   onClick={handleRejectSubmit}
-                  disabled={!finalRejectionReason || isSubmitting}
+                  disabled={!finalRejectionReason}
                   className="flex-1 bg-red-600 text-white py-2.5 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-colors"
                 >
                   Reject
@@ -405,6 +436,16 @@ export default function AdminIDVerificationReview() {
       )}
 
       <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+      <ConfirmActionDialog
+        open={confirmApprove !== null}
+        onOpenChange={(open) => !open && setConfirmApprove(null)}
+        title={`Approve ${confirmApprove?.profiles?.display_name ?? 'this'}'s ID?`}
+        description="Make sure the name, photo and Bulacan address match. They'll be verified, notified and emailed, and can join trips right away."
+        confirmLabel="Approve ID"
+        onConfirm={() => {
+          if (confirmApprove) review(confirmApprove, 'approved', 'Approved by admin after manual review.');
+        }}
+      />
     </AdminLayout>
   );
 }

@@ -146,6 +146,12 @@ export async function removeAdmin(userId: string) {
 export async function promoteToStaff(email: string, role: StaffRole) {
   const trimmedEmail = email.trim();
   if (!trimmedEmail) return { error: new Error('Enter an email address.') };
+  // Admin access only goes through set_admin_role (leaves guilds, refuses
+  // current Guild Leaders, audit-logged), never a raw role update.
+  if (role === 'admin') {
+    const { error } = await grantAdmin(trimmedEmail);
+    return { error };
+  }
 
   const { data: existing, error: lookupError } = await supabase
     .from('profiles')

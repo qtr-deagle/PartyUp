@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { logAuditAction } from '@/lib/auditLog';
 import type { GuildEmblem } from '@/lib/guilds';
 import type { ReportStatus, ReportType } from '@/lib/reports';
 
@@ -87,11 +88,13 @@ export async function getTicketMessages(ticketId: string) {
 
 export async function replyToTicket(ticketId: string, body: string) {
   const { error } = await supabase.rpc('reply_support_ticket', { p_ticket_id: ticketId, p_body: body.trim() });
+  if (!error) logAuditAction('Replied to support ticket', 'support_ticket', ticketId);
   return { error };
 }
 
 export async function setTicketStatus(ticketId: string, status: TicketStatus) {
   const { error } = await supabase.rpc('set_support_ticket_status', { p_ticket_id: ticketId, p_status: status });
+  if (!error) logAuditAction(`Set support ticket to ${status}`, 'support_ticket', ticketId, { status });
   return { error };
 }
 

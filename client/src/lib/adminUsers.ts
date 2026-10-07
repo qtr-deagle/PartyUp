@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { logAuditAction } from '@/lib/auditLog';
 
 export type UserVerificationStatus = 'unverified' | 'pending' | 'approved' | 'rejected' | 'resubmitted';
 export type UserRole = 'traveler' | 'guild_leader' | 'admin';
@@ -23,8 +24,24 @@ export interface UserFilters {
 
 const SELECT_COLUMNS = 'id, display_name, email, avatar_url, role, city, is_active, verification_status, created_at';
 
-export async function listUsers(search?: string, filters: UserFilters = {}) {
-  let query = supabase.from('profiles').select(SELECT_COLUMNS).order('created_at', { ascending: false });
+export type UserSortColumn = 'display_name' | 'email' | 'role' | 'verification_status' | 'created_at';
+export type UserSort = { column: UserSortColumn; ascending: boolean };
+
+// One page of users (`from`/`to` are zero-based, inclusive) plus the total
+// matching row count, so the table can page on the server. Sorting happens in
+// the query too (newest first unless `sort` says otherwise), so page 2
+// continues page 1's order.
+export async function listUsers(
+  search?: string,
+  filters: UserFilters = {},
+  range?: { from: number; to: number },
+  sort: UserSort = { column: 'created_at', ascending: false }
+) {
+  let query = supabase
+    .from('profiles')
+    .select(SELECT_COLUMNS, { count: 'exact' })
+    .order(sort.column, { ascending: sort.ascending, nullsFirst: false })
+    .order('id', { ascending: true });
   const trimmed = search?.trim();
   if (trimmed) {
     query = query.or(`display_name.ilike.%${trimmed}%,email.ilike.%${trimmed}%`);
@@ -34,8 +51,9 @@ export async function listUsers(search?: string, filters: UserFilters = {}) {
   if (filters.status === 'pending') query = query.in('verification_status', ['pending', 'resubmitted']);
   if (filters.status === 'unverified') query = query.in('verification_status', ['unverified', 'rejected']);
   if (filters.status === 'suspended') query = query.eq('is_active', false);
-  const { data, error } = await query;
-  return { data: (data ?? []) as unknown as UserRow[], error };
+  if (range) query = query.range(range.from, range.to);
+  const { data, error, count } = await query;
+  return { data: (data ?? []) as unknown as UserRow[], count: count ?? 0, error };
 }
 
 export interface UserStats {
@@ -66,6 +84,7 @@ export async function getUserStats(): Promise<UserStats> {
 
 export async function setUserVerificationStatus(userId: string, status: 'approved' | 'rejected') {
   const { error } = await supabase.from('profiles').update({ verification_status: status }).eq('id', userId);
+  if (!error) logAuditAction(`Set user verification to ${status}`, 'profile', userId, { verification_status: status });
   return { error };
 }
 
@@ -73,6 +92,7 @@ export async function setUserVerificationStatus(userId: string, status: 'approve
 // the mobile app locks them out on the "account suspended" screen.
 export async function setUserActive(userId: string, active: boolean) {
   const { error } = await supabase.from('profiles').update({ is_active: active }).eq('id', userId);
+  if (!error) logAuditAction(active ? 'Reactivated user' : 'Suspended user', 'profile', userId, { is_active: active });
   return { error };
 }
 

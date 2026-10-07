@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import StaffLayout from '@/components/StaffLayout';
-import { Search, DollarSign, AlertCircle, CheckCircle, Clock, Filter } from 'lucide-react';
+import { Search, DollarSign, AlertCircle, CheckCircle, Clock, Filter, Percent } from 'lucide-react';
 import { listReports, type ReportRow } from '@/lib/reports';
-import { listPaymentHistory, type PaymentHistoryRow } from '@/lib/payments';
+import SortableTh from '@/components/SortableTh';
+import { useSortable } from '@/hooks/useSortable';
+import { formatPeso, listPaymentHistory, partyUpFee, PLATFORM_FEE_RATE, type PaymentHistoryRow } from '@/lib/payments';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
 
 /**
@@ -61,6 +63,19 @@ export default function StaffPaymentMonitoring() {
     [issues, searchTerm, filterStatus]
   );
 
+  // Click a column title: ascending, descending, then off (newest first).
+  const issueSort = useSortable(
+    filteredIssues,
+    {
+      reporter: (i) => i.reporter?.display_name,
+      details: (i) => i.details,
+      trip: (i) => i.trip?.title,
+      status: (i) => i.status,
+      reported: (i) => i.created_at,
+    },
+    { key: 'reported', direction: 'desc' }
+  );
+
   const filteredTransactions = useMemo(
     () =>
       transactions.filter((transaction) => {
@@ -74,8 +89,27 @@ export default function StaffPaymentMonitoring() {
     [transactions, searchTerm, filterGateway]
   );
 
+  // Click a column title: ascending, descending, then off (newest first).
+  const transactionSort = useSortable(
+    filteredTransactions,
+    {
+      id: (t) => t.id,
+      user: (t) => t.user?.display_name,
+      trip: (t) => t.trip?.title,
+      amount: (t) => Number(t.amount),
+      fee: (t) => partyUpFee(t),
+      gateway: (t) => t.gateway,
+      reference: (t) => t.reference,
+      status: (t) => t.status,
+      date: (t) => t.created_at,
+    },
+    { key: 'date', direction: 'desc' }
+  );
+
   const paidTransactions = transactions.filter((t) => t.status === 'paid');
   const totalVolume = paidTransactions.reduce((sum, t) => sum + t.amount, 0);
+  const totalFees = paidTransactions.reduce((sum, t) => sum + partyUpFee(t), 0);
+  const feePercent = `${Math.round(PLATFORM_FEE_RATE * 100)}%`;
 
   const transactionStats = [
     {
@@ -84,6 +118,13 @@ export default function StaffPaymentMonitoring() {
       icon: DollarSign,
       color: 'bg-green-500/10',
       textColor: 'text-green-500',
+    },
+    {
+      label: `PartyUp Fees (${feePercent})`,
+      value: formatPeso(totalFees),
+      icon: Percent,
+      color: 'bg-primary/10',
+      textColor: 'text-primary',
     },
     {
       label: 'Paid',
@@ -255,14 +296,22 @@ export default function StaffPaymentMonitoring() {
             {/* Payment Issues List */}
             <div className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full">
+                {/* Fixed column widths so sorting or paging doesn't shift the columns. */}
+                <table className="w-full table-fixed [&_td]:whitespace-nowrap" style={{ minWidth: 920 }}>
+                  <colgroup>
+                    <col style={{ width: 180 }} />
+                    <col />
+                    <col style={{ width: 200 }} />
+                    <col style={{ width: 130 }} />
+                    <col style={{ width: 210 }} />
+                  </colgroup>
                   <thead>
                     <tr className="border-b border-border bg-secondary">
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Reporter</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Details</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Trip</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Status</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Reported</th>
+                      <SortableTh label="Reporter" sortKey="reporter" sort={issueSort.sort} onSort={issueSort.toggle} />
+                      <SortableTh label="Details" sortKey="details" sort={issueSort.sort} onSort={issueSort.toggle} />
+                      <SortableTh label="Trip" sortKey="trip" sort={issueSort.sort} onSort={issueSort.toggle} />
+                      <SortableTh label="Status" sortKey="status" sort={issueSort.sort} onSort={issueSort.toggle} />
+                      <SortableTh label="Reported" sortKey="reported" sort={issueSort.sort} onSort={issueSort.toggle} />
                     </tr>
                   </thead>
                   <tbody>
@@ -279,18 +328,18 @@ export default function StaffPaymentMonitoring() {
                         </td>
                       </tr>
                     ) : (
-                      filteredIssues.map((issue) => (
+                      issueSort.sorted.map((issue) => (
                         <tr key={issue.id} className="border-b border-border hover:bg-secondary/50 transition-smooth">
                           <td className="px-6 py-4">
-                            <span className="text-sm font-medium text-foreground">{issue.reporter?.display_name ?? 'Unknown'}</span>
+                            <span className="block truncate text-sm font-medium text-foreground" title={issue.reporter?.display_name ?? undefined}>{issue.reporter?.display_name ?? 'Unknown'}</span>
                           </td>
-                          <td className="px-6 py-4 max-w-xs">
-                            <span className="text-sm text-foreground line-clamp-2" title={issue.details}>
+                          <td className="px-6 py-4">
+                            <span className="block truncate text-sm text-foreground" title={issue.details}>
                               {issue.details}
                             </span>
                           </td>
                           <td className="px-6 py-4">
-                            <span className="text-sm text-muted-foreground">{issue.trip?.title ?? '—'}</span>
+                            <span className="block truncate text-sm text-muted-foreground" title={issue.trip?.title ?? undefined}>{issue.trip?.title ?? '—'}</span>
                           </td>
                           <td className="px-6 py-4">
                             <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${getStatusColor(issue.status)}`}>
@@ -322,7 +371,7 @@ export default function StaffPaymentMonitoring() {
         {activeTab === 'history' && (
           <>
             {/* Transaction Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-6">
               {transactionStats.map((stat, index) => {
                 const Icon = stat.icon;
                 return (
@@ -368,33 +417,47 @@ export default function StaffPaymentMonitoring() {
             {/* Payment History Table */}
             <div className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full">
+                {/* Fixed column widths: with auto layout, sorting or paging brought
+                    different text into view and every column shifted. */}
+                <table className="w-full table-fixed [&_td]:whitespace-nowrap" style={{ minWidth: 1270 }}>
+                  <colgroup>
+                    <col style={{ width: 130 }} />
+                    <col style={{ width: 180 }} />
+                    {/* Trip: no width, takes the rest */}
+                    <col />
+                    <col style={{ width: 120 }} />
+                    <col style={{ width: 170 }} />
+                    <col style={{ width: 120 }} />
+                    <col style={{ width: 120 }} />
+                    <col style={{ width: 210 }} />
+                  </colgroup>
                   <thead>
                     <tr className="border-b border-border bg-secondary">
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Transaction ID</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">User</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Trip</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Amount</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Gateway</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Status</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Date</th>
+                      <SortableTh label="Transaction ID" sortKey="id" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <SortableTh label="User" sortKey="user" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <SortableTh label="Trip" sortKey="trip" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <SortableTh label="Amount" sortKey="amount" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <SortableTh label="PartyUp Fee" sortKey="fee" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <SortableTh label="Gateway" sortKey="gateway" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <SortableTh label="Status" sortKey="status" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <SortableTh label="Date" sortKey="date" sort={transactionSort.sort} onSort={transactionSort.toggle} />
                     </tr>
                   </thead>
                   <tbody>
                     {isLoadingHistory ? (
                       <tr>
-                        <td colSpan={7} className="px-6 py-8 text-center text-sm text-muted-foreground">
+                        <td colSpan={8} className="px-6 py-8 text-center text-sm text-muted-foreground">
                           Loading...
                         </td>
                       </tr>
                     ) : filteredTransactions.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-6 py-8 text-center text-sm text-muted-foreground">
+                        <td colSpan={8} className="px-6 py-8 text-center text-sm text-muted-foreground">
                           No transactions found
                         </td>
                       </tr>
                     ) : (
-                      filteredTransactions.map((transaction) => (
+                      transactionSort.sorted.map((transaction) => (
                         <tr key={transaction.id} className="border-b border-border hover:bg-secondary/50 transition-smooth">
                           <td className="px-6 py-4">
                             <span className="text-sm font-mono text-foreground" title={transaction.id}>
@@ -402,14 +465,20 @@ export default function StaffPaymentMonitoring() {
                             </span>
                           </td>
                           <td className="px-6 py-4">
-                            <span className="text-sm text-foreground">{transaction.user?.display_name ?? 'Unknown'}</span>
+                            <span className="block truncate text-sm text-foreground" title={transaction.user?.display_name ?? undefined}>{transaction.user?.display_name ?? 'Unknown'}</span>
                           </td>
                           <td className="px-6 py-4">
-                            <span className="text-sm text-muted-foreground">{transaction.trip?.title ?? '—'}</span>
+                            <span className="block truncate text-sm text-muted-foreground" title={transaction.trip?.title ?? undefined}>{transaction.trip?.title ?? '—'}</span>
                           </td>
                           <td className="px-6 py-4">
                             <span className="text-sm font-semibold text-foreground">
                               ₱{transaction.amount.toLocaleString()}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="text-sm font-semibold text-primary">{formatPeso(partyUpFee(transaction))}</span>
+                            <span className="ml-1.5 text-xs text-muted-foreground">
+                              {transaction.trip?.trip_type === 'carpool' ? `${feePercent} on top` : feePercent}
                             </span>
                           </td>
                           <td className="px-6 py-4">

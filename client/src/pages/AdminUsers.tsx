@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import {
   Ban,
@@ -23,12 +23,16 @@ import {
   setUserVerificationStatus,
   type UserDetail,
   type UserFilters,
+  type UserSort,
+  type UserSortColumn,
   type UserRole,
   type UserRow,
   type UserStats,
   type UserStatusFilter,
 } from '@/lib/adminUsers';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
+import { usePagination } from '@/hooks/usePagination';
+import TablePagination from '@/components/TablePagination';
 import { useAuth } from '@/contexts/AuthContext';
 import { roleLabel } from '@/lib/guilds';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -39,17 +43,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import ConfirmActionDialog from '@/components/ConfirmActionDialog';
+import { runUndoable } from '@/lib/undoable';
+import { formatDate } from '@/lib/datetime';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import SortableTh from '@/components/SortableTh';
+import { useSortState } from '@/hooks/useSortable';
 
 const ROLE_BADGE: Record<string, string> = {
   traveler: 'bg-secondary text-foreground',
@@ -57,8 +56,7 @@ const ROLE_BADGE: Record<string, string> = {
   admin: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300',
 };
 
-const joinedFormat = new Intl.DateTimeFormat(undefined, { month: 'short', year: 'numeric' });
-const reportDateFormat = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+const joinedFormat = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric', timeZone: 'Asia/Manila' });
 
 function UserAvatar({ user, size = 'md' }: { user: UserRow; size?: 'md' | 'lg' }) {
   const [failed, setFailed] = useState(false);
@@ -134,10 +132,11 @@ export default function AdminUsers() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState<UserFilters>({});
   const [users, setUsers] = useState<UserRow[]>([]);
+  const [totalUsers, setTotalUsers] = useState(0);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [busyUserId, setBusyUserId] = useState<string | null>(null);
+  const [confirmVerify, setConfirmVerify] = useState<UserRow | null>(null);
   const [confirmSuspend, setConfirmSuspend] = useState<UserRow | null>(null);
   const [detailUser, setDetailUser] = useState<UserRow | null>(null);
   const [detail, setDetail] = useState<UserDetail | null>(null);
@@ -145,26 +144,55 @@ export default function AdminUsers() {
 
   // `silent` refreshes (realtime / tab focus) skip the loading state and the
   // error toast.
-  const loadUsers = useCallback(async (search: string, activeFilters: UserFilters, silent = false) => {
-    if (!silent) setIsLoading(true);
-    const [{ data, error }, nextStats] = await Promise.all([listUsers(search, activeFilters), getUserStats()]);
-    if (error) {
-      setLoadError(error.message);
-      if (!silent) toast.error('Failed to load users');
-    } else {
-      setLoadError(null);
-      setUsers(data);
-    }
-    setStats(nextStats);
-    setIsLoading(false);
-  }, []);
+  // Click a column title: ascending, descending, then off (newest first).
+  // Sorted in the query, since the table loads one page at a time.
+  const userSort = useSortState<UserSortColumn>();
+  const sortArg: UserSort | undefined = userSort.sort
+    ? { column: userSort.sort.key, ascending: userSort.sort.direction === 'asc' }
+    : undefined;
+  const pagination = usePagination(totalUsers, [searchTerm, filters, userSort.sort]);
+  const range = { from: pagination.from, to: pagination.to };
 
+  const loadUsers = useCallback(
+    async (
+      search: string,
+      activeFilters: UserFilters,
+      pageRange: { from: number; to: number },
+      sort: UserSort | undefined,
+      silent = false
+    ) => {
+      if (!silent) setIsLoading(true);
+      const [{ data, count, error }, nextStats] = await Promise.all([
+        listUsers(search, activeFilters, pageRange, sort),
+        getUserStats(),
+      ]);
+      if (error) {
+        setLoadError(error.message);
+        if (!silent) toast.error('Failed to load users');
+      } else {
+        setLoadError(null);
+        setUsers(data);
+        setTotalUsers(count);
+      }
+      setStats(nextStats);
+      setIsLoading(false);
+    },
+    []
+  );
+
+  // Debounce typing in the search box; page / filter clicks load right away.
+  const lastSearch = useRef(searchTerm);
   useEffect(() => {
-    const timeout = setTimeout(() => void loadUsers(searchTerm, filters), 300);
+    const typed = lastSearch.current !== searchTerm;
+    lastSearch.current = searchTerm;
+    const timeout = setTimeout(() => void loadUsers(searchTerm, filters, range, sortArg), typed ? 300 : 0);
     return () => clearTimeout(timeout);
-  }, [searchTerm, filters, loadUsers]);
+    // sortArg is rebuilt each render; its column/direction are the real deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, filters, range.from, range.to, sortArg?.column, sortArg?.ascending, loadUsers]);
 
-  useTableRealtime('profiles', () => void loadUsers(searchTerm, filters, true));
+  const reload = () => loadUsers(searchTerm, filters, range, sortArg, true);
+  useTableRealtime('profiles', () => void reload());
 
   // Keep the drawer's header in sync with the refreshed row (e.g. after suspend).
   useEffect(() => {
@@ -183,29 +211,45 @@ export default function AdminUsers() {
     else setDetail(data);
   };
 
-  const handleVerifyUser = async (user: UserRow) => {
-    setBusyUserId(user.id);
-    const { error } = await setUserVerificationStatus(user.id, 'approved');
-    setBusyUserId(null);
-    if (error) {
-      toast.error('Failed to verify user');
-    } else {
-      toast.success(`${user.display_name} verified`);
-      await loadUsers(searchTerm, filters, true);
-    }
+  // Optimistic patches for actions still inside their Undo window.
+  const [patches, setPatches] = useState<Record<string, Partial<UserRow>>>({});
+  const patch = (id: string, value: Partial<UserRow> | null) =>
+    setPatches((prev) => {
+      const next = { ...prev };
+      if (value) next[id] = { ...next[id], ...value };
+      else delete next[id];
+      return next;
+    });
+  const withPatch = (user: UserRow): UserRow => (patches[user.id] ? { ...user, ...patches[user.id] } : user);
+  const shownUsers = users.map(withPatch);
+  const shownDetailUser = detailUser ? withPatch(detailUser) : null;
+
+  const handleVerifyUser = (user: UserRow) => {
+    setConfirmVerify(null);
+    runUndoable({
+      key: `user-verify:${user.id}`,
+      message: `Verifying ${user.display_name}…`,
+      onHide: () => patch(user.id, { verification_status: 'approved' }),
+      onRestore: () => patch(user.id, null),
+      commit: () => setUserVerificationStatus(user.id, 'approved'),
+      onCommitted: () => void reload().then(() => patch(user.id, null)),
+      success: `${user.display_name} is now verified`,
+      error: 'Failed to verify user',
+    });
   };
 
-  const handleSetActive = async (user: UserRow, active: boolean) => {
-    setBusyUserId(user.id);
-    const { error } = await setUserActive(user.id, active);
-    setBusyUserId(null);
+  const handleSetActive = (user: UserRow, active: boolean) => {
     setConfirmSuspend(null);
-    if (error) {
-      toast.error(active ? 'Failed to reactivate user' : 'Failed to suspend user');
-    } else {
-      toast.success(active ? `${user.display_name} reactivated` : `${user.display_name} suspended`);
-      await loadUsers(searchTerm, filters, true);
-    }
+    runUndoable({
+      key: `user-active:${user.id}`,
+      message: active ? `Reactivating ${user.display_name}…` : `Suspending ${user.display_name}…`,
+      onHide: () => patch(user.id, { is_active: active }),
+      onRestore: () => patch(user.id, null),
+      commit: () => setUserActive(user.id, active),
+      onCommitted: () => void reload().then(() => patch(user.id, null)),
+      success: active ? `${user.display_name} reactivated` : `${user.display_name} suspended`,
+      error: active ? 'Failed to reactivate user' : 'Failed to suspend user',
+    });
   };
 
   // Admins are managed on the Team page; nobody can suspend themselves.
@@ -301,21 +345,30 @@ export default function AdminUsers() {
         </div>
 
         {/* Users Table */}
-        <div className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
+        <div data-paginated className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            {/* Fixed column widths so sorting or paging doesn't shift the columns. */}
+            <table className="w-full table-fixed [&_td]:whitespace-nowrap" style={{ minWidth: 1010 }}>
+              <colgroup>
+                <col />
+                <col />
+                <col style={{ width: 160 }} />
+                <col style={{ width: 190 }} />
+                <col style={{ width: 150 }} />
+                <col style={{ width: 110 }} />
+              </colgroup>
               <thead>
                 <tr className="border-b border-border bg-secondary">
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">User</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Email</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Role</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Status</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Joined</th>
+                  <SortableTh label="User" sortKey="display_name" sort={userSort.sort} onSort={userSort.toggle} />
+                  <SortableTh label="Email" sortKey="email" sort={userSort.sort} onSort={userSort.toggle} />
+                  <SortableTh label="Role" sortKey="role" sort={userSort.sort} onSort={userSort.toggle} />
+                  <SortableTh label="Status" sortKey="verification_status" sort={userSort.sort} onSort={userSort.toggle} />
+                  <SortableTh label="Joined" sortKey="created_at" sort={userSort.sort} onSort={userSort.toggle} />
                   <th className="px-6 py-4 text-right text-sm font-bold text-foreground">Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                {isLoading ? (
+              <tbody className={isLoading && users.length > 0 ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
+                {isLoading && users.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-8 text-center text-sm text-muted-foreground">
                       Loading...
@@ -334,7 +387,7 @@ export default function AdminUsers() {
                     </td>
                   </tr>
                 ) : (
-                  users.map((user) => {
+                  shownUsers.map((user) => {
                     const actions = actionButtons(user);
                     return (
                       <tr
@@ -355,14 +408,14 @@ export default function AdminUsers() {
                                 ) : null}
                               </div>
                               {user.city && (
-                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                  <MapPin className="w-3 h-3" /> {user.city}
+                                <div className="flex items-center gap-1 truncate text-xs text-muted-foreground">
+                                  <MapPin className="w-3 h-3 shrink-0" /> {user.city}
                                 </div>
                               )}
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-sm text-muted-foreground">{user.email ?? '—'}</td>
+                        <td className="px-6 py-4 text-sm text-muted-foreground truncate" title={user.email ?? undefined}>{user.email ?? '—'}</td>
                         <td className="px-6 py-4">
                           <RoleBadge role={user.role} />
                         </td>
@@ -379,12 +432,12 @@ export default function AdminUsers() {
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <button
-                                disabled={busyUserId === user.id}
+                                
                                 className="p-2 hover:bg-secondary rounded-lg text-muted-foreground transition-smooth disabled:opacity-50"
                                 title="Actions"
+                                aria-label={`Actions for ${user.display_name}`}
                               >
                                 <MoreHorizontal className="w-4 h-4" />
-                                <span className="sr-only">Actions for {user.display_name}</span>
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
@@ -392,7 +445,7 @@ export default function AdminUsers() {
                                 <Eye className="w-4 h-4" /> View details
                               </DropdownMenuItem>
                               {actions.verify && (
-                                <DropdownMenuItem onSelect={() => void handleVerifyUser(user)}>
+                                <DropdownMenuItem onSelect={() => setConfirmVerify(user)}>
                                   <Shield className="w-4 h-4" /> Verify
                                 </DropdownMenuItem>
                               )}
@@ -403,7 +456,7 @@ export default function AdminUsers() {
                                 </DropdownMenuItem>
                               )}
                               {actions.reactivate && (
-                                <DropdownMenuItem onSelect={() => void handleSetActive(user, true)}>
+                                <DropdownMenuItem onSelect={() => handleSetActive(user, true)}>
                                   <RotateCcw className="w-4 h-4" /> Reactivate
                                 </DropdownMenuItem>
                               )}
@@ -417,52 +470,52 @@ export default function AdminUsers() {
               </tbody>
             </table>
           </div>
+          {!loadError && <TablePagination pagination={pagination} itemLabel="users" />}
         </div>
       </div>
 
       {/* Suspend confirmation */}
-      <AlertDialog open={confirmSuspend !== null} onOpenChange={(open) => !open && setConfirmSuspend(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Suspend {confirmSuspend?.display_name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              They'll be locked out of the PartyUp app and hidden from search, nearby travelers, and friend
-              requests. You can reactivate them at any time.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-white hover:bg-destructive/90"
-              disabled={busyUserId !== null}
-              onClick={(e) => {
-                e.preventDefault();
-                if (confirmSuspend) void handleSetActive(confirmSuspend, false);
-              }}
-            >
-              Suspend
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmActionDialog
+        open={confirmSuspend !== null}
+        onOpenChange={(open) => !open && setConfirmSuspend(null)}
+        tone="destructive"
+        title={`Suspend ${confirmSuspend?.display_name ?? 'user'}?`}
+        description="They'll be locked out of the PartyUp app and hidden from search, nearby travelers, and friend requests. You can reactivate them at any time."
+        confirmLabel="Suspend"
+        onConfirm={() => {
+          if (confirmSuspend) handleSetActive(confirmSuspend, false);
+        }}
+      />
+
+      {/* Manual verify confirmation */}
+      <ConfirmActionDialog
+        open={confirmVerify !== null}
+        onOpenChange={(open) => !open && setConfirmVerify(null)}
+        title={`Mark ${confirmVerify?.display_name ?? 'user'} as verified?`}
+        description="This skips the ID review queue. Only do this if you've checked their identity another way. They'll be able to join trips right away."
+        confirmLabel="Mark verified"
+        onConfirm={() => {
+          if (confirmVerify) handleVerifyUser(confirmVerify);
+        }}
+      />
 
       {/* User detail drawer */}
       <Sheet open={detailUser !== null} onOpenChange={(open) => !open && setDetailUser(null)}>
         <SheetContent side="right" className="sm:max-w-md w-full overflow-y-auto">
-          {detailUser && (
+          {shownDetailUser && (
             <>
               <SheetHeader className="items-center text-center pt-8">
-                <UserAvatar user={detailUser} size="lg" />
-                <SheetTitle className="text-xl mt-2">{detailUser.display_name}</SheetTitle>
-                <SheetDescription>{detailUser.email ?? 'No email'}</SheetDescription>
+                <UserAvatar user={shownDetailUser} size="lg" />
+                <SheetTitle className="text-xl mt-2">{shownDetailUser.display_name}</SheetTitle>
+                <SheetDescription>{shownDetailUser.email ?? 'No email'}</SheetDescription>
                 <div className="flex flex-wrap justify-center items-center gap-2 mt-2">
-                  <RoleBadge role={detailUser.role} />
-                  <VerificationBadge status={detailUser.verification_status} />
-                  {!detailUser.is_active && <SuspendedPill />}
+                  <RoleBadge role={shownDetailUser.role} />
+                  <VerificationBadge status={shownDetailUser.verification_status} />
+                  {!shownDetailUser.is_active && <SuspendedPill />}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Joined {joinedFormat.format(new Date(detailUser.created_at))}
-                  {detailUser.city ? ` · ${detailUser.city}` : ''}
+                  Joined {joinedFormat.format(new Date(shownDetailUser.created_at))}
+                  {shownDetailUser.city ? ` · ${shownDetailUser.city}` : ''}
                 </p>
               </SheetHeader>
 
@@ -514,7 +567,7 @@ export default function AdminUsers() {
                               <div className="flex items-center justify-between gap-2 text-xs">
                                 <span className="font-medium capitalize text-foreground">{report.report_type}</span>
                                 <span className="capitalize text-muted-foreground">
-                                  {report.status} · {reportDateFormat.format(new Date(report.created_at))}
+                                  {report.status} · {formatDate(report.created_at)}
                                 </span>
                               </div>
                               <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{report.details}</p>
@@ -527,14 +580,14 @@ export default function AdminUsers() {
                 ) : null}
 
                 {(() => {
-                  const actions = actionButtons(detailUser);
+                  const actions = actionButtons(shownDetailUser);
                   if (!actions.verify && !actions.suspend && !actions.reactivate) return null;
                   return (
                     <div className="flex gap-2 pt-2 border-t border-border">
                       {actions.verify && (
                         <button
-                          onClick={() => void handleVerifyUser(detailUser)}
-                          disabled={busyUserId === detailUser.id}
+                          onClick={() => setConfirmVerify(shownDetailUser)}
+                          
                           className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
                         >
                           <Shield className="w-4 h-4" /> Verify
@@ -542,8 +595,8 @@ export default function AdminUsers() {
                       )}
                       {actions.suspend && (
                         <button
-                          onClick={() => setConfirmSuspend(detailUser)}
-                          disabled={busyUserId === detailUser.id}
+                          onClick={() => setConfirmSuspend(shownDetailUser)}
+                          
                           className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-destructive/40 text-destructive hover:bg-destructive/10 text-sm font-medium disabled:opacity-50"
                         >
                           <Ban className="w-4 h-4" /> Suspend
@@ -551,8 +604,8 @@ export default function AdminUsers() {
                       )}
                       {actions.reactivate && (
                         <button
-                          onClick={() => void handleSetActive(detailUser, true)}
-                          disabled={busyUserId === detailUser.id}
+                          onClick={() => handleSetActive(shownDetailUser, true)}
+                          
                           className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-border hover:bg-secondary text-sm font-medium disabled:opacity-50"
                         >
                           <RotateCcw className="w-4 h-4" /> Reactivate

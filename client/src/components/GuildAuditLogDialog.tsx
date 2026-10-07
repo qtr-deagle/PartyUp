@@ -3,6 +3,7 @@ import GuildEmblem from '@/components/GuildEmblem';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { describeGuildAuditEvent, getGuildAuditLog, GUILD_AUDIT_PAGE_SIZE, type GuildAuditEvent } from '@/lib/guildAudit';
 import type { ReportRow } from '@/lib/reports';
+import { formatDateTime } from '@/lib/datetime';
 
 type Guild = NonNullable<ReportRow['guild']>;
 
@@ -71,7 +72,7 @@ export default function GuildAuditLogDialog({ guild, onClose }: { guild: Guild |
                 <li key={event.id} className="px-4 py-3">
                   <p className={`text-sm ${isReport ? 'text-destructive' : 'text-foreground'}`}>{describeGuildAuditEvent(event)}</p>
                   {excerpt && <p className="text-xs italic text-muted-foreground mt-0.5 line-clamp-2">“{excerpt}”</p>}
-                  <p className="text-xs text-muted-foreground mt-0.5">{new Date(event.created_at).toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{formatDateTime(event.created_at)}</p>
                 </li>
               );
             })}

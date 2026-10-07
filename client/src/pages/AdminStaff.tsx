@@ -14,7 +14,14 @@ import {
 } from '@/lib/adminStaff';
 import { adminSendPasswordReset } from '@/lib/password';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
+import { useClientPagination } from '@/hooks/usePagination';
+import TablePagination from '@/components/TablePagination';
 import { LeaderApplications, LeaderScorecards } from '@/components/LeaderProgram';
+import ConfirmActionDialog from '@/components/ConfirmActionDialog';
+import { runUndoable } from '@/lib/undoable';
+import { formatDate } from '@/lib/datetime';
+import SortableTh from '@/components/SortableTh';
+import { useSortable } from '@/hooks/useSortable';
 
 /**
  * Guild Leader Management
@@ -36,6 +43,9 @@ export default function AdminStaff() {
   const [showAddStaffForm, setShowAddStaffForm] = useState(false);
   const [newLeaderEmail, setNewLeaderEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [confirmPromote, setConfirmPromote] = useState<string | null>(null);
+  // Optimistic active/inactive while a change is inside its Undo window.
+  const [activePatch, setActivePatch] = useState<Record<string, boolean>>({});
   const [editingStaff, setEditingStaff] = useState<StaffRow | null>(null);
   const [editActive, setEditActive] = useState(true);
   const [revokingStaff, setRevokingStaff] = useState<StaffRow | null>(null);
@@ -73,23 +83,41 @@ export default function AdminStaff() {
       ),
     [staff, searchTerm]
   );
+  // Click a column title: ascending, descending, then off (newest first).
+  const staffSort = useSortable(
+    filteredStaff,
+    {
+      leader: (m) => m.display_name,
+      guild: (m) => m.guild_name,
+      status: (m) => ((activePatch[m.id] ?? m.is_active) ? 'active' : 'inactive'),
+      joined: (m) => m.created_at,
+    },
+    { key: 'joined', direction: 'desc' }
+  );
+  const staffPage = useClientPagination(staffSort.sorted, [searchTerm, staffSort.sort]);
 
-  const handleAddLeader = async () => {
+  const handleAddLeader = () => {
     if (!newLeaderEmail.trim()) {
       toast.error('Enter an email address');
       return;
     }
-    setIsSubmitting(true);
-    const { error } = await promoteToStaff(newLeaderEmail, 'guild_leader');
-    setIsSubmitting(false);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    toast.success(`${newLeaderEmail} is now a Guild Leader`);
+    setConfirmPromote(newLeaderEmail.trim());
+  };
+
+  const promote = (email: string) => {
+    runUndoable({
+      key: `leader-promote:${email.toLowerCase()}`,
+      message: `Making ${email} a Guild Leader…`,
+      commit: async () => {
+        const { error } = await promoteToStaff(email, 'guild_leader');
+        return { error };
+      },
+      onCommitted: () => void loadStaff(true),
+      success: `${email} is now a Guild Leader`,
+      error: 'Could not promote',
+    });
     setNewLeaderEmail('');
     setShowAddStaffForm(false);
-    await loadStaff();
   };
 
   const openEdit = (member: StaffRow) => {
@@ -97,18 +125,23 @@ export default function AdminStaff() {
     setEditActive(member.is_active);
   };
 
-  const handleSaveEdit = async () => {
+  const handleSaveEdit = () => {
     if (!editingStaff) return;
-    setIsSubmitting(true);
-    const { error } = await updateStaffMember(editingStaff.id, { isActive: editActive });
-    setIsSubmitting(false);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    toast.success(`Updated ${editingStaff.display_name}`);
+    const member = editingStaff;
+    const active = editActive;
     setEditingStaff(null);
-    await loadStaff();
+    if (active === member.is_active) return;
+    runUndoable({
+      key: `leader-active:${member.id}`,
+      message: active ? `Reactivating ${member.display_name}…` : `Deactivating ${member.display_name}…`,
+      onHide: () => setActivePatch((prev) => ({ ...prev, [member.id]: active })),
+      onRestore: () => setActivePatch(({ [member.id]: _, ...rest }) => rest),
+      commit: () => updateStaffMember(member.id, { isActive: active }),
+      onCommitted: () =>
+        void loadStaff(true).then(() => setActivePatch(({ [member.id]: _, ...rest }) => rest)),
+      success: active ? `${member.display_name} reactivated` : `${member.display_name} deactivated`,
+      error: `Could not update ${member.display_name}`,
+    });
   };
 
   const openRevoke = async (member: StaffRow) => {
@@ -157,17 +190,14 @@ export default function AdminStaff() {
     setScorecardKey((key) => key + 1);
   };
 
-  const handleSendReset = async () => {
-    if (!resettingStaff) return;
-    setIsSubmitting(true);
-    const { error } = await adminSendPasswordReset(resettingStaff);
-    setIsSubmitting(false);
+  // Emails can't be unsent, so this is confirm-only (no Undo).
+  const handleSendReset = async (member: StaffRow) => {
+    const { error } = await adminSendPasswordReset(member);
     if (error) {
       toast.error(error.message);
-      return;
+      return false;
     }
-    toast.success(`Password reset link sent to ${resettingStaff.email}`);
-    setResettingStaff(null);
+    toast.success(`Password reset link sent to ${member.email}`);
   };
 
   return (
@@ -193,7 +223,7 @@ export default function AdminStaff() {
           <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
             <h3 className="text-lg font-bold text-foreground mb-2">Promote a Traveler to Guild Leader</h3>
             <p className="text-xs text-muted-foreground mb-4">
-              Normally travelers earn this by reaching Gold and applying in the app. Use this only for special cases. They
+              Normally travelers earn this by meeting the leader requirements and applying in the app. Use this only for special cases. They
               must already have a PartyUp account. To add a PartyUp team member, use the Admins page.
             </p>
             <div className="space-y-4">
@@ -207,7 +237,6 @@ export default function AdminStaff() {
               <div className="flex gap-3">
                 <button
                   onClick={handleAddLeader}
-                  disabled={isSubmitting}
                   className="flex-1 px-4 py-2.5 bg-primary text-primary-foreground rounded-lg font-medium hover:shadow-lg transition-smooth disabled:opacity-50"
                 >
                   Make Guild Leader
@@ -244,15 +273,23 @@ export default function AdminStaff() {
         </div>
 
         {/* Leaders table */}
-        <div className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
+        <div data-paginated className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            {/* Fixed column widths so sorting or paging doesn't shift the columns. */}
+            <table className="w-full table-fixed [&_td]:whitespace-nowrap" style={{ minWidth: 890 }}>
+              <colgroup>
+                <col />
+                <col />
+                <col style={{ width: 140 }} />
+                <col style={{ width: 170 }} />
+                <col style={{ width: 180 }} />
+              </colgroup>
               <thead>
                 <tr className="border-b border-border bg-secondary">
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Leader</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Guild</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Status</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Joined</th>
+                  <SortableTh label="Leader" sortKey="leader" sort={staffSort.sort} onSort={staffSort.toggle} />
+                  <SortableTh label="Guild" sortKey="guild" sort={staffSort.sort} onSort={staffSort.toggle} />
+                  <SortableTh label="Status" sortKey="status" sort={staffSort.sort} onSort={staffSort.toggle} />
+                  <SortableTh label="Joined" sortKey="joined" sort={staffSort.sort} onSort={staffSort.toggle} />
                   <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Actions</th>
                 </tr>
               </thead>
@@ -270,12 +307,12 @@ export default function AdminStaff() {
                     </td>
                   </tr>
                 ) : (
-                  filteredStaff.map((member) => (
+                  staffPage.pageItems.map((row) => ({ ...row, is_active: activePatch[row.id] ?? row.is_active })).map((member) => (
                     <tr key={member.id} className="border-b border-border hover:bg-secondary/50 transition-colors">
                       <td className="px-6 py-4">
                         <div>
-                          <p className="font-medium text-foreground">{member.display_name}</p>
-                          <p className="text-xs text-muted-foreground">{member.email}</p>
+                          <p className="truncate font-medium text-foreground">{member.display_name}</p>
+                          <p className="truncate text-xs text-muted-foreground">{member.email}</p>
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm">
@@ -283,10 +320,10 @@ export default function AdminStaff() {
                           <button
                             onClick={() => setViewingGuildId(member.guild_id)}
                             title={`View ${member.guild_name}`}
-                            className="group flex items-center gap-1.5 text-left text-foreground"
+                            className="group flex max-w-full items-center gap-1.5 text-left text-foreground"
                           >
                             <Crown className="w-4 h-4 text-amber-600" />
-                            <span className="font-medium group-hover:text-primary group-hover:underline underline-offset-2">{member.guild_name}</span>
+                            <span className="truncate font-medium group-hover:text-primary group-hover:underline underline-offset-2">{member.guild_name}</span>
                             <span className="text-muted-foreground">· {member.member_count} {member.member_count === 1 ? 'member' : 'members'}</span>
                           </button>
                         ) : (
@@ -304,7 +341,7 @@ export default function AdminStaff() {
                           {member.is_active ? 'active' : 'inactive'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm text-muted-foreground">{new Date(member.created_at).toLocaleDateString()}</td>
+                      <td className="px-6 py-4 text-sm text-muted-foreground">{formatDate(member.created_at)}</td>
                       <td className="px-6 py-4 text-sm space-x-2 flex">
                         <button
                           onClick={() => openEdit(member)}
@@ -335,6 +372,7 @@ export default function AdminStaff() {
               </tbody>
             </table>
           </div>
+          <TablePagination pagination={staffPage} itemLabel="Guild Leaders" />
         </div>
 
         {/* How each leader's guild is doing */}
@@ -368,7 +406,6 @@ export default function AdminStaff() {
                 </button>
                 <button
                   onClick={handleSaveEdit}
-                  disabled={isSubmitting}
                   className="flex-1 bg-primary text-primary-foreground py-2.5 rounded-lg disabled:opacity-50 font-semibold transition-colors hover:shadow-lg"
                 >
                   Save
@@ -379,38 +416,38 @@ export default function AdminStaff() {
         </div>
       )}
 
-      {/* Password Reset Confirmation Modal */}
-      {resettingStaff && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card rounded-2xl max-w-md w-full shadow-elevation-3 border border-border">
-            <div className="p-6 border-b border-border">
-              <h3 className="text-lg font-bold text-foreground">Send Password Reset Link</h3>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-muted-foreground">
-                This emails <span className="font-medium text-foreground">{resettingStaff.email}</span> a one-time link
-                to choose a new password. You won't see or set their password, and their current password keeps
-                working until they use the link.
-              </p>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setResettingStaff(null)}
-                  className="flex-1 border border-border text-foreground py-2.5 rounded-lg hover:bg-secondary font-semibold transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSendReset}
-                  disabled={isSubmitting}
-                  className="flex-1 bg-primary text-primary-foreground py-2.5 rounded-lg disabled:opacity-50 font-semibold transition-colors hover:shadow-lg"
-                >
-                  Send Link
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Password reset: confirm only (an email can't be unsent) */}
+      <ConfirmActionDialog
+        open={resettingStaff !== null}
+        onOpenChange={(open) => !open && setResettingStaff(null)}
+        title="Send password reset link?"
+        description={
+          <>
+            This emails <span className="font-medium text-foreground">{resettingStaff?.email}</span> a one-time link to choose
+            a new password. You won&apos;t see or set their password, and their current password keeps working until they use
+            the link.
+          </>
+        }
+        confirmLabel="Send link"
+        onConfirm={() => (resettingStaff ? handleSendReset(resettingStaff) : undefined)}
+      />
+
+      {/* Promote directly */}
+      <ConfirmActionDialog
+        open={confirmPromote !== null}
+        onOpenChange={(open) => !open && setConfirmPromote(null)}
+        title="Make this traveler a Guild Leader?"
+        description={
+          <>
+            <span className="font-medium text-foreground">{confirmPromote}</span> skips the application and can found and run a
+            guild right away.
+          </>
+        }
+        confirmLabel="Make Guild Leader"
+        onConfirm={() => {
+          if (confirmPromote) promote(confirmPromote);
+        }}
+      />
 
       {/* Revoke Modal: the guild must go somewhere */}
       {revokingStaff && (
@@ -423,6 +460,9 @@ export default function AdminStaff() {
               <p className="text-sm text-muted-foreground">
                 <span className="font-medium text-foreground">{revokingStaff.display_name}</span> becomes a traveler again.
                 Their account, points and rank are kept.
+              </p>
+              <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs font-medium text-red-600 dark:text-red-400">
+                This takes effect immediately and can&apos;t be undone from here. Members are notified.
               </p>
 
               {revokingStaff.guild_name ? (

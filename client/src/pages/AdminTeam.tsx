@@ -6,6 +6,11 @@ import { grantAdmin, listStaff, removeAdmin, type StaffRow } from '@/lib/adminSt
 import { adminSendPasswordReset } from '@/lib/password';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
 import { useAuth } from '@/contexts/AuthContext';
+import ConfirmActionDialog from '@/components/ConfirmActionDialog';
+import { runUndoable, usePendingUndoKeys } from '@/lib/undoable';
+import { formatDate } from '@/lib/datetime';
+import SortableTh from '@/components/SortableTh';
+import { useSortable } from '@/hooks/useSortable';
 
 /**
  * Admins (Team & Access)
@@ -23,7 +28,7 @@ export default function AdminTeam() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [email, setEmail] = useState('');
   const [confirmEmail, setConfirmEmail] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const pendingKeys = usePendingUndoKeys();
   const [removing, setRemoving] = useState<StaffRow | null>(null);
   const [resetting, setResetting] = useState<StaffRow | null>(null);
 
@@ -42,53 +47,61 @@ export default function AdminTeam() {
 
   const emailsMatch = email.trim().length > 0 && email.trim().toLowerCase() === confirmEmail.trim().toLowerCase();
 
-  const handleAdd = async () => {
+  const handleAdd = () => {
     if (!emailsMatch) {
       toast.error('The two emails must match');
       return;
     }
-    setIsSubmitting(true);
-    const { error, name } = await grantAdmin(email);
-    setIsSubmitting(false);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    toast.success(`${name ?? email} is now an admin`);
+    const target = email.trim();
+    runUndoable({
+      key: `admin-grant:${target.toLowerCase()}`,
+      message: `Giving ${target} admin access…`,
+      commit: async () => {
+        const { error } = await grantAdmin(target);
+        return { error };
+      },
+      onCommitted: () => void load(true),
+      success: `${target} is now an admin`,
+      error: 'Could not add admin',
+    });
     setEmail('');
     setConfirmEmail('');
     setShowAddForm(false);
-    await load();
   };
 
-  const handleRemove = async () => {
-    if (!removing) return;
-    setIsSubmitting(true);
-    const { error } = await removeAdmin(removing.id);
-    setIsSubmitting(false);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    toast.success(`${removing.display_name} is no longer an admin`);
-    setRemoving(null);
-    await load();
+  const handleRemove = (admin: StaffRow) => {
+    runUndoable({
+      key: `admin-remove:${admin.id}`,
+      message: `Removing ${admin.display_name}'s admin access…`,
+      commit: () => removeAdmin(admin.id),
+      onCommitted: () => void load(true),
+      success: `${admin.display_name} is no longer an admin`,
+      error: 'Could not remove admin',
+    });
   };
 
-  const handleSendReset = async () => {
-    if (!resetting) return;
-    setIsSubmitting(true);
-    const { error } = await adminSendPasswordReset(resetting);
-    setIsSubmitting(false);
+  // Emails can't be unsent, so this is confirm-only (no Undo).
+  const handleSendReset = async (admin: StaffRow) => {
+    const { error } = await adminSendPasswordReset(admin);
     if (error) {
       toast.error(error.message);
-      return;
+      return false;
     }
-    toast.success(`Password reset link sent to ${resetting.email}`);
-    setResetting(null);
+    toast.success(`Password reset link sent to ${admin.email}`);
   };
 
   const lastAdmin = admins.filter((admin) => admin.is_active).length <= 1;
+
+  // Click a column title: ascending, descending, then off (newest first).
+  const adminSort = useSortable(
+    admins,
+    {
+      admin: (a) => a.display_name,
+      status: (a) => (a.is_active ? 'active' : 'inactive'),
+      joined: (a) => a.created_at,
+    },
+    { key: 'joined', direction: 'desc' }
+  );
 
   return (
     <AdminLayout>
@@ -135,7 +148,7 @@ export default function AdminTeam() {
               <div className="flex gap-3">
                 <button
                   onClick={handleAdd}
-                  disabled={isSubmitting || !emailsMatch}
+                  disabled={!emailsMatch}
                   className="flex-1 px-4 py-2.5 bg-primary text-primary-foreground rounded-lg font-medium hover:shadow-lg transition-smooth disabled:opacity-50"
                 >
                   Grant admin access
@@ -153,12 +166,19 @@ export default function AdminTeam() {
 
         <div className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            {/* Fixed column widths so sorting or paging doesn't shift the columns. */}
+            <table className="w-full table-fixed [&_td]:whitespace-nowrap" style={{ minWidth: 780 }}>
+              <colgroup>
+                <col />
+                <col style={{ width: 180 }} />
+                <col style={{ width: 220 }} />
+                <col style={{ width: 180 }} />
+              </colgroup>
               <thead>
                 <tr className="border-b border-border bg-secondary">
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Admin</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Status</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Joined</th>
+                  <SortableTh label="Admin" sortKey="admin" sort={adminSort.sort} onSort={adminSort.toggle} />
+                  <SortableTh label="Status" sortKey="status" sort={adminSort.sort} onSort={adminSort.toggle} />
+                  <SortableTh label="Joined" sortKey="joined" sort={adminSort.sort} onSort={adminSort.toggle} />
                   <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Actions</th>
                 </tr>
               </thead>
@@ -170,7 +190,9 @@ export default function AdminTeam() {
                     </td>
                   </tr>
                 ) : (
-                  admins.map((admin) => {
+                  adminSort.sorted
+                    .filter((admin) => !pendingKeys.has(`admin-remove:${admin.id}`))
+                    .map((admin) => {
                     const isMe = admin.id === user?.id;
                     const cantRemove = isMe || (lastAdmin && admin.is_active);
                     return (
@@ -178,12 +200,12 @@ export default function AdminTeam() {
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
                             <ShieldCheck className="w-4 h-4 text-primary" />
-                            <div>
-                              <p className="font-medium text-foreground">
+                            <div className="min-w-0">
+                              <p className="truncate font-medium text-foreground">
                                 {admin.display_name}
                                 {isMe ? <span className="ml-2 text-xs font-normal text-muted-foreground">(you)</span> : null}
                               </p>
-                              <p className="text-xs text-muted-foreground">{admin.email}</p>
+                              <p className="truncate text-xs text-muted-foreground">{admin.email}</p>
                             </div>
                           </div>
                         </td>
@@ -198,7 +220,7 @@ export default function AdminTeam() {
                             {admin.is_active ? 'active' : 'inactive'}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-sm text-muted-foreground">{new Date(admin.created_at).toLocaleDateString()}</td>
+                        <td className="px-6 py-4 text-sm text-muted-foreground">{formatDate(admin.created_at)}</td>
                         <td className="px-6 py-4 text-sm space-x-2 flex">
                           <button
                             onClick={() => setResetting(admin)}
@@ -227,67 +249,36 @@ export default function AdminTeam() {
         </div>
       </div>
 
-      {removing && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card rounded-2xl max-w-md w-full shadow-elevation-3 border border-border">
-            <div className="p-6 border-b border-border">
-              <h3 className="text-lg font-bold text-foreground">Remove Admin Access</h3>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">{removing.display_name}</span> becomes a regular traveler and
-                loses access to this console. Their account is kept.
-              </p>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setRemoving(null)}
-                  className="flex-1 border border-border text-foreground py-2.5 rounded-lg hover:bg-secondary font-semibold transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleRemove}
-                  disabled={isSubmitting}
-                  className="flex-1 bg-destructive text-white py-2.5 rounded-lg disabled:opacity-50 font-semibold transition-colors hover:bg-destructive/90"
-                >
-                  Remove admin
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmActionDialog
+        open={removing !== null}
+        onOpenChange={(open) => !open && setRemoving(null)}
+        tone="destructive"
+        title="Remove admin access?"
+        description={
+          <>
+            <span className="font-medium text-foreground">{removing?.display_name}</span> becomes a regular traveler and loses
+            access to this console. Their account is kept.
+          </>
+        }
+        confirmLabel="Remove admin"
+        onConfirm={() => {
+          if (removing) handleRemove(removing);
+        }}
+      />
 
-      {resetting && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card rounded-2xl max-w-md w-full shadow-elevation-3 border border-border">
-            <div className="p-6 border-b border-border">
-              <h3 className="text-lg font-bold text-foreground">Send Password Reset Link</h3>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-muted-foreground">
-                This emails <span className="font-medium text-foreground">{resetting.email}</span> a one-time link to choose a
-                new password. You won&apos;t see or set their password.
-              </p>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setResetting(null)}
-                  className="flex-1 border border-border text-foreground py-2.5 rounded-lg hover:bg-secondary font-semibold transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSendReset}
-                  disabled={isSubmitting}
-                  className="flex-1 bg-primary text-primary-foreground py-2.5 rounded-lg disabled:opacity-50 font-semibold transition-colors hover:shadow-lg"
-                >
-                  Send Link
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmActionDialog
+        open={resetting !== null}
+        onOpenChange={(open) => !open && setResetting(null)}
+        title="Send password reset link?"
+        description={
+          <>
+            This emails <span className="font-medium text-foreground">{resetting?.email}</span> a one-time link to choose a new
+            password. You won&apos;t see or set their password. An email can&apos;t be unsent.
+          </>
+        }
+        confirmLabel="Send link"
+        onConfirm={() => (resetting ? handleSendReset(resetting) : undefined)}
+      />
     </AdminLayout>
   );
 }

@@ -266,7 +266,6 @@ export default function StaffDashboard() {
                 sosAlerts={activeSosAlerts}
                 getExportRows={getExportRows}
                 onChanged={() => void loadDashboard()}
-                isRefreshing={isRefreshing}
               />
             </div>
 

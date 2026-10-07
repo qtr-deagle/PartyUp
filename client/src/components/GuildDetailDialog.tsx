@@ -26,7 +26,9 @@ const JOIN_POLICY_LABEL: Record<string, string> = {
   approval: 'Approval — the leader accepts requests',
 };
 
-const formatDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+import { formatDate } from '@/lib/datetime';
+import SortableTh from '@/components/SortableTh';
+import { useSortable } from '@/hooks/useSortable';
 
 // How the guild is doing, from the share of members who earned points this
 // month and whether the guild earned any XP in the last 30 days.
@@ -84,6 +86,19 @@ export default function GuildDetailDialog({ guildId, onClose, onDisband }: Props
       leader: overview.members.find((member) => member.is_leader) ?? null,
     };
   }, [overview]);
+
+  // Click a column title: ascending, descending, then off (most points this month first).
+  const memberSort = useSortable(
+    overview?.members ?? [],
+    {
+      member: (m) => m.display_name,
+      role: (m) => (m.is_leader ? 'leader' : 'member'),
+      joined: (m) => m.joined_at,
+      month: (m) => m.points,
+      lifetime: (m) => m.lifetime_points,
+    },
+    { key: 'month', direction: 'desc' }
+  );
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -223,15 +238,15 @@ export default function GuildDetailDialog({ guildId, onClose, onDisband }: Props
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border bg-secondary text-left">
-                        <th className="px-4 py-2.5 font-semibold text-foreground">Member</th>
-                        <th className="px-4 py-2.5 font-semibold text-foreground">Role</th>
-                        <th className="px-4 py-2.5 font-semibold text-foreground">Joined</th>
-                        <th className="px-4 py-2.5 text-right font-semibold text-foreground">This month</th>
-                        <th className="px-4 py-2.5 text-right font-semibold text-foreground">Lifetime</th>
+                        <SortableTh label="Member" sortKey="member" sort={memberSort.sort} onSort={memberSort.toggle} className="px-4 py-2.5 font-semibold text-foreground" />
+                        <SortableTh label="Role" sortKey="role" sort={memberSort.sort} onSort={memberSort.toggle} className="px-4 py-2.5 font-semibold text-foreground" />
+                        <SortableTh label="Joined" sortKey="joined" sort={memberSort.sort} onSort={memberSort.toggle} className="px-4 py-2.5 font-semibold text-foreground" />
+                        <SortableTh label="This month" sortKey="month" sort={memberSort.sort} onSort={memberSort.toggle} className="px-4 py-2.5 font-semibold text-foreground" align="right" />
+                        <SortableTh label="Lifetime" sortKey="lifetime" sort={memberSort.sort} onSort={memberSort.toggle} className="px-4 py-2.5 font-semibold text-foreground" align="right" />
                       </tr>
                     </thead>
                     <tbody>
-                      {overview.members.map((member) => (
+                      {memberSort.sorted.map((member) => (
                         <tr key={member.user_id} className="border-b border-border last:border-0">
                           <td className="px-4 py-2.5">
                             <div className="flex items-center gap-2">

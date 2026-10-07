@@ -15,18 +15,99 @@ export interface AuditLogRow {
   entity_id: string | null;
   metadata: Record<string, unknown>;
   created_at: string;
-  actor: { display_name: string } | null;
+  // From audit_logs_view (partyup-mobile migration 202610070004): the admin's
+  // name ('System' when there's no actor) and severity as 3/2/1. The view is
+  // the one place the severity rules live.
+  actor_name: string;
+  severity_rank: 1 | 2 | 3;
 }
 
-const SELECT_COLUMNS = '*, actor:profiles!audit_logs_actor_id_fkey(display_name)';
+// Reads go through the view so the admin's name and severity can be sorted
+// and filtered in the query. Inserts still go to the audit_logs table.
+const VIEW = 'audit_logs_view';
 
-export async function listAuditLogs(limit = 200) {
-  const { data, error } = await supabase
-    .from('audit_logs')
-    .select(SELECT_COLUMNS)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  return { data: (data ?? []) as unknown as AuditLogRow[], error };
+export type AuditSeverity = 'high' | 'medium' | 'low';
+
+const SEVERITY_RANK: Record<AuditSeverity, 1 | 2 | 3> = { high: 3, medium: 2, low: 1 };
+
+export function severityFromRank(rank: number): AuditSeverity {
+  return rank >= 3 ? 'high' : rank === 2 ? 'medium' : 'low';
+}
+
+// Characters that would break a PostgREST or() expression.
+const cleanSearch = (term: string) => term.replace(/[,()*%"\\]/g, ' ').trim();
+
+// Columns the Audit Log can be ordered by in the query.
+export type AuditSortColumn = 'actor_name' | 'action' | 'entity_type' | 'severity_rank' | 'created_at';
+
+export interface AuditLogQuery {
+  search?: string;
+  severity?: AuditSeverity;
+  sort?: { column: AuditSortColumn; ascending: boolean };
+  from: number;
+  to: number;
+}
+
+// One page of audit logs (newest first unless `sort` says otherwise) plus
+// the total matching count.
+// Search matches the action text, the entity type, or the admin's name.
+export async function listAuditLogs({ search, severity, sort, from, to }: AuditLogQuery) {
+  let query = supabase
+    .from(VIEW)
+    .select('*', { count: 'exact' })
+    .order(sort?.column ?? 'created_at', { ascending: sort?.ascending ?? false, nullsFirst: false })
+    .order('id', { ascending: true });
+
+  const term = cleanSearch(search ?? '');
+  if (term) query = query.or(`action.ilike.%${term}%,entity_type.ilike.%${term}%,actor_name.ilike.%${term}%`);
+  if (severity) query = query.eq('severity_rank', SEVERITY_RANK[severity]);
+
+  const { data, error, count } = await query.range(from, to);
+  if (error) console.error('listAuditLogs failed:', error.message);
+  return { data: (data ?? []) as unknown as AuditLogRow[], count: count ?? 0, error };
+}
+
+export interface AuditLogStats {
+  totalToday: number;
+  percentChange: number | null;
+  highSeverityToday: number;
+  mostActive: { name: string; count: number } | null;
+}
+
+// Summary cards, computed over every row (not just the page on screen).
+export async function getAuditLogStats(): Promise<AuditLogStats> {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+  const startOfWeek = new Date(startOfToday);
+  startOfWeek.setDate(startOfWeek.getDate() - 6);
+
+  const count = () => supabase.from(VIEW).select('id', { count: 'exact', head: true });
+  const [today, yesterday, highToday, week] = await Promise.all([
+    count().gte('created_at', startOfToday.toISOString()),
+    count().gte('created_at', startOfYesterday.toISOString()).lt('created_at', startOfToday.toISOString()),
+    count().gte('created_at', startOfToday.toISOString()).eq('severity_rank', SEVERITY_RANK.high),
+    supabase.from(VIEW).select('actor_id, actor_name').gte('created_at', startOfWeek.toISOString()).limit(5000),
+  ]);
+
+  const totalToday = today.count ?? 0;
+  const totalYesterday = yesterday.count ?? 0;
+  const percentChange = totalYesterday > 0 ? Math.round(((totalToday - totalYesterday) / totalYesterday) * 100) : null;
+
+  const countsByActor = new Map<string, { name: string; count: number }>();
+  for (const row of (week.data ?? []) as unknown as Pick<AuditLogRow, 'actor_id' | 'actor_name'>[]) {
+    const key = row.actor_id ?? 'unknown';
+    const entry = countsByActor.get(key) ?? { name: row.actor_name, count: 0 };
+    entry.count += 1;
+    countsByActor.set(key, entry);
+  }
+  let mostActive: AuditLogStats['mostActive'] = null;
+  countsByActor.forEach((entry) => {
+    if (!mostActive || entry.count > mostActive.count) mostActive = entry;
+  });
+
+  return { totalToday, percentChange, highSeverityToday: highToday.count ?? 0, mostActive };
 }
 
 // Fire-and-forget by design: a hiccup writing the audit trail should never

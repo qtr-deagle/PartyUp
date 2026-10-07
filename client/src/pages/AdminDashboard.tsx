@@ -5,6 +5,8 @@ import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import {
   Activity,
   AlertTriangle,
+  CalendarDays,
+  Flag,
   ArrowRight,
   BarChart3,
   CheckCircle2,
@@ -25,13 +27,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   getAnalyticsMetrics,
   getDashboardCounts,
-  getStaffResolutionCounts,
+  getGuildLeaderPerformance,
   getTopDestinations,
   getWeeklyTripsAndDisputes,
   type AnalyticsMetrics,
   type DashboardCounts,
   type DestinationCount,
-  type StaffResolutionCount,
+  type GuildLeaderPerformance,
   type WeekBucket,
 } from '@/lib/adminStats';
 import { listReports, type ReportRow } from '@/lib/reports';
@@ -39,6 +41,8 @@ import { useActiveSosAlerts } from '@/hooks/useSosRealtime';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
 import { useAuth } from '@/contexts/AuthContext';
 import AdminQuickActions from '@/components/AdminQuickActions';
+import GuildEmblem from '@/components/GuildEmblem';
+import { formatDateTime, formatTime, timeAgo } from '@/lib/datetime';
 
 // Validated for CVD separation and contrast against the light (#FFFFFF) and dark (#1E293B) card surfaces.
 const weeklyChartConfig = {
@@ -58,26 +62,7 @@ function greeting() {
   return 'Good evening';
 }
 
-function timeAgo(iso: string) {
-  const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  return days < 30 ? `${days}d ago` : new Date(iso).toLocaleDateString();
-}
 
-function initials(name: string) {
-  return (
-    name
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0]!.toUpperCase())
-      .join('') || '?'
-  );
-}
 
 function SectionHeader({ icon: Icon, title, subtitle, href }: { icon: LucideIcon; title: string; subtitle?: string; href?: string }) {
   return (
@@ -160,7 +145,7 @@ export default function AdminDashboard() {
   const [metrics, setMetrics] = useState<AnalyticsMetrics | null>(null);
   const [weeklyData, setWeeklyData] = useState<WeekBucket[]>([]);
   const [topDestinations, setTopDestinations] = useState<DestinationCount[]>([]);
-  const [staffMetrics, setStaffMetrics] = useState<StaffResolutionCount[]>([]);
+  const [staffMetrics, setStaffMetrics] = useState<GuildLeaderPerformance[]>([]);
   const [recentReports, setRecentReports] = useState<ReportRow[]>([]);
   const [openReportCount, setOpenReportCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -179,7 +164,7 @@ export default function AdminDashboard() {
       getAnalyticsMetrics(),
       getWeeklyTripsAndDisputes(8),
       getTopDestinations(5),
-      getStaffResolutionCounts(),
+      getGuildLeaderPerformance(),
       listReports('open'),
     ]);
     const error =
@@ -209,7 +194,7 @@ export default function AdminDashboard() {
 
   // Every stat on this page comes from these three tables (pending ID
   // verifications are profiles.verification_status).
-  useTableRealtime(['reports', 'profiles', 'trips'], () => void loadDashboard());
+  useTableRealtime(['reports', 'profiles', 'trips', 'guild_reports', 'guild_members', 'id_verifications', 'vehicles'], () => void loadDashboard());
 
   const getExportRows = () => {
     const rows: (string | number)[][] = [['Section', 'Metric', 'Value']];
@@ -217,7 +202,15 @@ export default function AdminDashboard() {
     rows.push(['Attention', 'Open reports', openReportCount], ['Attention', 'Active SOS alerts', activeSosAlerts.length]);
     for (const week of weeklyData) rows.push(['Weekly', `${week.weekLabel} trips`, week.trips], ['Weekly', `${week.weekLabel} disputes`, week.disputes]);
     for (const d of topDestinations) rows.push(['Top destinations', d.destination, `${d.count} trips (${d.pct.toFixed(1)}%)`]);
-    for (const s of staffMetrics) rows.push(['Guild Leader resolved today', s.displayName, s.resolvedToday]);
+    for (const g of staffMetrics) {
+      rows.push(
+        ['Guild leaders (this month)', `${g.leaderName} - ${g.guildName} points`, g.pointsThisMonth],
+        ['Guild leaders (this month)', `${g.leaderName} - members`, g.memberCount],
+        ['Guild leaders (this month)', `${g.leaderName} - guild reports handled / open`, `${g.reportsHandled} / ${g.reportsOpen}`],
+        ['Guild leaders (this month)', `${g.leaderName} - SOS assists`, g.sosAssists],
+        ['Guild leaders (this month)', `${g.leaderName} - PartyUps`, g.partyUps],
+      );
+    }
     return rows;
   };
 
@@ -226,6 +219,7 @@ export default function AdminDashboard() {
       ? [
           {
             label: 'Total Users',
+            href: '/admin/users',
             value: counts.totalUsers.toLocaleString(),
             sub: `+${metrics.newUsersThisWeek.toLocaleString()} this week`,
             positive: metrics.newUsersThisWeek > 0,
@@ -234,6 +228,7 @@ export default function AdminDashboard() {
           },
           {
             label: 'Active Trips',
+            href: '/admin/trips',
             value: counts.activeTrips.toLocaleString(),
             sub: 'Open or ongoing',
             icon: Activity,
@@ -241,6 +236,7 @@ export default function AdminDashboard() {
           },
           {
             label: 'Total Trips',
+            href: '/admin/trips?completed=1',
             value: counts.totalTrips.toLocaleString(),
             sub: 'All time',
             icon: Plane,
@@ -248,6 +244,7 @@ export default function AdminDashboard() {
           },
           {
             label: 'Completion Rate',
+            href: '/admin/trips?completed=1',
             value: counts.totalTrips > 0 ? `${metrics.completionRatePct.toFixed(1)}%` : '—',
             sub: `${counts.completedTrips.toLocaleString()} completed`,
             icon: Percent,
@@ -255,6 +252,7 @@ export default function AdminDashboard() {
           },
           {
             label: 'Pending IDs',
+            href: '/admin/verification',
             value: counts.pendingVerifications.toLocaleString(),
             sub: 'Awaiting review',
             icon: ShieldCheck,
@@ -262,6 +260,7 @@ export default function AdminDashboard() {
           },
           {
             label: 'Avg Resolution',
+            href: '/admin/support?view=reports',
             value: metrics.avgResolutionHours !== null ? `${metrics.avgResolutionHours.toFixed(1)}h` : '—',
             sub: 'Per dispute',
             icon: Clock,
@@ -271,11 +270,11 @@ export default function AdminDashboard() {
       : [];
 
   const hasWeeklyActivity = weeklyData.some((week) => week.trips > 0 || week.disputes > 0);
-  const maxResolved = Math.max(1, ...staffMetrics.map((s) => s.resolvedToday));
+  const maxGuildPoints = Math.max(1, ...staffMetrics.map((g) => g.pointsThisMonth));
   const attentionItems = [
-    { label: 'SOS alerts', value: activeSosAlerts.length, icon: Siren, urgent: activeSosAlerts.length > 0 },
-    { label: 'Open reports', value: openReportCount, icon: AlertTriangle, urgent: false },
-    { label: 'Pending IDs', value: counts?.pendingVerifications ?? 0, icon: ShieldCheck, urgent: false },
+    { label: 'SOS alerts', value: activeSosAlerts.length, icon: Siren, urgent: activeSosAlerts.length > 0, href: '/admin/sos' },
+    { label: 'Open reports', value: openReportCount, icon: AlertTriangle, urgent: false, href: '/admin/support?view=reports' },
+    { label: 'Pending IDs', value: counts?.pendingVerifications ?? 0, icon: ShieldCheck, urgent: false, href: '/admin/verification' },
   ];
   const needsAttention = attentionItems.some((item) => item.value > 0);
   const firstName = user?.name?.split(' ')[0];
@@ -287,7 +286,7 @@ export default function AdminDashboard() {
         <div className="flex flex-wrap items-end justify-between gap-4 animate-admin-rise">
           <div>
             <p className="text-sm font-medium text-muted-foreground">
-              {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+              {new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'Asia/Manila' }).format(new Date())}
             </p>
             <h1 className="text-3xl font-bold tracking-tight text-foreground mt-1">
               {greeting()}
@@ -303,7 +302,7 @@ export default function AdminDashboard() {
             {isRefreshing
               ? 'Updating…'
               : lastUpdated
-                ? `Live · updated ${lastUpdated.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+                ? `Live · updated ${formatTime(lastUpdated)}`
                 : 'Live'}
           </div>
         </div>
@@ -344,9 +343,13 @@ export default function AdminDashboard() {
                   {attentionItems.map((item) => {
                     const Icon = item.icon;
                     return (
-                      <div
+                      <Link
                         key={item.label}
-                        className={`rounded-2xl px-4 py-3 border ${item.urgent ? 'bg-destructive/10 border-destructive/30' : 'bg-secondary border-transparent'}`}
+                        href={item.href}
+                        title={`Open ${item.label.toLowerCase()}`}
+                        className={`block rounded-2xl px-4 py-3 border transition-smooth hover:-translate-y-0.5 hover:shadow-elevation-2 ${
+                          item.urgent ? 'bg-destructive/10 border-destructive/30 hover:border-destructive/60' : 'bg-secondary border-transparent hover:border-primary/40'
+                        }`}
                       >
                         <div className={`flex items-center gap-1.5 text-xs font-medium ${item.urgent ? 'text-destructive' : 'text-muted-foreground'}`}>
                           <Icon className={`w-3.5 h-3.5 shrink-0 ${item.urgent ? 'animate-pulse' : ''}`} />
@@ -355,7 +358,7 @@ export default function AdminDashboard() {
                         <p className={`text-2xl font-bold tracking-tight mt-1 ${item.urgent ? 'text-destructive' : 'text-foreground'}`}>
                           {item.value.toLocaleString()}
                         </p>
-                      </div>
+                      </Link>
                     );
                   })}
                 </div>
@@ -367,9 +370,11 @@ export default function AdminDashboard() {
               {kpis.map((kpi, index) => {
                 const Icon = kpi.icon;
                 return (
-                  <div
+                  <Link
                     key={kpi.label}
-                    className={`${cardClass} p-5 hover:-translate-y-0.5 animate-admin-rise`}
+                    href={kpi.href}
+                    title={`Open ${kpi.label.toLowerCase()}`}
+                    className={`${cardClass} block p-5 hover:-translate-y-0.5 hover:border-primary/40 animate-admin-rise`}
                     style={riseIn(index + 2)}
                   >
                     <div className={`w-10 h-10 rounded-xl ${kpi.tint} flex items-center justify-center`}>
@@ -384,7 +389,7 @@ export default function AdminDashboard() {
                     >
                       {kpi.sub}
                     </p>
-                  </div>
+                  </Link>
                 );
               })}
             </div>
@@ -394,11 +399,11 @@ export default function AdminDashboard() {
               <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Quick actions</h2>
               <AdminQuickActions
                 pendingIdCount={counts?.pendingVerifications ?? 0}
+                pendingVehicleCount={counts?.pendingVehicles ?? 0}
                 openReportCount={openReportCount}
                 sosAlerts={activeSosAlerts}
                 getExportRows={getExportRows}
                 onChanged={() => void loadDashboard()}
-                isRefreshing={isRefreshing}
               />
             </div>
 
@@ -474,21 +479,24 @@ export default function AdminDashboard() {
             {/* Staff Performance & Recent Reports */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className={`${cardClass} p-6 animate-admin-rise`} style={riseIn(11)}>
-                <SectionHeader icon={Trophy} title="Guild Leader Performance" subtitle="Reports resolved today" href="/admin/staff" />
+                <SectionHeader
+                  icon={Trophy}
+                  title="Guild Leader Performance"
+                  subtitle={`${new Date().toLocaleString('en-US', { month: 'long' })} · ranked by guild points`}
+                  href="/admin/guilds"
+                />
                 <div className="space-y-1">
                   {staffMetrics.length === 0 ? (
                     <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
                       <Trophy className="w-8 h-8 text-muted-foreground/40" />
-                      <p className="text-sm text-muted-foreground">No reports resolved yet today</p>
+                      <p className="text-sm text-muted-foreground">No guilds yet</p>
                     </div>
                   ) : (
-                    staffMetrics.map((staff, index) => (
-                      <div key={staff.staffId} className="flex items-center gap-3 p-3 rounded-xl hover:bg-secondary/60 transition-smooth">
+                    staffMetrics.slice(0, 5).map((guild, index) => (
+                      <div key={guild.guildId} className="flex items-start gap-3 p-3 rounded-xl hover:bg-secondary/60 transition-smooth">
                         <div className="relative shrink-0">
-                          <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold">
-                            {initials(staff.displayName)}
-                          </div>
-                          {index === 0 && staff.resolvedToday > 0 && (
+                          <GuildEmblem emblem={guild.emblem} color={guild.color} size={36} />
+                          {index === 0 && guild.pointsThisMonth > 0 && (
                             <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-amber-400 ring-2 ring-card flex items-center justify-center">
                               <Trophy className="w-2.5 h-2.5 text-amber-900" />
                             </span>
@@ -496,13 +504,37 @@ export default function AdminDashboard() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-baseline justify-between gap-2">
-                            <p className="text-sm font-medium text-foreground truncate">{staff.displayName}</p>
+                            <p className="text-sm font-medium text-foreground truncate">{guild.leaderName}</p>
                             <p className="text-xs text-muted-foreground shrink-0">
-                              <span className="font-semibold text-foreground tabular-nums">{staff.resolvedToday}</span> resolved
+                              <span className="font-semibold text-foreground tabular-nums">{guild.pointsThisMonth.toLocaleString()}</span> pts
                             </p>
                           </div>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {guild.guildName} · {guild.memberCount}
+                            {guild.memberCap ? `/${guild.memberCap}` : ''} members
+                          </p>
                           <div className="w-full bg-secondary rounded-full h-1 mt-1.5 overflow-hidden">
-                            <div className="h-1 rounded-full bg-primary" style={{ width: `${(staff.resolvedToday / maxResolved) * 100}%` }} />
+                            <div className="h-1 rounded-full bg-primary" style={{ width: `${(guild.pointsThisMonth / maxGuildPoints) * 100}%` }} />
+                          </div>
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground" title="Guild reports resolved or dismissed this month">
+                              <CheckCircle2 className="w-3 h-3" />
+                              {guild.reportsHandled} handled
+                            </span>
+                            {guild.reportsOpen > 0 && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/10 px-2 py-0.5 text-[11px] font-medium text-orange-600 dark:text-orange-400" title="Guild reports still waiting on this leader">
+                                <Flag className="w-3 h-3" />
+                                {guild.reportsOpen} open
+                              </span>
+                            )}
+                            <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground" title="SOS alerts this leader resolved this month">
+                              <Siren className="w-3 h-3" />
+                              {guild.sosAssists} SOS
+                            </span>
+                            <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground" title="PartyUp outings posted this month">
+                              <CalendarDays className="w-3 h-3" />
+                              {guild.partyUps} PartyUps
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -526,7 +558,11 @@ export default function AdminDashboard() {
                     </div>
                   ) : (
                     recentReports.map((report) => (
-                      <div key={report.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-secondary/60 transition-smooth">
+                      <Link
+                        key={report.id}
+                        href={`/admin/support?view=reports&report=${report.id}`}
+                        className="group flex items-center gap-3 p-3 rounded-xl hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-smooth"
+                      >
                         <div className="w-9 h-9 rounded-xl bg-orange-500/10 flex items-center justify-center shrink-0">
                           <AlertTriangle className="w-4 h-4 text-orange-500" />
                         </div>
@@ -536,10 +572,11 @@ export default function AdminDashboard() {
                             {report.report_type}
                           </span>
                         </div>
-                        <p className="text-xs text-muted-foreground shrink-0" title={new Date(report.created_at).toLocaleString()}>
+                        <p className="text-xs text-muted-foreground shrink-0" title={formatDateTime(report.created_at)}>
                           {timeAgo(report.created_at)}
                         </p>
-                      </div>
+                        <ArrowRight className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+                      </Link>
                     ))
                   )}
                 </div>

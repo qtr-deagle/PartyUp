@@ -10,19 +10,18 @@ import {
   type LeaderScorecard,
 } from '@/lib/leaderApplications';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
+import { useClientPagination } from '@/hooks/usePagination';
+import TablePagination from '@/components/TablePagination';
+import { runUndoable, usePendingUndoKeys } from '@/lib/undoable';
+import { timeAgo as formatAgo } from '@/lib/datetime';
+import SortableTh from '@/components/SortableTh';
+import { useSortable } from '@/hooks/useSortable';
 
-function timeAgo(iso: string | null) {
-  if (!iso) return 'never';
-  const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
-  if (minutes < 60) return `${Math.max(1, minutes)}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
+const timeAgo = (iso: string | null) => formatAgo(iso, 'never');
 
 /**
- * Leader Applications queue. Travelers at Gold+ with a verified ID and a
- * 4+ rating apply in the mobile app; approving makes them a Guild Leader and
+ * Leader Applications queue. Travelers who meet the leader requirements
+ * (completed and hosted trips, rating, verified ID) apply in the mobile app; approving makes them a Guild Leader and
  * founds their proposed guild. Decisions happen in an in-place dialog.
  */
 export function LeaderApplications({ onDecided }: { onDecided: () => void }) {
@@ -30,7 +29,6 @@ export function LeaderApplications({ onDecided }: { onDecided: () => void }) {
   const [loading, setLoading] = useState(true);
   const [deciding, setDeciding] = useState<{ row: LeaderApplicationRow; approve: boolean } | null>(null);
   const [notes, setNotes] = useState('');
-  const [submitting, setSubmitting] = useState(false);
 
   const load = useCallback(async () => {
     const { data, error } = await listLeaderApplications('pending');
@@ -51,33 +49,38 @@ export function LeaderApplications({ onDecided }: { onDecided: () => void }) {
     setDeciding({ row, approve });
   };
 
-  const submit = async () => {
+  const submit = () => {
     if (!deciding) return;
-    setSubmitting(true);
-    const { error } = await decideLeaderApplication(deciding.row.id, deciding.approve, notes);
-    setSubmitting(false);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    toast.success(
-      deciding.approve
-        ? `${deciding.row.display_name} is now a Guild Leader of ${deciding.row.guild_name}`
-        : `Declined ${deciding.row.display_name}'s application`
-    );
+    const { row, approve } = deciding;
+    const note = notes;
     setDeciding(null);
-    await load();
-    onDecided();
+    runUndoable({
+      key: `leader-app:${row.id}`,
+      message: approve ? `Approving ${row.display_name}…` : `Declining ${row.display_name}…`,
+      commit: () => decideLeaderApplication(row.id, approve, note),
+      onCommitted: () => {
+        void load();
+        onDecided();
+      },
+      success: approve
+        ? `${row.display_name} is now a Guild Leader of ${row.guild_name}`
+        : `Declined ${row.display_name}'s application`,
+      error: approve ? 'Could not approve application' : 'Could not decline application',
+    });
   };
 
+  const pendingKeys = usePendingUndoKeys();
+  const shownRows = rows.filter((row) => !pendingKeys.has(`leader-app:${row.id}`));
+  const appsPage = useClientPagination(shownRows);
+
   return (
-    <div className="bg-card rounded-2xl shadow-elevation-2 border border-border p-6">
+    <div data-paginated className="bg-card rounded-2xl shadow-elevation-2 border border-border p-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Crown className="w-5 h-5 text-amber-600" />
           <h2 className="text-lg font-bold text-foreground">Leader Applications</h2>
         </div>
-        <span className="text-sm text-muted-foreground">{loading ? '' : `${rows.length} waiting`}</span>
+        <span className="text-sm text-muted-foreground">{loading ? '' : `${shownRows.length} waiting`}</span>
       </div>
       <p className="text-xs text-muted-foreground mt-1">
         Applicants already meet the bar: 10+ completed trips, 2+ hosted trips, a 4+ rating from at least 3 buddies, and a verified ID.
@@ -85,11 +88,11 @@ export function LeaderApplications({ onDecided }: { onDecided: () => void }) {
 
       {loading ? (
         <p className="text-sm text-muted-foreground mt-4">Loading...</p>
-      ) : rows.length === 0 ? (
+      ) : shownRows.length === 0 ? (
         <p className="text-sm text-muted-foreground mt-4">No applications waiting.</p>
       ) : (
         <div className="mt-4 space-y-3">
-          {rows.map((row) => (
+          {appsPage.pageItems.map((row) => (
             <div key={row.id} className="rounded-xl border border-border p-4 flex flex-col gap-3 md:flex-row md:items-start">
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -125,6 +128,7 @@ export function LeaderApplications({ onDecided }: { onDecided: () => void }) {
               </div>
             </div>
           ))}
+          <TablePagination pagination={appsPage} itemLabel="applications" className="px-0 pb-0" />
         </div>
       )}
 
@@ -161,7 +165,7 @@ export function LeaderApplications({ onDecided }: { onDecided: () => void }) {
                 </button>
                 <button
                   onClick={submit}
-                  disabled={submitting}
+                  
                   className={`flex-1 py-2.5 rounded-lg disabled:opacity-50 font-semibold transition-colors ${
                     deciding.approve ? 'bg-primary text-primary-foreground hover:shadow-lg' : 'bg-destructive text-white hover:bg-destructive/90'
                   }`}
@@ -198,6 +202,21 @@ export function LeaderScorecards({ refreshKey }: { refreshKey: number }) {
     };
   }, [refreshKey]);
 
+  // Click a column title: ascending, descending, then off (most guild points first).
+  const scoreSort = useSortable(
+    rows,
+    {
+      leader: (r) => r.display_name,
+      guild: (r) => r.guild_name,
+      newMembers: (r) => Number(r.new_members_30d),
+      trips: (r) => Number(r.member_trips_30d),
+      points: (r) => Number(r.guild_points_30d),
+      requests: (r) => Number(r.pending_requests),
+      lastActive: (r) => r.last_active,
+    },
+    { key: 'points', direction: 'desc' }
+  );
+
   return (
     <div className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
       <div className="p-6 pb-3">
@@ -207,16 +226,26 @@ export function LeaderScorecards({ refreshKey }: { refreshKey: number }) {
         </p>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full">
+        {/* Fixed column widths so sorting or paging doesn't shift the columns. */}
+        <table className="w-full table-fixed [&_td]:whitespace-nowrap" style={{ minWidth: 1230 }}>
+          <colgroup>
+            <col />
+            <col />
+            <col style={{ width: 160 }} />
+            <col style={{ width: 160 }} />
+            <col style={{ width: 130 }} />
+            <col style={{ width: 190 }} />
+            <col style={{ width: 190 }} />
+          </colgroup>
           <thead>
             <tr className="border-y border-border bg-secondary">
-              <th className="px-6 py-3 text-left text-sm font-bold text-foreground">Leader</th>
-              <th className="px-6 py-3 text-left text-sm font-bold text-foreground">Guild</th>
-              <th className="px-6 py-3 text-left text-sm font-bold text-foreground">New members</th>
-              <th className="px-6 py-3 text-left text-sm font-bold text-foreground">Member trips</th>
-              <th className="px-6 py-3 text-left text-sm font-bold text-foreground">Guild pts</th>
-              <th className="px-6 py-3 text-left text-sm font-bold text-foreground">Join requests</th>
-              <th className="px-6 py-3 text-left text-sm font-bold text-foreground">Last active</th>
+              <SortableTh label="Leader" sortKey="leader" sort={scoreSort.sort} onSort={scoreSort.toggle} />
+              <SortableTh label="Guild" sortKey="guild" sort={scoreSort.sort} onSort={scoreSort.toggle} />
+              <SortableTh label="New members" sortKey="newMembers" sort={scoreSort.sort} onSort={scoreSort.toggle} />
+              <SortableTh label="Member trips" sortKey="trips" sort={scoreSort.sort} onSort={scoreSort.toggle} />
+              <SortableTh label="Guild pts" sortKey="points" sort={scoreSort.sort} onSort={scoreSort.toggle} />
+              <SortableTh label="Join requests" sortKey="requests" sort={scoreSort.sort} onSort={scoreSort.toggle} />
+              <SortableTh label="Last active" sortKey="lastActive" sort={scoreSort.sort} onSort={scoreSort.toggle} />
             </tr>
           </thead>
           <tbody>
@@ -233,17 +262,17 @@ export function LeaderScorecards({ refreshKey }: { refreshKey: number }) {
                 </td>
               </tr>
             ) : (
-              rows.map((row) => {
+              scoreSort.sorted.map((row) => {
                 const inactive = !row.last_active || Date.now() - new Date(row.last_active).getTime() > 30 * 86_400_000;
                 return (
                   <tr key={row.user_id} className="border-b border-border">
                     <td className="px-6 py-3">
-                      <p className="font-medium text-foreground">{row.display_name}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="truncate font-medium text-foreground">{row.display_name}</p>
+                      <p className="truncate text-xs text-muted-foreground">
                         {rankName(row.lifetime_points)} · {row.lifetime_points} pts
                       </p>
                     </td>
-                    <td className="px-6 py-3 text-sm text-foreground">
+                    <td className="px-6 py-3 text-sm text-foreground truncate">
                       {row.guild_name ? `${row.guild_name} (${row.member_count})` : <span className="text-muted-foreground">No guild yet</span>}
                     </td>
                     <td className="px-6 py-3 text-sm font-semibold text-foreground">{row.new_members_30d}</td>

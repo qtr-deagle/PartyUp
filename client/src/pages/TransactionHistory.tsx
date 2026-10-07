@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import Layout from '@/components/Layout';
 import { CreditCard, Download, Search, Filter, TrendingDown, CheckCircle, AlertCircle, Clock, RefreshCw } from 'lucide-react';
+import SortableTh from '@/components/SortableTh';
+import { useSortable } from '@/hooks/useSortable';
 
 interface Transaction {
     id: number;
@@ -162,6 +164,20 @@ export default function TransactionHistory() {
 
         return true;
     });
+
+    // Click a column title: ascending, descending, then off (newest first).
+    const transactionSort = useSortable(
+        filteredTransactions,
+        {
+            trip: (t) => t.tripName,
+            type: (t) => t.tripType,
+            amount: (t) => t.amount,
+            method: (t) => t.paymentMethod,
+            status: (t) => t.status,
+            date: (t) => t.date,
+        },
+        { key: 'date', direction: 'desc' }
+    );
 
     const getStatusBadge = (status: string) => {
         const statusConfig = {
@@ -386,17 +402,17 @@ export default function TransactionHistory() {
                                     <table className="w-full">
                                         <thead>
                                             <tr className="border-b border-slate-200 bg-slate-50">
-                                                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">Trip</th>
-                                                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">Type</th>
-                                                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">Amount</th>
-                                                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">Payment Method</th>
-                                                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">Status</th>
-                                                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">Date</th>
+                                                <SortableTh label="Trip" sortKey="trip" sort={transactionSort.sort} onSort={transactionSort.toggle} className="px-6 py-4 text-sm font-semibold text-slate-900" />
+                                                <SortableTh label="Type" sortKey="type" sort={transactionSort.sort} onSort={transactionSort.toggle} className="px-6 py-4 text-sm font-semibold text-slate-900" />
+                                                <SortableTh label="Amount" sortKey="amount" sort={transactionSort.sort} onSort={transactionSort.toggle} className="px-6 py-4 text-sm font-semibold text-slate-900" />
+                                                <SortableTh label="Payment Method" sortKey="method" sort={transactionSort.sort} onSort={transactionSort.toggle} className="px-6 py-4 text-sm font-semibold text-slate-900" />
+                                                <SortableTh label="Status" sortKey="status" sort={transactionSort.sort} onSort={transactionSort.toggle} className="px-6 py-4 text-sm font-semibold text-slate-900" />
+                                                <SortableTh label="Date" sortKey="date" sort={transactionSort.sort} onSort={transactionSort.toggle} className="px-6 py-4 text-sm font-semibold text-slate-900" />
                                                 <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">Action</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {filteredTransactions.map((transaction, index) => (
+                                            {transactionSort.sorted.map((transaction, index) => (
                                                 <tr
                                                     key={transaction.id}
                                                     className={`border-b border-slate-200 hover:bg-slate-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'
@@ -446,7 +462,7 @@ export default function TransactionHistory() {
 
                                 {/* Mobile Card View */}
                                 <div className="md:hidden space-y-4 p-4">
-                                    {filteredTransactions.map((transaction) => (
+                                    {transactionSort.sorted.map((transaction) => (
                                         <div key={transaction.id} className="border border-slate-200 rounded-lg p-4 space-y-3">
                                             <div className="flex items-start justify-between">
                                                 <div className="flex-1">

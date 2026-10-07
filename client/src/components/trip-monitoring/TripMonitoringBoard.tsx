@@ -9,6 +9,7 @@ import {
   CalendarDays,
   Car,
   Compass,
+  History,
   ListOrdered,
   MapPin,
   Navigation,
@@ -19,16 +20,19 @@ import {
   Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useLocation } from 'wouter';
+import { useLocation, useSearch } from 'wouter';
 import { useTheme } from '@/contexts/ThemeContext';
 import {
   listActiveTripsWithSafetyStatus,
   getTripMonitoringDetail,
-  resolveSosAlert,
   type TripMonitoringRow,
   type TripMonitoringDetail,
 } from '@/lib/tripMonitoring';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
+import { useClientPagination } from '@/hooks/usePagination';
+import TablePagination from '@/components/TablePagination';
+import ResolveSosDialog, { useSosResolving } from '@/components/sos/ResolveSosDialog';
+import { formatDateShort, formatDateTime } from '@/lib/datetime';
 import { useTripMonitoringRealtime } from '@/hooks/useTripMonitoringRealtime';
 
 const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
@@ -36,7 +40,34 @@ if (mapboxToken) {
   mapboxgl.accessToken = mapboxToken;
 }
 
-function StatusPill({ status }: { status: string }) {
+// An ongoing trip past its scheduled end. The database closes these
+// automatically OVERDUE_GRACE_HOURS later (auto_complete_overdue_trips,
+// partyup-mobile migration 202610070005); keep the two in sync. Without an
+// end_at, a trip is assumed to last one day (the job's minimum).
+const OVERDUE_GRACE_HOURS = 12;
+
+function scheduledEnd(trip: { start_at: string | null; end_at: string | null }) {
+  if (trip.end_at) return new Date(trip.end_at).getTime();
+  if (trip.start_at) return new Date(trip.start_at).getTime() + 86_400_000;
+  return null;
+}
+
+function isOverdue(trip: { status: string; start_at: string | null; end_at: string | null }, now: number) {
+  const end = scheduledEnd(trip);
+  return trip.status === 'ongoing' && end !== null && end < now;
+}
+
+function StatusPill({ status, overdue = false }: { status: string; overdue?: boolean }) {
+  if (overdue) {
+    return (
+      <span
+        className="px-3 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300"
+        title={`Past its scheduled end but not completed by the organizer. Closes automatically ${OVERDUE_GRACE_HOURS}h after the end time.`}
+      >
+        Overdue
+      </span>
+    );
+  }
   const styles: Record<string, string> = {
     ongoing: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300',
     open: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300',
@@ -65,7 +96,7 @@ function formatAgo(iso: string, now: number) {
 
 function formatDate(iso: string | null) {
   if (!iso) return null;
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return formatDateShort(iso);
 }
 
 function formatDateRange(start: string | null, end: string | null) {
@@ -135,7 +166,10 @@ export default function TripMonitoringBoard() {
   const mapStyle = theme === 'dark' ? 'mapbox://styles/mapbox/navigation-night-v1' : 'mapbox://styles/mapbox/navigation-day-v1';
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [includeCompleted, setIncludeCompleted] = useState(false);
+  // `?completed=1` (from the dashboard's Total Trips / Completion Rate cards)
+  // opens the board with finished trips included.
+  const search = useSearch();
+  const [includeCompleted, setIncludeCompleted] = useState(() => new URLSearchParams(search).get('completed') === '1');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const now = useNow();
   const [trips, setTrips] = useState<TripMonitoringRow[]>([]);
@@ -148,8 +182,7 @@ export default function TripMonitoringBoard() {
   const [popupUserId, setPopupUserId] = useState<string | null>(null);
 
   const [resolvingAlertId, setResolvingAlertId] = useState<string | null>(null);
-  const [resolutionNotes, setResolutionNotes] = useState('');
-  const [isResolving, setIsResolving] = useState(false);
+  const isResolving = useSosResolving();
 
   const memberUserIds = useMemo(
     () => (detail ? detail.members.filter((member) => member.status === 'accepted').map((member) => member.user_id) : []),
@@ -197,6 +230,7 @@ export default function TripMonitoringBoard() {
     () => (statusFilter === 'all' ? sortedTrips : sortedTrips.filter((trip) => trip.status === statusFilter)),
     [sortedTrips, statusFilter]
   );
+  const tripsPage = useClientPagination(visibleTrips, [searchTerm, statusFilter, includeCompleted]);
 
   const stats = useMemo(() => {
     const ongoing = trips.filter((trip) => trip.status === 'ongoing');
@@ -238,20 +272,6 @@ export default function TripMonitoringBoard() {
   }, [selectedTripId]);
 
   const selectedTrip = trips.find((trip) => trip.id === selectedTripId) ?? null;
-
-  async function handleResolve() {
-    if (!resolvingAlertId) return;
-    setIsResolving(true);
-    const { error } = await resolveSosAlert(resolvingAlertId, resolutionNotes);
-    setIsResolving(false);
-    if (error) {
-      toast.error('Failed to resolve SOS alert');
-      return;
-    }
-    toast.success('SOS alert marked resolved');
-    setResolvingAlertId(null);
-    setResolutionNotes('');
-  }
 
   const memberDisplayName = (userId: string) => detail?.members.find((m) => m.user_id === userId)?.profiles?.display_name ?? 'Unknown user';
 
@@ -374,10 +394,6 @@ export default function TripMonitoringBoard() {
             className="w-full pl-12 pr-4 py-3 bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-smooth"
           />
         </div>
-        <label className="flex items-center gap-2 px-4 py-3 bg-card border border-border rounded-lg text-sm text-foreground cursor-pointer whitespace-nowrap">
-          <input type="checkbox" checked={includeCompleted} onChange={(e) => setIncludeCompleted(e.target.checked)} />
-          Include completed/cancelled
-        </label>
       </div>
 
       <div className="flex gap-2 flex-wrap">
@@ -392,11 +408,30 @@ export default function TripMonitoringBoard() {
             {value} <span className="opacity-70">({stats.counts[value]})</span>
           </button>
         ))}
+        {/* Live trips only by default; this adds completed + cancelled ones. */}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={includeCompleted}
+          onClick={() => setIncludeCompleted((on) => !on)}
+          title={includeCompleted ? 'Hide completed and cancelled trips' : 'Also show completed and cancelled trips'}
+          className={`sm:ml-auto inline-flex items-center gap-2.5 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+            includeCompleted ? 'bg-primary/10 border-primary/40 text-primary' : 'bg-card border-border text-foreground hover:bg-secondary'
+          }`}
+        >
+          <History className="w-4 h-4" />
+          Show finished trips
+          <span className={`relative h-5 w-9 rounded-full transition-colors ${includeCompleted ? 'bg-primary' : 'bg-muted-foreground/30'}`}>
+            <span
+              className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${includeCompleted ? 'translate-x-4' : ''}`}
+            />
+          </span>
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         <div className="lg:col-span-2">
-          <div className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
+          <div data-paginated className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
             {isLoading ? (
               <p className="text-sm text-muted-foreground text-center py-8">Loading...</p>
             ) : loadError ? (
@@ -408,8 +443,9 @@ export default function TripMonitoringBoard() {
                 <p className="text-sm text-muted-foreground">Try another status filter, clear the search, or include completed trips.</p>
               </div>
             ) : (
-              <div className="divide-y divide-border max-h-[70vh] overflow-y-auto">
-                {visibleTrips.map((trip) => {
+              <>
+              <div className="divide-y divide-border">
+                {tripsPage.pageItems.map((trip) => {
                   const hasActiveSos = tripIdsWithActiveSos.has(trip.id) || trip.active_sos_count > 0;
                   const seatsFilled = trip.seats_total ? trip.seats_total - (trip.seats_available ?? 0) : null;
                   return (
@@ -451,7 +487,7 @@ export default function TripMonitoringBoard() {
                         </div>
                       </div>
                       <div className="flex items-center flex-wrap gap-2 mt-3 pl-12">
-                        <StatusPill status={trip.status} />
+                        <StatusPill status={trip.status} overdue={isOverdue(trip, now)} />
                         {trip.open_report_count > 0 && (
                           <span className="flex items-center gap-1 text-xs text-amber-700">
                             <AlertTriangle className="w-3.5 h-3.5" /> {trip.open_report_count} report{trip.open_report_count > 1 ? 's' : ''}
@@ -483,6 +519,8 @@ export default function TripMonitoringBoard() {
                   );
                 })}
               </div>
+              <TablePagination pagination={tripsPage} itemLabel="trips" />
+              </>
             )}
           </div>
         </div>
@@ -523,7 +561,7 @@ export default function TripMonitoringBoard() {
                       <h3 className="text-lg font-bold text-foreground">
                         {selectedTrip.origin} → {selectedTrip.destination}
                       </h3>
-                      <StatusPill status={selectedTrip.status} />
+                      <StatusPill status={selectedTrip.status} overdue={isOverdue(selectedTrip, now)} />
                     </div>
                     {selectedTrip.title && <p className="text-sm text-foreground mt-0.5">{selectedTrip.title}</p>}
                     <p className="text-sm text-muted-foreground">
@@ -534,8 +572,8 @@ export default function TripMonitoringBoard() {
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {[
-                    { label: 'Starts', value: selectedTrip.start_at ? new Date(selectedTrip.start_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—' },
-                    { label: 'Ends', value: selectedTrip.end_at ? new Date(selectedTrip.end_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—' },
+                    { label: 'Starts', value: formatDateTime(selectedTrip.start_at) },
+                    { label: 'Ends', value: formatDateTime(selectedTrip.end_at) },
                     {
                       label: 'Seats',
                       value: selectedTrip.seats_total ? `${selectedTrip.seats_total - (selectedTrip.seats_available ?? 0)} / ${selectedTrip.seats_total} taken` : '—',
@@ -581,7 +619,7 @@ export default function TripMonitoringBoard() {
                               <p className="text-sm font-medium text-foreground">{memberDisplayName(alert.user_id)}</p>
                               <p className="text-xs text-muted-foreground">
                                 {alert.trigger_reason === 'manual' ? 'Manually triggered' : 'Auto-escalated from Warning Mode'} ·{' '}
-                                {new Date(alert.created_at).toLocaleString()}
+                                {formatDateTime(alert.created_at)}
                               </p>
                               {alert.latitude !== null && alert.longitude !== null && (
                                 <p className="text-xs text-muted-foreground">
@@ -589,12 +627,18 @@ export default function TripMonitoringBoard() {
                                 </p>
                               )}
                             </div>
-                            <button
-                              onClick={() => setResolvingAlertId(alert.id)}
-                              className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg text-sm font-semibold hover:opacity-90 transition-smooth"
-                            >
-                              Resolve
-                            </button>
+                            {isResolving(alert.id) ? (
+                              <span className="px-3 py-1.5 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 text-sm font-semibold">
+                                Resolving…
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => setResolvingAlertId(alert.id)}
+                                className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg text-sm font-semibold hover:opacity-90 transition-smooth"
+                              >
+                                Resolve
+                              </button>
+                            )}
                           </div>
                         ))}
                     </div>
@@ -816,7 +860,7 @@ export default function TripMonitoringBoard() {
                               </p>
                               {event.note && <p className="text-xs text-muted-foreground mt-0.5">{event.note}</p>}
                             </div>
-                            <span className="text-xs text-muted-foreground shrink-0">{new Date(event.at).toLocaleString()}</span>
+                            <span className="text-xs text-muted-foreground shrink-0">{formatDateTime(event.at)}</span>
                           </div>
                         ))}
                       </div>
@@ -846,45 +890,15 @@ export default function TripMonitoringBoard() {
         </div>
       </div>
 
-      {resolvingAlertId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card rounded-2xl max-w-md w-full shadow-elevation-3 border border-border">
-            <div className="p-6 border-b border-border">
-              <h3 className="text-lg font-bold text-foreground">Resolve SOS Alert</h3>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-foreground mb-2">Resolution notes (optional)</label>
-                <textarea
-                  value={resolutionNotes}
-                  onChange={(e) => setResolutionNotes(e.target.value)}
-                  rows={3}
-                  className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary transition-colors"
-                  placeholder="What happened / how this was handled..."
-                />
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => {
-                    setResolvingAlertId(null);
-                    setResolutionNotes('');
-                  }}
-                  className="flex-1 border border-border text-foreground py-2.5 rounded-lg hover:bg-secondary font-semibold transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleResolve}
-                  disabled={isResolving}
-                  className="flex-1 bg-destructive text-destructive-foreground py-2.5 rounded-lg hover:opacity-90 disabled:opacity-50 font-semibold transition-colors"
-                >
-                  {isResolving ? 'Resolving...' : 'Mark Resolved'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {(() => {
+        const alert = resolvingAlertId ? detail?.sosAlerts.find((a) => a.id === resolvingAlertId) : null;
+        return (
+          <ResolveSosDialog
+            alert={alert ? { id: alert.id, created_at: alert.created_at, name: memberDisplayName(alert.user_id) } : null}
+            onClose={() => setResolvingAlertId(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

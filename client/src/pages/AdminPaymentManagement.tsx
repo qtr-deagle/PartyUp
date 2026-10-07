@@ -1,10 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { ImageLightbox } from '@/components/ImageLightbox';
-import { Search, DollarSign, AlertCircle, CheckCircle, Clock, Filter, Camera, AlertTriangle, XCircle, Eye } from 'lucide-react';
+import { Search, DollarSign, AlertCircle, CheckCircle, Clock, Filter, Camera, AlertTriangle, XCircle, Eye, Percent } from 'lucide-react';
 import { getReportEvidenceUrl, listReports, updateReportStatus, type ReportRow, type ReportStatus } from '@/lib/reports';
-import { listPaymentHistory, type PaymentHistoryRow } from '@/lib/payments';
+import SortableTh from '@/components/SortableTh';
+import { useSortable } from '@/hooks/useSortable';
+import { formatPeso, listPaymentHistory, partyUpFee, PLATFORM_FEE_RATE, type PaymentHistoryRow } from '@/lib/payments';
+import { runUndoable } from '@/lib/undoable';
+import { formatDate, formatDateTime } from '@/lib/datetime';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
+import { useClientPagination } from '@/hooks/usePagination';
+import TablePagination from '@/components/TablePagination';
 
 /**
  * Admin Payment Management
@@ -20,7 +26,12 @@ export default function AdminPaymentManagement() {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterGateway, setFilterGateway] = useState('');
 
-  const [issues, setIssues] = useState<ReportRow[]>([]);
+  const [rawIssues, setIssues] = useState<ReportRow[]>([]);
+  const [statusPatch, setStatusPatch] = useState<Record<string, ReportStatus>>({});
+  const issues = useMemo(
+    () => rawIssues.map((issue) => (statusPatch[issue.id] ? { ...issue, status: statusPatch[issue.id] } : issue)),
+    [rawIssues, statusPatch]
+  );
   const [isLoadingIssues, setIsLoadingIssues] = useState(true);
   const [resolvingReport, setResolvingReport] = useState<{ report: ReportRow; status: ReportStatus } | null>(null);
   const [notes, setNotes] = useState('');
@@ -82,12 +93,59 @@ export default function AdminPaymentManagement() {
     [transactions, searchTerm, filterGateway]
   );
 
-  const handleQuickStatus = async (report: ReportRow, status: ReportStatus) => {
-    setIsSubmitting(true);
-    const { error } = await updateReportStatus(report.id, status, report.resolution_notes ?? undefined);
-    setIsSubmitting(false);
-    if (!error) await loadIssues();
+  // Click a column title: ascending, descending, then off (newest first).
+  const issueSort = useSortable(
+    filteredIssues,
+    {
+      reporter: (i) => i.reporter?.display_name,
+      details: (i) => i.details,
+      trip: (i) => i.trip?.title,
+      reported: (i) => i.created_at,
+      status: (i) => i.status,
+    },
+    { key: 'reported', direction: 'desc' }
+  );
+  const issuesPage = useClientPagination(issueSort.sorted, [searchTerm, filterStatus, issueSort.sort]);
+  // Click a column title: ascending, descending, then off (newest first).
+  const transactionSort = useSortable(
+    filteredTransactions,
+    {
+      id: (t) => t.id,
+      user: (t) => t.user?.display_name,
+      trip: (t) => t.trip?.title,
+      amount: (t) => Number(t.amount),
+      fee: (t) => partyUpFee(t),
+      gateway: (t) => t.gateway,
+      reference: (t) => t.reference,
+      status: (t) => t.status,
+      date: (t) => t.created_at,
+    },
+    { key: 'date', direction: 'desc' }
+  );
+  const transactionsPage = useClientPagination(transactionSort.sorted, [searchTerm, filterGateway, transactionSort.sort]);
+
+  // Status changes message the reporter, so they're held for the Undo window.
+  const changeStatus = (report: ReportRow, status: ReportStatus, notes?: string) => {
+    const name = report.reporter?.display_name ?? 'this traveler';
+    const label = status === 'reviewing' ? 'Marking as investigating' : status === 'resolved' ? 'Resolving' : 'Dismissing';
+    runUndoable({
+      key: `report:${report.id}`,
+      message: `${label} ${name}'s payment issue…`,
+      onHide: () => setStatusPatch((prev) => ({ ...prev, [report.id]: status })),
+      onRestore: () => setStatusPatch(({ [report.id]: _, ...rest }) => rest),
+      commit: () => updateReportStatus(report.id, status, notes ?? report.resolution_notes ?? undefined),
+      onCommitted: () => void loadIssues().then(() => setStatusPatch(({ [report.id]: _, ...rest }) => rest)),
+      success:
+        status === 'reviewing'
+          ? 'Marked as investigating. The reporter was told.'
+          : status === 'resolved'
+            ? 'Payment issue resolved. The reporter got a reply.'
+            : 'Payment issue dismissed. The reporter got a reply.',
+      error: 'Failed to update payment issue',
+    });
   };
+
+  const handleQuickStatus = (report: ReportRow, status: ReportStatus) => changeStatus(report, status);
 
   const handleViewEvidence = async (report: ReportRow) => {
     setEvidenceReportId(report.id);
@@ -96,20 +154,17 @@ export default function AdminPaymentManagement() {
     setEvidenceUrls(urls.filter((url): url is string => Boolean(url)));
   };
 
-  const handleResolutionSubmit = async () => {
+  const handleResolutionSubmit = () => {
     if (!resolvingReport) return;
-    setIsSubmitting(true);
-    const { error } = await updateReportStatus(resolvingReport.report.id, resolvingReport.status, notes);
-    setIsSubmitting(false);
-    if (!error) {
-      setResolvingReport(null);
-      setNotes('');
-      await loadIssues();
-    }
+    changeStatus(resolvingReport.report, resolvingReport.status, notes);
+    setResolvingReport(null);
+    setNotes('');
   };
 
   const paidTransactions = transactions.filter((t) => t.status === 'paid');
   const totalVolume = paidTransactions.reduce((sum, t) => sum + t.amount, 0);
+  const totalFees = paidTransactions.reduce((sum, t) => sum + partyUpFee(t), 0);
+  const feePercent = `${Math.round(PLATFORM_FEE_RATE * 100)}%`;
 
   const issueStats = [
     {
@@ -149,6 +204,13 @@ export default function AdminPaymentManagement() {
       icon: DollarSign,
       color: 'bg-green-500/10',
       textColor: 'text-green-500',
+    },
+    {
+      label: `PartyUp Fees (${feePercent})`,
+      value: formatPeso(totalFees),
+      icon: Percent,
+      color: 'bg-primary/10',
+      textColor: 'text-primary',
     },
     {
       label: 'Paid',
@@ -287,16 +349,25 @@ export default function AdminPaymentManagement() {
             </div>
 
             {/* Payment Issues Table */}
-            <div className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
+            <div data-paginated className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full">
+                {/* Fixed column widths so sorting or paging doesn't shift the columns. */}
+                <table className="w-full table-fixed [&_td]:whitespace-nowrap" style={{ minWidth: 1070 }}>
+                  <colgroup>
+                    <col style={{ width: 180 }} />
+                    <col />
+                    <col style={{ width: 200 }} />
+                    <col style={{ width: 150 }} />
+                    <col style={{ width: 130 }} />
+                    <col style={{ width: 210 }} />
+                  </colgroup>
                   <thead>
                     <tr className="border-b border-border bg-secondary">
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Reporter</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Details</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Trip</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Reported</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Status</th>
+                      <SortableTh label="Reporter" sortKey="reporter" sort={issueSort.sort} onSort={issueSort.toggle} />
+                      <SortableTh label="Details" sortKey="details" sort={issueSort.sort} onSort={issueSort.toggle} />
+                      <SortableTh label="Trip" sortKey="trip" sort={issueSort.sort} onSort={issueSort.toggle} />
+                      <SortableTh label="Reported" sortKey="reported" sort={issueSort.sort} onSort={issueSort.toggle} />
+                      <SortableTh label="Status" sortKey="status" sort={issueSort.sort} onSort={issueSort.toggle} />
                       <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Actions</th>
                     </tr>
                   </thead>
@@ -314,21 +385,21 @@ export default function AdminPaymentManagement() {
                         </td>
                       </tr>
                     ) : (
-                      filteredIssues.map((issue) => (
+                      issuesPage.pageItems.map((issue) => (
                         <tr key={issue.id} className="border-b border-border hover:bg-secondary/50 transition-smooth">
                           <td className="px-6 py-4">
-                            <span className="text-sm font-medium text-foreground">{issue.reporter?.display_name ?? 'Unknown'}</span>
+                            <span className="block truncate text-sm font-medium text-foreground" title={issue.reporter?.display_name ?? undefined}>{issue.reporter?.display_name ?? 'Unknown'}</span>
                           </td>
-                          <td className="px-6 py-4 max-w-xs">
+                          <td className="px-6 py-4">
                             <span className="text-sm text-muted-foreground truncate block" title={issue.details}>
                               {issue.details}
                             </span>
                           </td>
                           <td className="px-6 py-4">
-                            <span className="text-sm text-muted-foreground">{issue.trip?.title ?? '—'}</span>
+                            <span className="block truncate text-sm text-muted-foreground" title={issue.trip?.title ?? undefined}>{issue.trip?.title ?? '—'}</span>
                           </td>
                           <td className="px-6 py-4">
-                            <span className="text-sm text-muted-foreground">{new Date(issue.created_at).toLocaleDateString()}</span>
+                            <span className="text-sm text-muted-foreground">{formatDate(issue.created_at)}</span>
                           </td>
                           <td className="px-6 py-4">
                             <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${getStatusColor(issue.status)}`}>
@@ -388,6 +459,7 @@ export default function AdminPaymentManagement() {
                   </tbody>
                 </table>
               </div>
+              <TablePagination pagination={issuesPage} itemLabel="issues" />
             </div>
           </>
         )}
@@ -396,7 +468,7 @@ export default function AdminPaymentManagement() {
         {activeTab === 'history' && (
           <>
             {/* Transaction Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-6">
               {transactionStats.map((stat, index) => {
                 const Icon = stat.icon;
                 return (
@@ -440,36 +512,51 @@ export default function AdminPaymentManagement() {
             </div>
 
             {/* Payment History Table */}
-            <div className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
+            <div data-paginated className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full">
+                {/* Fixed column widths: with auto layout, sorting or paging brought
+                    different text into view and every column shifted. */}
+                <table className="w-full table-fixed [&_td]:whitespace-nowrap" style={{ minWidth: 1460 }}>
+                  <colgroup>
+                    <col style={{ width: 130 }} />
+                    <col style={{ width: 180 }} />
+                    {/* Trip: no width, takes the rest */}
+                    <col />
+                    <col style={{ width: 120 }} />
+                    <col style={{ width: 170 }} />
+                    <col style={{ width: 120 }} />
+                    <col style={{ width: 190 }} />
+                    <col style={{ width: 120 }} />
+                    <col style={{ width: 210 }} />
+                  </colgroup>
                   <thead>
                     <tr className="border-b border-border bg-secondary">
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Transaction ID</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">User</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Trip</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Amount</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Gateway</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Reference</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Status</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Date</th>
+                      <SortableTh label="Transaction ID" sortKey="id" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <SortableTh label="User" sortKey="user" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <SortableTh label="Trip" sortKey="trip" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <SortableTh label="Amount" sortKey="amount" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <SortableTh label="PartyUp Fee" sortKey="fee" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <SortableTh label="Gateway" sortKey="gateway" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <SortableTh label="Reference" sortKey="reference" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <SortableTh label="Status" sortKey="status" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <SortableTh label="Date" sortKey="date" sort={transactionSort.sort} onSort={transactionSort.toggle} />
                     </tr>
                   </thead>
                   <tbody>
                     {isLoadingHistory ? (
                       <tr>
-                        <td colSpan={8} className="px-6 py-8 text-center text-sm text-muted-foreground">
+                        <td colSpan={9} className="px-6 py-8 text-center text-sm text-muted-foreground">
                           Loading...
                         </td>
                       </tr>
                     ) : filteredTransactions.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="px-6 py-8 text-center text-sm text-muted-foreground">
+                        <td colSpan={9} className="px-6 py-8 text-center text-sm text-muted-foreground">
                           No transactions found
                         </td>
                       </tr>
                     ) : (
-                      filteredTransactions.map((transaction) => (
+                      transactionsPage.pageItems.map((transaction) => (
                         <tr key={transaction.id} className="border-b border-border hover:bg-secondary/50 transition-smooth">
                           <td className="px-6 py-4">
                             <span className="text-sm font-mono text-foreground" title={transaction.id}>
@@ -477,10 +564,10 @@ export default function AdminPaymentManagement() {
                             </span>
                           </td>
                           <td className="px-6 py-4">
-                            <span className="text-sm text-foreground">{transaction.user?.display_name ?? 'Unknown'}</span>
+                            <span className="block truncate text-sm text-foreground" title={transaction.user?.display_name ?? undefined}>{transaction.user?.display_name ?? 'Unknown'}</span>
                           </td>
                           <td className="px-6 py-4">
-                            <span className="text-sm text-muted-foreground">{transaction.trip?.title ?? '—'}</span>
+                            <span className="block truncate text-sm text-muted-foreground" title={transaction.trip?.title ?? undefined}>{transaction.trip?.title ?? '—'}</span>
                           </td>
                           <td className="px-6 py-4">
                             <span className="text-sm font-semibold text-foreground">
@@ -488,10 +575,16 @@ export default function AdminPaymentManagement() {
                             </span>
                           </td>
                           <td className="px-6 py-4">
+                            <span className="text-sm font-semibold text-primary">{formatPeso(partyUpFee(transaction))}</span>
+                            <span className="ml-1.5 text-xs text-muted-foreground">
+                              {transaction.trip?.trip_type === 'carpool' ? `${feePercent} on top` : feePercent}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
                             <span className="text-sm font-medium text-foreground capitalize">{transaction.gateway}</span>
                           </td>
                           <td className="px-6 py-4">
-                            <span className="text-sm font-mono text-muted-foreground">{transaction.reference ?? '—'}</span>
+                            <span className="block truncate text-sm font-mono text-muted-foreground" title={transaction.reference ?? undefined}>{transaction.reference ?? '—'}</span>
                           </td>
                           <td className="px-6 py-4">
                             <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${getStatusColor(transaction.status)}`}>
@@ -499,7 +592,7 @@ export default function AdminPaymentManagement() {
                             </span>
                           </td>
                           <td className="px-6 py-4">
-                            <span className="text-sm text-muted-foreground">{new Date(transaction.created_at).toLocaleString()}</span>
+                            <span className="text-sm text-muted-foreground">{formatDateTime(transaction.created_at)}</span>
                           </td>
                         </tr>
                       ))
@@ -507,6 +600,7 @@ export default function AdminPaymentManagement() {
                   </tbody>
                 </table>
               </div>
+              <TablePagination pagination={transactionsPage} itemLabel="transactions" />
             </div>
           </>
         )}

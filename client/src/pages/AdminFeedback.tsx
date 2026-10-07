@@ -3,6 +3,9 @@ import AdminLayout from '@/components/AdminLayout';
 import { Search, Star, MessageSquare, Filter, ThumbsUp, AlertCircle, Download } from 'lucide-react';
 import { listFeedback, type FeedbackRow, type FeedbackType } from '@/lib/feedback';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
+import { useClientPagination } from '@/hooks/usePagination';
+import TablePagination from '@/components/TablePagination';
+import { formatDateTime } from '@/lib/datetime';
 
 /**
  * Admin Feedback Management
@@ -51,6 +54,8 @@ export default function AdminFeedback() {
       }),
     [feedback, searchTerm, filterRating, filterType]
   );
+
+  const feedbackPage = useClientPagination(filteredFeedback, [searchTerm, filterRating, filterType]);
 
   const stats = useMemo(() => {
     const total = feedback.length;
@@ -251,13 +256,13 @@ export default function AdminFeedback() {
         </div>
 
         {/* Feedback List */}
-        <div className="space-y-4">
+        <div data-paginated className="space-y-4">
           {isLoading ? (
             <div className="bg-card rounded-xl p-8 shadow-elevation-2 border border-border text-center text-sm text-muted-foreground">
               Loading...
             </div>
           ) : filteredFeedback.length > 0 ? (
-            filteredFeedback.map((item) => (
+            feedbackPage.pageItems.map((item) => (
               <div key={item.id} className="bg-card rounded-xl shadow-elevation-2 border border-border transition-all duration-200 hover:shadow-lg">
                 <div className="p-6">
                   {/* Top Row */}
@@ -274,7 +279,7 @@ export default function AdminFeedback() {
                             {getFeedbackTypeLabel(item.feedback_type)}
                           </span>
                         </div>
-                        <p className="text-xs text-muted-foreground">{new Date(item.created_at).toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">{formatDateTime(item.created_at)}</p>
                       </div>
                     </div>
 
@@ -295,6 +300,13 @@ export default function AdminFeedback() {
               <p className="text-muted-foreground text-lg font-medium">No feedback found</p>
               <p className="text-sm text-muted-foreground mt-1">Try adjusting your filters to see more feedback</p>
             </div>
+          )}
+          {!isLoading && (
+            <TablePagination
+              pagination={feedbackPage}
+              itemLabel="reviews"
+              className="bg-card rounded-xl border shadow-elevation-1"
+            />
           )}
         </div>
       </div>

@@ -4,6 +4,8 @@ import { Search, CheckCircle, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { listReports, updateReportStatus, type ReportRow } from '@/lib/reports';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
+import SortableTh from '@/components/SortableTh';
+import { useSortable } from '@/hooks/useSortable';
 
 /**
  * Staff Moderation - Reports Queue
@@ -50,6 +52,17 @@ export default function StaffModeration() {
     [reports, searchTerm]
   );
 
+  // Click a column title: ascending, descending, then off (newest first).
+  const reportSort = useSortable(
+    filteredReports,
+    {
+      user: (r) => r.reported_user?.display_name,
+      reason: (r) => `${r.report_type} ${r.details}`,
+      time: (r) => r.created_at,
+    },
+    { key: 'time', direction: 'desc' }
+  );
+
   const handleAction = async (report: ReportRow, status: 'resolved' | 'dismissed') => {
     setActioningReportId(report.id);
     const { error } = await updateReportStatus(report.id, status);
@@ -85,12 +98,19 @@ export default function StaffModeration() {
         {/* Reports Table */}
         <div className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            {/* Fixed column widths so sorting or paging doesn't shift the columns. */}
+            <table className="w-full table-fixed [&_td]:whitespace-nowrap" style={{ minWidth: 750 }}>
+              <colgroup>
+                <col style={{ width: 200 }} />
+                <col />
+                <col style={{ width: 210 }} />
+                <col style={{ width: 140 }} />
+              </colgroup>
               <thead className="border-b border-border bg-secondary">
                 <tr>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">User</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Reason</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Time</th>
+                  <SortableTh label="User" sortKey="user" sort={reportSort.sort} onSort={reportSort.toggle} />
+                  <SortableTh label="Reason" sortKey="reason" sort={reportSort.sort} onSort={reportSort.toggle} />
+                  <SortableTh label="Time" sortKey="time" sort={reportSort.sort} onSort={reportSort.toggle} />
                   <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Action</th>
                 </tr>
               </thead>
@@ -114,10 +134,10 @@ export default function StaffModeration() {
                     </td>
                   </tr>
                 ) : (
-                  filteredReports.map((report) => (
+                  reportSort.sorted.map((report) => (
                     <tr key={report.id} className="border-b border-border hover:bg-secondary/50 transition-colors">
-                      <td className="px-6 py-4 text-sm text-foreground">{report.reported_user?.display_name ?? '—'}</td>
-                      <td className="px-6 py-4 text-sm text-muted-foreground">
+                      <td className="px-6 py-4 text-sm text-foreground truncate">{report.reported_user?.display_name ?? '—'}</td>
+                      <td className="px-6 py-4 text-sm text-muted-foreground truncate" title={report.details}>
                         <span className="capitalize font-medium text-foreground">{report.report_type}</span> — {report.details}
                       </td>
                       <td className="px-6 py-4 text-sm text-muted-foreground">{new Date(report.created_at).toLocaleString()}</td>

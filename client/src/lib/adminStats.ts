@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import type { GuildEmblem } from '@/lib/guilds';
 
 export interface DashboardCounts {
   totalUsers: number;
@@ -6,6 +7,7 @@ export interface DashboardCounts {
   completedTrips: number;
   totalTrips: number;
   pendingVerifications: number;
+  pendingVehicles: number;
 }
 
 async function countRows(table: string, apply?: (query: any) => any) {
@@ -16,14 +18,15 @@ async function countRows(table: string, apply?: (query: any) => any) {
 }
 
 export async function getDashboardCounts(): Promise<{ data: DashboardCounts; error: Error | null }> {
-  const [users, activeTrips, completedTrips, totalTrips, pendingVerifications] = await Promise.all([
+  const [users, activeTrips, completedTrips, totalTrips, pendingVerifications, pendingVehicles] = await Promise.all([
     countRows('profiles'),
     countRows('trips', (q) => q.in('status', ['open', 'ongoing'])),
     countRows('trips', (q) => q.eq('status', 'completed')),
     countRows('trips'),
     countRows('id_verifications', (q) => q.eq('status', 'pending')),
+    countRows('vehicles', (q) => q.eq('verification_status', 'pending')),
   ]);
-  const firstError = [users, activeTrips, completedTrips, totalTrips, pendingVerifications].find((r) => r.error)?.error ?? null;
+  const firstError = [users, activeTrips, completedTrips, totalTrips, pendingVerifications, pendingVehicles].find((r) => r.error)?.error ?? null;
   return {
     data: {
       totalUsers: users.count,
@@ -31,6 +34,7 @@ export async function getDashboardCounts(): Promise<{ data: DashboardCounts; err
       completedTrips: completedTrips.count,
       totalTrips: totalTrips.count,
       pendingVerifications: pendingVerifications.count,
+      pendingVehicles: pendingVehicles.count,
     },
     error: firstError,
   };
@@ -73,6 +77,69 @@ export async function getStaffResolutionCounts(): Promise<{ data: StaffResolutio
     .map(([staffId, resolvedToday]) => ({ staffId, displayName: nameById.get(staffId) ?? 'Unknown', resolvedToday }))
     .sort((a, b) => b.resolvedToday - a.resolvedToday);
   return { data: results, error: null };
+}
+
+// What each guild leader did this month. Report review is admin-only, so
+// leaders are measured on their own work: guild growth, guild reports,
+// SOS assists and PartyUp outings.
+export interface GuildLeaderPerformance {
+  guildId: string;
+  guildName: string;
+  emblem: GuildEmblem;
+  color: string;
+  leaderId: string;
+  leaderName: string;
+  memberCount: number;
+  memberCap: number | null;
+  pointsThisMonth: number;
+  reportsHandled: number;
+  reportsOpen: number;
+  sosAssists: number;
+  partyUps: number;
+}
+
+export async function getGuildLeaderPerformance(): Promise<{ data: GuildLeaderPerformance[]; error: Error | null }> {
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const since = monthStart.toISOString();
+
+  const [board, reports, sos, partyUps] = await Promise.all([
+    supabase.rpc('get_guild_leaderboard', { p_period: 'month' }),
+    supabase.from('guild_reports').select('guild_id, status, handled_by, handled_at').or(`status.eq.open,handled_at.gte.${since}`),
+    supabase.from('sos_alerts').select('resolved_by').eq('status', 'resolved').gte('resolved_at', since).not('resolved_by', 'is', null),
+    supabase.from('guild_partyups').select('guild_id').gte('created_at', since),
+  ]);
+  const error = board.error ?? reports.error ?? sos.error ?? partyUps.error;
+  if (error) return { data: [], error: new Error(error.message) };
+
+  const tally = (keys: Array<string | null>) => {
+    const counts = new Map<string, number>();
+    for (const key of keys) if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
+    return counts;
+  };
+  const reportRows = reports.data ?? [];
+  const handledBy = tally(reportRows.filter((r) => r.status !== 'open' && r.handled_at && r.handled_at >= since).map((r) => r.handled_by));
+  const openByGuild = tally(reportRows.filter((r) => r.status === 'open').map((r) => r.guild_id));
+  const sosBy = tally((sos.data ?? []).map((r) => r.resolved_by));
+  const partyUpsByGuild = tally((partyUps.data ?? []).map((r) => r.guild_id));
+
+  const data = ((board.data as any[] | null) ?? []).map((g) => ({
+    guildId: g.guild_id,
+    guildName: g.name,
+    emblem: g.emblem,
+    color: g.color,
+    leaderId: g.leader_id,
+    leaderName: g.leader_name,
+    memberCount: Number(g.member_count ?? 0),
+    memberCap: g.member_cap == null ? null : Number(g.member_cap),
+    pointsThisMonth: Number(g.points ?? 0),
+    reportsHandled: handledBy.get(g.leader_id) ?? 0,
+    reportsOpen: openByGuild.get(g.guild_id) ?? 0,
+    sosAssists: sosBy.get(g.leader_id) ?? 0,
+    partyUps: partyUpsByGuild.get(g.guild_id) ?? 0,
+  }));
+  return { data, error: null };
 }
 
 export interface AnalyticsMetrics {

@@ -1,34 +1,44 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { Search, Filter, Clock, User } from 'lucide-react';
-import { listAuditLogs, type AuditLogRow } from '@/lib/auditLog';
+import {
+  getAuditLogStats,
+  listAuditLogs,
+  severityFromRank,
+  type AuditLogQuery,
+  type AuditLogRow,
+  type AuditLogStats,
+  type AuditSeverity,
+  type AuditSortColumn,
+} from '@/lib/auditLog';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
+import { formatDateTime } from '@/lib/datetime';
+import { usePagination } from '@/hooks/usePagination';
+import TablePagination from '@/components/TablePagination';
+import SortableTh from '@/components/SortableTh';
+import { useSortState } from '@/hooks/useSortable';
 
 /**
  * Admin Audit Log - Compliance & Monitoring
  *
- * Reads the real audit_logs table. Entries are written by the actual
- * admin actions that produce them -- see logAuditAction() call sites in
- * lib/reports.ts, lib/vehicles.ts, lib/verification.ts, lib/tripMonitoring.ts.
- * A DB trigger (202610020005_audit_log_admin_only) drops inserts from
- * non-admins, so Guild Leader actions never land here.
+ * Reads the real audit logs (through audit_logs_view). Entries are written by
+ * the actual admin actions that produce them -- see logAuditAction() call
+ * sites in lib/reports.ts, lib/vehicles.ts, lib/verification.ts,
+ * lib/tripMonitoring.ts. A DB trigger (202610020005_audit_log_admin_only)
+ * drops inserts from non-admins, so Guild Leader actions never land here.
+ *
+ * Severity isn't stored: audit_logs_view derives it from the action text
+ * (partyup-mobile migration 202610070004), so it can be sorted and filtered
+ * in the query. Change the rules there, not here.
  */
-type Severity = 'high' | 'medium' | 'low';
-
-// audit_logs has no severity column -- this is a display-only heuristic
-// derived from the action text, not stored data.
-function getSeverity(action: string): Severity {
-  const lower = action.toLowerCase();
-  if (lower.startsWith('rejected') || lower.includes('sos')) return 'high';
-  if (lower.startsWith('resolved') || lower.startsWith('dismissed') || lower.startsWith('started investigating')) return 'medium';
-  return 'low';
-}
+type Severity = AuditSeverity;
 
 const ENTITY_LABELS: Record<string, string> = {
   report: 'Report',
   vehicle: 'Vehicle',
   id_verification: 'ID Verification',
   sos_alert: 'SOS Alert',
+  driver_license: "Driver's License",
 };
 
 function getTargetLabel(log: AuditLogRow) {
@@ -39,74 +49,52 @@ function getTargetLabel(log: AuditLogRow) {
 
 export default function AdminAudit() {
   const [logs, setLogs] = useState<AuditLogRow[]>([]);
+  const [totalLogs, setTotalLogs] = useState(0);
+  const [stats, setStats] = useState<AuditLogStats>({ totalToday: 0, percentChange: null, highSeverityToday: 0, mostActive: null });
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSeverity, setFilterSeverity] = useState<'all' | Severity>('all');
 
+  // Click a column title: ascending, descending, then off (newest first).
+  // Sorted in the query, since the table loads one page at a time.
+  const logSort = useSortState<AuditSortColumn>();
+  const sortArg = logSort.sort ? { column: logSort.sort.key, ascending: logSort.sort.direction === 'asc' } : undefined;
+  const pagination = usePagination(totalLogs, [searchTerm, filterSeverity, logSort.sort]);
+  const { from, to } = pagination;
+
   // `silent` refreshes (realtime / tab focus) skip the loading state.
-  const loadLogs = useCallback(async (silent = false) => {
+  const loadLogs = useCallback(async (
+    search: string,
+    severity: 'all' | Severity,
+    range: { from: number; to: number },
+    sort: AuditLogQuery['sort'],
+    silent = false
+  ) => {
     if (!silent) setIsLoading(true);
-    const { data } = await listAuditLogs();
-    setLogs(data);
+    const [{ data, count, error }, nextStats] = await Promise.all([
+      listAuditLogs({ search, severity: severity === 'all' ? undefined : severity, sort, ...range }),
+      getAuditLogStats(),
+    ]);
+    if (!error) {
+      setLogs(data);
+      setTotalLogs(count);
+    }
+    setStats(nextStats);
     setIsLoading(false);
   }, []);
 
+  // Debounce typing in the search box; page / filter changes load right away.
+  const lastSearch = useRef(searchTerm);
   useEffect(() => {
-    void loadLogs();
-  }, [loadLogs]);
+    const typed = lastSearch.current !== searchTerm;
+    lastSearch.current = searchTerm;
+    const timeout = setTimeout(() => void loadLogs(searchTerm, filterSeverity, { from, to }, sortArg), typed ? 300 : 0);
+    return () => clearTimeout(timeout);
+    // sortArg is rebuilt each render; its column/direction are the real deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, filterSeverity, from, to, sortArg?.column, sortArg?.ascending, loadLogs]);
 
-  useTableRealtime('audit_logs', () => void loadLogs(true));
-
-  const filteredLogs = useMemo(
-    () =>
-      logs.filter((log) => {
-        const searchLower = searchTerm.toLowerCase();
-        const matchesSearch =
-          (log.actor?.display_name ?? '').toLowerCase().includes(searchLower) || log.action.toLowerCase().includes(searchLower);
-        const matchesFilter = filterSeverity === 'all' || getSeverity(log.action) === filterSeverity;
-        return matchesSearch && matchesFilter;
-      }),
-    [logs, searchTerm, filterSeverity]
-  );
-
-  const stats = useMemo(() => {
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startOfYesterday = new Date(startOfToday);
-    startOfYesterday.setDate(startOfYesterday.getDate() - 1);
-    const startOfWeek = new Date(startOfToday);
-    startOfWeek.setDate(startOfWeek.getDate() - 6);
-
-    const todayLogs = logs.filter((l) => new Date(l.created_at) >= startOfToday);
-    const yesterdayLogs = logs.filter((l) => {
-      const d = new Date(l.created_at);
-      return d >= startOfYesterday && d < startOfToday;
-    });
-    const weekLogs = logs.filter((l) => new Date(l.created_at) >= startOfWeek);
-
-    const totalToday = todayLogs.length;
-    const totalYesterday = yesterdayLogs.length;
-    const percentChange = totalYesterday > 0 ? Math.round(((totalToday - totalYesterday) / totalYesterday) * 100) : null;
-
-    const highSeverityToday = todayLogs.filter((l) => getSeverity(l.action) === 'high').length;
-
-    const countsByActor = new Map<string, { name: string; count: number }>();
-    for (const log of weekLogs) {
-      const key = log.actor_id ?? 'unknown';
-      const name = log.actor?.display_name ?? 'Unknown';
-      const entry = countsByActor.get(key) ?? { name, count: 0 };
-      entry.count += 1;
-      countsByActor.set(key, entry);
-    }
-    const actorEntries = Array.from(countsByActor.values());
-    let mostActive: { name: string; count: number } | null = null;
-    for (let i = 0; i < actorEntries.length; i++) {
-      const entry = actorEntries[i];
-      if (!mostActive || entry.count > mostActive.count) mostActive = entry;
-    }
-
-    return { totalToday, percentChange, highSeverityToday, mostActive };
-  }, [logs]);
+  useTableRealtime('audit_logs', () => void loadLogs(searchTerm, filterSeverity, { from, to }, sortArg, true));
 
   const getSeverityColor = (severity: Severity) => {
     switch (severity) {
@@ -158,50 +146,60 @@ export default function AdminAudit() {
         </div>
 
         {/* Audit Table */}
-        <div className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
+        <div data-paginated className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            {/* Fixed column widths so sorting or paging doesn't shift the columns. */}
+            <table className="w-full table-fixed [&_td]:whitespace-nowrap" style={{ minWidth: 990 }}>
+              <colgroup>
+                <col style={{ width: 220 }} />
+                <col />
+                <col />
+                <col style={{ width: 140 }} />
+                <col style={{ width: 230 }} />
+              </colgroup>
               <thead>
                 <tr className="border-b border-border bg-secondary">
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Admin</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Action</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Target</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Severity</th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Timestamp</th>
+                  <SortableTh label="Admin" sortKey="actor_name" sort={logSort.sort} onSort={logSort.toggle} />
+                  <SortableTh label="Action" sortKey="action" sort={logSort.sort} onSort={logSort.toggle} />
+                  <SortableTh label="Target" sortKey="entity_type" sort={logSort.sort} onSort={logSort.toggle} />
+                  <SortableTh label="Severity" sortKey="severity_rank" sort={logSort.sort} onSort={logSort.toggle} />
+                  <SortableTh label="Timestamp" sortKey="created_at" sort={logSort.sort} onSort={logSort.toggle} />
                 </tr>
               </thead>
-              <tbody>
-                {isLoading ? (
+              <tbody className={isLoading && logs.length > 0 ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
+                {isLoading && logs.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-6 py-8 text-center text-sm text-muted-foreground">
                       Loading...
                     </td>
                   </tr>
-                ) : filteredLogs.length === 0 ? (
+                ) : logs.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-6 py-8 text-center text-sm text-muted-foreground">
-                      No actions recorded yet
+                      {searchTerm || filterSeverity !== 'all' ? 'No actions match these filters' : 'No actions recorded yet'}
                     </td>
                   </tr>
                 ) : (
-                  filteredLogs.map((log) => {
-                    const severity = getSeverity(log.action);
+                  logs.map((log) => {
+                    const severity = severityFromRank(log.severity_rank);
                     return (
                       <tr key={log.id} className="border-b border-border hover:bg-secondary/50 transition-colors">
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
                             <User className="w-4 h-4 text-muted-foreground" />
-                            <p className="text-sm font-medium text-foreground">{log.actor?.display_name ?? 'System'}</p>
+                            <p className="truncate text-sm font-medium text-foreground">{log.actor_name}</p>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-sm text-foreground">{log.action}</td>
-                        <td className="px-6 py-4 text-sm text-muted-foreground">{getTargetLabel(log)}</td>
+                        <td className="px-6 py-4 text-sm text-foreground truncate" title={log.action}>{log.action}</td>
+                        <td className="px-6 py-4 text-sm text-muted-foreground truncate">{getTargetLabel(log)}</td>
                         <td className="px-6 py-4 text-sm">
                           <span className={`px-3 py-1 rounded-full text-xs font-medium ${getSeverityColor(severity)}`}>{severity}</span>
                         </td>
-                        <td className="px-6 py-4 text-sm text-muted-foreground flex items-center gap-2">
-                          <Clock className="w-4 h-4" />
-                          {new Date(log.created_at).toLocaleString()}
+                        <td className="px-6 py-4 text-sm text-muted-foreground">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4" />
+                            {formatDateTime(log.created_at)}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -210,6 +208,7 @@ export default function AdminAudit() {
               </tbody>
             </table>
           </div>
+          <TablePagination pagination={pagination} itemLabel="actions" />
         </div>
 
         {/* Summary Stats */}

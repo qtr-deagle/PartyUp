@@ -1,20 +1,40 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { CheckCircle, XCircle, Clock, BarChart3 } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, BarChart3, Car, IdCard } from 'lucide-react';
 import AdminLayout from '@/components/AdminLayout';
 import { ImageLightbox } from '@/components/ImageLightbox';
-import { listVehicles, getVehiclePhotoUrl, reviewVehicleVerification, type VehicleRow, type VehicleVerificationStatus } from '@/lib/vehicles';
+import {
+  listVehicles,
+  getVehiclePhotoUrl,
+  reviewVehicleVerification,
+  listLicenseOnlyQueue,
+  reviewDriverLicense,
+  type DriverLicense,
+  type VehicleRow,
+  type VehicleVerificationStatus,
+} from '@/lib/vehicles';
+import DriverLicensePanel from '@/components/DriverLicensePanel';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
+import { useClientPagination } from '@/hooks/usePagination';
+import TablePagination from '@/components/TablePagination';
+import ConfirmActionDialog from '@/components/ConfirmActionDialog';
+import { runUndoable } from '@/lib/undoable';
+import { formatDateTime } from '@/lib/datetime';
 
 /**
- * Staff Vehicles - Personal Vehicle Verification
+ * Vehicle Verification (admin, routed at /admin/vehicles)
  *
- * Staff can:
+ * Admins can:
  * - Review travelers' personal vehicles submitted for verification
  * - Inspect the exterior, OR/CR, and plate photos
  * - For borrowed vehicles, also inspect the owner's letter of authorization,
  *   both sides of the owner's ID, and the owner's 3 specimen signatures
  * - Approve or reject with a note back to the traveler
  * - Browse past decisions by status (all / pending / approved / rejected)
+ * - See the traveler's driver's license (photos, auto-check, QR result) with
+ *   every vehicle; approving the vehicle approves a pending license too
+ * - "Driver's licenses" tab: licenses submitted without a vehicle (license
+ *   only, or a reused verified-ID license whose QR check didn't pass), which
+ *   would otherwise never get reviewed
  */
 // 'unverified' vehicles were never submitted, so they never show up here.
 type FilterStatus = 'all' | Exclude<VehicleVerificationStatus, 'unverified'>;
@@ -55,16 +75,24 @@ function DocumentImage({ label, src, alt, onOpen }: { label: string; src: string
 }
 
 export default function StaffVehicles() {
-  const [vehicles, setVehicles] = useState<VehicleRow[]>([]);
+  const [rawVehicles, setVehicles] = useState<VehicleRow[]>([]);
+  // Decisions still inside their Undo window, shown as if saved.
+  const [statusPatch, setStatusPatch] = useState<Record<string, VehicleVerificationStatus>>({});
+  const [confirmApprove, setConfirmApprove] = useState<VehicleRow | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [images, setImages] = useState<VehicleImages>(EMPTY_IMAGES);
   const [rejectionReason, setRejectionReason] = useState('');
   const [otherReason, setOtherReason] = useState('');
   const [showRejectionModal, setShowRejectionModal] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('pending');
+  const [view, setView] = useState<'vehicles' | 'licenses'>('vehicles');
+  const [licenseQueue, setLicenseQueue] = useState<DriverLicense[]>([]);
+  const [licensesLoading, setLicensesLoading] = useState(true);
+  const [selectedLicenseUser, setSelectedLicenseUser] = useState<string | null>(null);
+  const [licenseDecision, setLicenseDecision] = useState<{ license: DriverLicense; decision: 'approved' | 'rejected' } | null>(null);
+  const [hiddenLicenses, setHiddenLicenses] = useState<Set<string>>(new Set());
 
   // `silent` refreshes (realtime / tab focus) keep the list on screen instead of
   // flashing the loading state.
@@ -81,6 +109,59 @@ export default function StaffVehicles() {
   }, [filterStatus, loadQueue]);
 
   useTableRealtime('vehicles', () => void loadQueue(filterStatus, true));
+
+  const loadLicenses = useCallback(async (silent = false) => {
+    if (!silent) setLicensesLoading(true);
+    const { data } = await listLicenseOnlyQueue();
+    setLicenseQueue(data);
+    setLicensesLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void loadLicenses();
+  }, [loadLicenses]);
+
+  // A vehicle decision can settle a license too, so both tables refresh it.
+  useTableRealtime(['driver_licenses', 'vehicles'], () => void loadLicenses(true));
+
+  const shownLicenses = licenseQueue.filter((l) => !hiddenLicenses.has(l.user_id));
+  const selectedLicense = shownLicenses.find((l) => l.user_id === selectedLicenseUser) ?? null;
+
+  const unhideLicense = (userId: string) =>
+    setHiddenLicenses((prev) => {
+      const next = new Set(prev);
+      next.delete(userId);
+      return next;
+    });
+
+  // Same Undo window as vehicle reviews: the traveler is notified on save.
+  const decideLicense = (license: DriverLicense, decision: 'approved' | 'rejected', notes: string) => {
+    const name = license.profiles?.display_name ?? 'this traveler';
+    runUndoable({
+      key: `license-review:${license.user_id}`,
+      message: decision === 'approved' ? `Approving ${name}'s driver's license…` : `Rejecting ${name}'s driver's license…`,
+      description: 'They get a notification once this saves.',
+      onHide: () => {
+        setHiddenLicenses((prev) => new Set(prev).add(license.user_id));
+        setSelectedLicenseUser((current) => (current === license.user_id ? null : current));
+      },
+      onRestore: () => unhideLicense(license.user_id),
+      commit: () => reviewDriverLicense(license.user_id, decision, notes),
+      onCommitted: () => void loadLicenses(true).then(() => unhideLicense(license.user_id)),
+      success: decision === 'approved' ? `${name}'s driver's license approved` : `${name}'s driver's license rejected`,
+      error: decision === 'approved' ? 'Failed to approve license' : 'Failed to reject license',
+    });
+  };
+
+  const vehicles = useMemo(
+    () =>
+      rawVehicles
+        .map((v) => (statusPatch[v.id] ? { ...v, verification_status: statusPatch[v.id] } : v))
+        .filter((v) => filterStatus === 'all' || v.verification_status === filterStatus),
+    [rawVehicles, statusPatch, filterStatus]
+  );
+
+  const queuePage = useClientPagination(vehicles, [filterStatus]);
 
   const selected = vehicles.find((v) => v.id === selectedId) ?? null;
   // Changes only when the reviewed vehicle or its documents change, so a
@@ -121,14 +202,31 @@ export default function StaffVehicles() {
     // photoKey captures every field read from `selected`.
   }, [photoKey]);
 
-  const handleApprove = async (id: string) => {
-    setIsSubmitting(true);
-    const { error } = await reviewVehicleVerification(id, 'approved', 'Approved by a Guild Leader after manual review.');
-    setIsSubmitting(false);
-    if (!error) {
-      setSelectedId(null);
-      await loadQueue(filterStatus);
-    }
+  // Reviews notify and email the traveler, so they're held for the Undo
+  // window: Undo means the decision never reached them.
+  const review = (row: VehicleRow, decision: 'approved' | 'rejected', notes: string) => {
+    const name = row.profiles?.display_name ?? 'this traveler';
+    const car = `${row.make} ${row.model}`.trim();
+    runUndoable({
+      key: `vehicle-review:${row.id}`,
+      message: decision === 'approved' ? `Approving ${name}'s ${car}…` : `Rejecting ${name}'s ${car}…`,
+      description: 'They get a notification and an email once this saves.',
+      onHide: () => {
+        setStatusPatch((prev) => ({ ...prev, [row.id]: decision }));
+        setSelectedId((current) => (current === row.id ? null : current));
+      },
+      onRestore: () => setStatusPatch(({ [row.id]: _, ...rest }) => rest),
+      commit: () => reviewVehicleVerification(row.id, decision, notes),
+      onCommitted: () =>
+        void loadQueue(filterStatus, true).then(() => setStatusPatch(({ [row.id]: _, ...rest }) => rest)),
+      success: decision === 'approved' ? `${name}'s ${car} approved` : `${name}'s ${car} rejected`,
+      error: decision === 'approved' ? 'Failed to approve vehicle' : 'Failed to reject vehicle',
+    });
+  };
+
+  const handleApprove = (id: string) => {
+    const row = vehicles.find((v) => v.id === id);
+    if (row) setConfirmApprove(row);
   };
 
   const handleRejectClick = (id: string) => {
@@ -139,18 +237,13 @@ export default function StaffVehicles() {
   // Picking "Other" requires typing the reason; that text is what gets saved.
   const finalRejectionReason = rejectionReason === 'Other' ? otherReason.trim() : rejectionReason;
 
-  const handleRejectSubmit = async () => {
-    if (!selectedId || !finalRejectionReason) return;
-    setIsSubmitting(true);
-    const { error } = await reviewVehicleVerification(selectedId, 'rejected', finalRejectionReason);
-    setIsSubmitting(false);
-    if (!error) {
-      setShowRejectionModal(false);
-      setRejectionReason('');
-      setOtherReason('');
-      setSelectedId(null);
-      await loadQueue(filterStatus);
-    }
+  const handleRejectSubmit = () => {
+    const row = vehicles.find((v) => v.id === selectedId);
+    if (!row || !finalRejectionReason) return;
+    review(row, 'rejected', finalRejectionReason);
+    setShowRejectionModal(false);
+    setRejectionReason('');
+    setOtherReason('');
   };
 
   const stats = useMemo(() => {
@@ -169,6 +262,44 @@ export default function StaffVehicles() {
           <h1 className="text-3xl font-bold text-foreground">Vehicle Verification</h1>
           <p className="text-sm text-muted-foreground mt-2">Review and approve travelers' personal vehicles for carpooling</p>
         </div>
+
+        <div className="inline-flex gap-1.5 rounded-xl border border-border bg-card p-1 shadow-elevation-1">
+          {(
+            [
+              { id: 'vehicles', label: 'Vehicles', icon: Car, count: 0 },
+              { id: 'licenses', label: "Driver's licenses", icon: IdCard, count: shownLicenses.length },
+            ] as const
+          ).map(({ id, label, icon: Icon, count }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setView(id)}
+              className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                view === id ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-secondary'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {label}
+              {count > 0 && (
+                <span className={`min-w-5 rounded-full px-1.5 text-xs font-bold ${view === id ? 'bg-white/25' : 'bg-orange-500 text-white'}`}>
+                  {count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {view === 'licenses' ? (
+          <LicenseQueue
+            licenses={shownLicenses}
+            isLoading={licensesLoading}
+            selected={selectedLicense}
+            onSelect={setSelectedLicenseUser}
+            onDecide={(license, decision) => setLicenseDecision({ license, decision })}
+            onOpenImage={setLightboxSrc}
+          />
+        ) : (
+        <>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
@@ -217,15 +348,16 @@ export default function StaffVehicles() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 lg:sticky lg:top-0 lg:self-start lg:max-h-[calc(100vh-4rem)] flex flex-col">
             <h2 className="text-lg font-bold text-foreground mb-4">Queue ({vehicles.length})</h2>
-            <div className="bg-card rounded-2xl p-4 shadow-elevation-2 border border-border">
+            <div data-paginated className="bg-card rounded-2xl p-4 shadow-elevation-2 border border-border flex flex-col min-h-0">
               {isLoading ? (
                 <p className="text-sm text-muted-foreground text-center py-4">Loading...</p>
               ) : (
-                <div className="space-y-2 max-h-96 overflow-y-auto">
+                <>
+                <div className="space-y-2 min-h-0 overflow-y-auto overscroll-contain -mr-2 pr-2">
                   {vehicles.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No vehicles to review</p>}
-                  {vehicles.map((v) => (
+                  {queuePage.pageItems.map((v) => (
                     <button
                       key={v.id}
                       onClick={() => setSelectedId(v.id)}
@@ -256,11 +388,13 @@ export default function StaffVehicles() {
                         <span className="inline-block mt-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300">Borrowed</span>
                       )}
                       <p className="text-xs text-muted-foreground mt-2">
-                        {v.submitted_at ? new Date(v.submitted_at).toLocaleString() : ''}
+                        {v.submitted_at ? formatDateTime(v.submitted_at) : ''}
                       </p>
                     </button>
                   ))}
                 </div>
+                <TablePagination pagination={queuePage} itemLabel="vehicles" compact className="mt-3 px-1 pt-3 pb-0" />
+                </>
               )}
             </div>
           </div>
@@ -303,11 +437,15 @@ export default function StaffVehicles() {
                   </div>
                 )}
 
+                <div className="border-t border-border pt-5">
+                  <DriverLicensePanel key={selected.user_id} userId={selected.user_id} onOpenImage={setLightboxSrc} />
+                </div>
+
                 <div className="bg-secondary rounded-lg p-3 space-y-2 border border-border">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Submitted:</span>
                     <span className="font-medium text-foreground">
-                      {selected.submitted_at ? new Date(selected.submitted_at).toLocaleString() : 'Unknown'}
+                      {selected.submitted_at ? formatDateTime(selected.submitted_at) : 'Unknown'}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
@@ -317,7 +455,7 @@ export default function StaffVehicles() {
                   {selected.reviewed_at && (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Reviewed:</span>
-                      <span className="font-medium text-foreground">{new Date(selected.reviewed_at).toLocaleString()}</span>
+                      <span className="font-medium text-foreground">{formatDateTime(selected.reviewed_at)}</span>
                     </div>
                   )}
                   {selected.reviewer_notes && (
@@ -332,7 +470,7 @@ export default function StaffVehicles() {
                   <div className="flex gap-3 pt-4 border-t border-border">
                     <button
                       onClick={() => handleApprove(selected.id)}
-                      disabled={isSubmitting}
+                      
                       className="flex-1 bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 font-semibold transition-smooth hover:shadow-lg flex items-center justify-center gap-2"
                     >
                       <CheckCircle className="w-5 h-5" />
@@ -340,7 +478,7 @@ export default function StaffVehicles() {
                     </button>
                     <button
                       onClick={() => handleRejectClick(selected.id)}
-                      disabled={isSubmitting}
+                      
                       className="flex-1 bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 disabled:opacity-50 font-semibold transition-smooth hover:shadow-lg flex items-center justify-center gap-2"
                     >
                       <XCircle className="w-5 h-5" />
@@ -359,6 +497,9 @@ export default function StaffVehicles() {
             </div>
           )}
         </div>
+
+        </>
+        )}
 
         <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
           <p className="text-sm text-foreground">
@@ -409,7 +550,7 @@ export default function StaffVehicles() {
                 </button>
                 <button
                   onClick={handleRejectSubmit}
-                  disabled={!finalRejectionReason || isSubmitting}
+                  disabled={!finalRejectionReason}
                   className="flex-1 bg-red-600 text-white py-2.5 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-colors"
                 >
                   Reject
@@ -421,6 +562,138 @@ export default function StaffVehicles() {
       )}
 
       <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+      <ConfirmActionDialog
+        open={licenseDecision !== null}
+        onOpenChange={(open) => !open && setLicenseDecision(null)}
+        tone={licenseDecision?.decision === 'rejected' ? 'destructive' : 'default'}
+        title={
+          licenseDecision?.decision === 'rejected'
+            ? `Reject ${licenseDecision.license.profiles?.display_name ?? 'this traveler'}'s driver's license?`
+            : `Approve ${licenseDecision?.license.profiles?.display_name ?? 'this traveler'}'s driver's license?`
+        }
+        description={
+          licenseDecision?.decision === 'rejected'
+            ? "They're notified with your reason and can submit a new license."
+            : 'Check the photos, name, expiry and QR result. Once approved they can create carpools, and they get a notification.'
+        }
+        notes={
+          licenseDecision?.decision === 'rejected'
+            ? { label: 'Reason (the traveler sees this)', required: true, placeholder: "e.g. The QR code doesn't match the license photo." }
+            : undefined
+        }
+        confirmLabel={licenseDecision?.decision === 'rejected' ? 'Reject license' : 'Approve license'}
+        onConfirm={(notes) => {
+          if (!licenseDecision) return;
+          const { license, decision } = licenseDecision;
+          decideLicense(license, decision, decision === 'approved' ? 'Approved by an admin after manual review.' : notes.trim());
+          setLicenseDecision(null);
+        }}
+      />
+      <ConfirmActionDialog
+        open={confirmApprove !== null}
+        onOpenChange={(open) => !open && setConfirmApprove(null)}
+        title={`Approve ${confirmApprove ? `${confirmApprove.make} ${confirmApprove.model}` : 'this vehicle'}?`}
+        description="Check that the plate, OR/CR and photos match (and the owner's documents for a borrowed car). Their pending driver's license is approved too, and they're notified and emailed."
+        confirmLabel="Approve vehicle"
+        onConfirm={() => {
+          if (confirmApprove) review(confirmApprove, 'approved', 'Approved by an admin after manual review.');
+        }}
+      />
     </AdminLayout>
+  );
+}
+
+function LicenseQueue({
+  licenses,
+  isLoading,
+  selected,
+  onSelect,
+  onDecide,
+  onOpenImage,
+}: {
+  licenses: DriverLicense[];
+  isLoading: boolean;
+  selected: DriverLicense | null;
+  onSelect: (userId: string) => void;
+  onDecide: (license: DriverLicense, decision: 'approved' | 'rejected') => void;
+  onOpenImage: (src: string) => void;
+}) {
+  const page = useClientPagination(licenses, []);
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="lg:col-span-1 lg:sticky lg:top-0 lg:self-start lg:max-h-[calc(100vh-4rem)] flex flex-col">
+        <h2 className="text-lg font-bold text-foreground mb-1">License-only queue ({licenses.length})</h2>
+        <p className="text-xs text-muted-foreground mb-4">
+          Licenses submitted without a vehicle. A license sent with a vehicle is reviewed with that vehicle instead.
+        </p>
+        <div data-paginated className="bg-card rounded-2xl p-4 shadow-elevation-2 border border-border flex flex-col min-h-0">
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Loading...</p>
+          ) : (
+            <>
+              <div className="space-y-2 min-h-0 overflow-y-auto overscroll-contain -mr-2 pr-2">
+                {licenses.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No licenses waiting</p>}
+                {page.pageItems.map((l) => (
+                  <button
+                    key={l.user_id}
+                    onClick={() => onSelect(l.user_id)}
+                    className={`w-full text-left p-4 rounded-xl border-2 transition-colors ${
+                      selected?.user_id === l.user_id ? 'bg-primary/10 border-primary' : 'bg-secondary border-border hover:border-primary/50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-semibold text-foreground truncate">{l.profiles?.display_name ?? 'Unknown traveler'}</p>
+                      {l.ai_flag && l.ai_flag !== 'passed' && (
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-lg whitespace-nowrap bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300">
+                          {l.ai_flag === 'mismatch' ? 'Mismatch' : l.ai_flag === 'error' ? 'Unchecked' : 'Needs a look'}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1 truncate">{l.profiles?.email}</p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {l.source === 'id_verification' ? 'Reused from verified ID' : 'Uploaded'} · {formatDateTime(l.submitted_at)}
+                    </p>
+                  </button>
+                ))}
+              </div>
+              <TablePagination pagination={page} itemLabel="licenses" compact className="mt-3 px-1 pt-3 pb-0" />
+            </>
+          )}
+        </div>
+      </div>
+
+      {selected ? (
+        <div className="lg:col-span-2 bg-card rounded-2xl p-6 shadow-elevation-2 border border-border space-y-6">
+          <div>
+            <h3 className="text-lg font-bold text-foreground">{selected.profiles?.display_name ?? 'Unknown traveler'}</h3>
+            <p className="text-sm text-muted-foreground mt-1">{selected.profiles?.email}</p>
+          </div>
+          <DriverLicensePanel key={selected.user_id} license={selected} onOpenImage={onOpenImage} />
+          <div className="flex gap-3 pt-4 border-t border-border">
+            <button
+              onClick={() => onDecide(selected, 'approved')}
+              className="flex-1 bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 font-semibold transition-smooth hover:shadow-lg flex items-center justify-center gap-2"
+            >
+              <CheckCircle className="w-5 h-5" />
+              Approve
+            </button>
+            <button
+              onClick={() => onDecide(selected, 'rejected')}
+              className="flex-1 bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 font-semibold transition-smooth hover:shadow-lg flex items-center justify-center gap-2"
+            >
+              <XCircle className="w-5 h-5" />
+              Reject
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="lg:col-span-2 bg-card rounded-2xl p-12 shadow-elevation-2 border border-border flex items-center justify-center">
+          <div className="text-center">
+            <IdCard className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+            <p className="text-muted-foreground">Select a license to review</p>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

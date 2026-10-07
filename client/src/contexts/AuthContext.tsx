@@ -24,6 +24,8 @@ interface AuthContextType {
   register: (email: string, password: string, name: string, interests?: string[]) => Promise<void>;
   logout: () => Promise<void>;
   oauthLogin: (provider: 'google' | 'github') => Promise<void>;
+  /** Re-reads the signed-in profile, e.g. after changing the avatar. */
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -144,6 +146,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    if (!session) return;
+    const nextUser = await loadUser(session);
+    if (nextUser) setUser(nextUser);
+  }, [session]);
+
   const oauthLogin = useCallback(async (provider: 'google' | 'github') => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
@@ -165,6 +173,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         register,
         logout,
         oauthLogin,
+        refreshUser,
       }}
     >
       {children}

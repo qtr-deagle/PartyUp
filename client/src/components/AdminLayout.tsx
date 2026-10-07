@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import SosGlobalAlert from '@/components/sos/SosGlobalAlert';
 import LogoutConfirmDialog from '@/components/LogoutConfirmDialog';
+import { flushPendingUndos } from '@/lib/undoable';
 import { useActiveSosAlerts } from '@/hooks/useSosRealtime';
 import { roleLabel } from '@/lib/guilds';
 
@@ -50,6 +51,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   ];
 
   const handleLogout = async () => {
+    // Commit any actions still inside their Undo window before the session ends.
+    await flushPendingUndos();
     await logout();
     window.location.href = '/login';
   };
@@ -90,7 +93,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const isExpanded = hovered;
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
+    <div className="relative flex h-screen bg-background overflow-hidden">
       <aside
         ref={sidebarRef}
         onMouseEnter={() => {
@@ -165,9 +168,13 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         <div className="p-3 space-y-1 overflow-hidden shrink-0">
           {user && (
             <div className="flex items-center gap-3 px-3 py-1.5 mb-1">
-              <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-sm leading-none shrink-0">
-                {user.name?.charAt(0).toUpperCase() ?? 'A'}
-              </div>
+              {user.avatar ? (
+                <img src={user.avatar} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-sm leading-none shrink-0">
+                  {user.name?.charAt(0).toUpperCase() ?? 'A'}
+                </div>
+              )}
               {isExpanded && (
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-sidebar-foreground truncate">{user.name}</p>
@@ -209,7 +216,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
       <div className="flex-1 flex flex-col overflow-hidden ml-20 min-h-0">
         <SosGlobalAlert alerts={activeSosAlerts} isLoading={isSosLoading} basePath="/admin" />
-        <main className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 p-8">
+        <main className="relative flex-1 overflow-y-auto overflow-x-hidden min-h-0 p-8">
           {children}
         </main>
       </div>

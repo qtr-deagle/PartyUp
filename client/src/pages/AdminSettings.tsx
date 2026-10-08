@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
-import { Settings, Toggle2, Save, AlertCircle } from 'lucide-react';
+import { Settings, Save, AlertCircle } from 'lucide-react';
 
 /**
  * Admin Settings - System Configuration
@@ -20,7 +20,8 @@ export default function AdminSettings() {
     sosAlertEnabled: true,
   });
 
-  const handleToggle = (key: string) => {
+  type ToggleKey = 'maintenanceMode' | 'newUserSignups' | 'tripBooking' | 'sosAlertEnabled';
+  const handleToggle = (key: ToggleKey) => {
     setSettings(prev => ({ ...prev, [key]: !prev[key] }));
   };
 

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
-import { Search, Filter, Clock, User } from 'lucide-react';
+import { Activity, AlertOctagon, ScrollText, Search, TrendingDown, TrendingUp, UserCog, UserX } from 'lucide-react';
+import { PageHeader, PersonCell, Pill, SearchField, Segmented, StatTile, TableMessage, TD, TH, TR, Toolbar, type PillTone } from '@/components/admin/AdminUI';
 import {
   getAuditLogStats,
   listAuditLogs,
@@ -12,7 +13,7 @@ import {
   type AuditSortColumn,
 } from '@/lib/auditLog';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
-import { formatDateTime } from '@/lib/datetime';
+import { formatDateTime, timeAgo } from '@/lib/datetime';
 import { usePagination } from '@/hooks/usePagination';
 import TablePagination from '@/components/TablePagination';
 import SortableTh from '@/components/SortableTh';
@@ -96,54 +97,63 @@ export default function AdminAudit() {
 
   useTableRealtime('audit_logs', () => void loadLogs(searchTerm, filterSeverity, { from, to }, sortArg, true));
 
-  const getSeverityColor = (severity: Severity) => {
-    switch (severity) {
-      case 'high':
-        return 'bg-destructive/10 text-destructive';
-      case 'medium':
-        return 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300';
-      case 'low':
-        return 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300';
-    }
-  };
+  const SEVERITY_TONE: Record<Severity, PillTone> = { high: 'red', medium: 'orange', low: 'green' };
+  const filtered = searchTerm.trim() !== '' || filterSeverity !== 'all';
+  const change = stats.percentChange;
 
   return (
     <AdminLayout>
       <div className="space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Audit Log</h1>
-          <p className="text-sm text-muted-foreground mt-2">Track all admin actions</p>
+        <PageHeader title="Audit Log" subtitle="Every admin action, newest first. Entries can't be edited or deleted." />
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <StatTile
+            icon={Activity}
+            tone="bg-primary/10 text-primary"
+            label="Actions today"
+            value={stats.totalToday}
+            hint={
+              change === null ? (
+                'No data from yesterday to compare'
+              ) : (
+                <span className={`inline-flex items-center gap-1 ${change >= 0 ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                  {change >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                  {Math.abs(change)}% from yesterday
+                </span>
+              )
+            }
+          />
+          <StatTile
+            icon={AlertOctagon}
+            tone="bg-red-500/15 text-red-600 dark:text-red-400"
+            label="High severity today"
+            value={stats.highSeverityToday}
+            hint="Click to show only high"
+            onClick={() => setFilterSeverity('high')}
+            active={filterSeverity === 'high'}
+          />
+          <StatTile
+            icon={UserCog}
+            tone="bg-violet-500/15 text-violet-600 dark:text-violet-400"
+            label="Most active admin (7 days)"
+            value={<span className="text-lg">{stats.mostActive?.name ?? '—'}</span>}
+            hint={stats.mostActive ? `${stats.mostActive.count} action${stats.mostActive.count === 1 ? '' : 's'} this week` : 'No activity yet'}
+          />
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search by admin or action..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-smooth"
-            />
-          </div>
-          <div className="relative">
-            <Filter className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-            <select
-              value={filterSeverity}
-              onChange={(e) => setFilterSeverity(e.target.value as 'all' | Severity)}
-              className="pl-12 pr-4 py-3 bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-smooth text-foreground"
-            >
-              <option value="all">All Severities</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
-          </div>
-        </div>
+        <Toolbar>
+          <SearchField value={searchTerm} onChange={setSearchTerm} placeholder="Search by admin or action..." />
+          <Segmented
+            value={filterSeverity}
+            options={[
+              { value: 'all' as const, label: 'All' },
+              { value: 'high' as const, label: <><span className="h-2 w-2 rounded-full bg-red-500" /> High</> },
+              { value: 'medium' as const, label: <><span className="h-2 w-2 rounded-full bg-orange-500" /> Medium</> },
+              { value: 'low' as const, label: <><span className="h-2 w-2 rounded-full bg-green-500" /> Low</> },
+            ]}
+            onChange={setFilterSeverity}
+          />
+        </Toolbar>
 
         {/* Audit Table */}
         <div data-paginated className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
@@ -151,55 +161,68 @@ export default function AdminAudit() {
             {/* Fixed column widths so sorting or paging doesn't shift the columns. */}
             <table className="w-full table-fixed [&_td]:whitespace-nowrap" style={{ minWidth: 990 }}>
               <colgroup>
-                <col style={{ width: 220 }} />
-                <col />
-                <col />
-                <col style={{ width: 140 }} />
                 <col style={{ width: 230 }} />
+                <col />
+                <col style={{ width: 230 }} />
+                <col style={{ width: 130 }} />
+                <col style={{ width: 200 }} />
               </colgroup>
               <thead>
-                <tr className="border-b border-border bg-secondary">
-                  <SortableTh label="Admin" sortKey="actor_name" sort={logSort.sort} onSort={logSort.toggle} />
-                  <SortableTh label="Action" sortKey="action" sort={logSort.sort} onSort={logSort.toggle} />
-                  <SortableTh label="Target" sortKey="entity_type" sort={logSort.sort} onSort={logSort.toggle} />
-                  <SortableTh label="Severity" sortKey="severity_rank" sort={logSort.sort} onSort={logSort.toggle} />
-                  <SortableTh label="Timestamp" sortKey="created_at" sort={logSort.sort} onSort={logSort.toggle} />
+                <tr className="border-b border-border bg-secondary/50">
+                  <SortableTh className={TH} label="Admin" sortKey="actor_name" sort={logSort.sort} onSort={logSort.toggle} />
+                  <SortableTh className={TH} label="Action" sortKey="action" sort={logSort.sort} onSort={logSort.toggle} />
+                  <SortableTh className={TH} label="Target" sortKey="entity_type" sort={logSort.sort} onSort={logSort.toggle} />
+                  <SortableTh className={TH} label="Severity" sortKey="severity_rank" sort={logSort.sort} onSort={logSort.toggle} />
+                  <SortableTh className={TH} label="When" sortKey="created_at" sort={logSort.sort} onSort={logSort.toggle} />
                 </tr>
               </thead>
-              <tbody className={isLoading && logs.length > 0 ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
+              <tbody className={`divide-y divide-border transition-opacity ${isLoading && logs.length > 0 ? 'opacity-60' : ''}`}>
                 {isLoading && logs.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-sm text-muted-foreground">
-                      Loading...
-                    </td>
-                  </tr>
+                  <TableMessage colSpan={5} icon={ScrollText} title="Loading" loading />
                 ) : logs.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-sm text-muted-foreground">
-                      {searchTerm || filterSeverity !== 'all' ? 'No actions match these filters' : 'No actions recorded yet'}
-                    </td>
-                  </tr>
+                  <TableMessage
+                    colSpan={5}
+                    icon={filtered ? Search : ScrollText}
+                    title={filtered ? 'No actions match these filters' : 'No actions recorded yet'}
+                  />
                 ) : (
                   logs.map((log) => {
                     const severity = severityFromRank(log.severity_rank);
                     return (
-                      <tr key={log.id} className="border-b border-border hover:bg-secondary/50 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <User className="w-4 h-4 text-muted-foreground" />
-                            <p className="truncate text-sm font-medium text-foreground">{log.actor_name}</p>
-                          </div>
+                      <tr key={log.id} className={TR}>
+                        <td className={TD}>
+                          {log.actor_id ? (
+                            <PersonCell name={log.actor_name} />
+                          ) : (
+                            // The admin's account was deleted after this entry was written.
+                            <div className="flex items-center gap-3 min-w-0" title="This admin's account has since been deleted">
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-muted-foreground">
+                                <UserX className="w-4 h-4" />
+                              </span>
+                              <span className="truncate text-sm italic text-muted-foreground">{log.actor_name}</span>
+                            </div>
+                          )}
                         </td>
-                        <td className="px-6 py-4 text-sm text-foreground truncate" title={log.action}>{log.action}</td>
-                        <td className="px-6 py-4 text-sm text-muted-foreground truncate">{getTargetLabel(log)}</td>
-                        <td className="px-6 py-4 text-sm">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${getSeverityColor(severity)}`}>{severity}</span>
+                        <td className={`${TD} text-sm font-medium text-foreground truncate`} title={log.action}>
+                          {log.action}
                         </td>
-                        <td className="px-6 py-4 text-sm text-muted-foreground">
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4" />
-                            {formatDateTime(log.created_at)}
-                          </div>
+                        <td className={TD}>
+                          {log.entity_type ? (
+                            <span className="inline-flex max-w-full truncate rounded-md border border-border bg-secondary/50 px-2 py-0.5 font-mono text-xs text-muted-foreground">
+                              {getTargetLabel(log)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className={TD}>
+                          <Pill tone={SEVERITY_TONE[severity] ?? 'gray'} dot className="capitalize">
+                            {severity}
+                          </Pill>
+                        </td>
+                        <td className={TD} title={formatDateTime(log.created_at)}>
+                          <p className="text-sm text-foreground">{timeAgo(log.created_at)}</p>
+                          <p className="text-xs text-muted-foreground">{formatDateTime(log.created_at)}</p>
                         </td>
                       </tr>
                     );
@@ -209,31 +232,6 @@ export default function AdminAudit() {
             </table>
           </div>
           <TablePagination pagination={pagination} itemLabel="actions" />
-        </div>
-
-        {/* Summary Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-            <p className="text-sm text-muted-foreground mb-2">Total Actions (Today)</p>
-            <p className="text-3xl font-bold text-foreground">{stats.totalToday}</p>
-            <p className="text-xs text-muted-foreground mt-2">
-              {stats.percentChange === null
-                ? 'No data from yesterday to compare'
-                : `${stats.percentChange >= 0 ? '↑' : '↓'} ${Math.abs(stats.percentChange)}% from yesterday`}
-            </p>
-          </div>
-          <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-            <p className="text-sm text-muted-foreground mb-2">High Severity Actions (Today)</p>
-            <p className="text-3xl font-bold text-destructive">{stats.highSeverityToday}</p>
-            <p className="text-xs text-muted-foreground mt-2">Requiring attention</p>
-          </div>
-          <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-            <p className="text-sm text-muted-foreground mb-2">Most Active Admin (7 days)</p>
-            <p className="text-lg font-bold text-foreground">{stats.mostActive?.name ?? '—'}</p>
-            <p className="text-xs text-muted-foreground mt-2">
-              {stats.mostActive ? `${stats.mostActive.count} action${stats.mostActive.count === 1 ? '' : 's'} this week` : 'No activity yet'}
-            </p>
-          </div>
         </div>
       </div>
     </AdminLayout>

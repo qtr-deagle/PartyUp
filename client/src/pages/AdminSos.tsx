@@ -4,7 +4,7 @@ import SosCenterBoard from '@/components/sos/SosCenterBoard';
 export default function AdminSos() {
   return (
     <AdminLayout>
-      <SosCenterBoard />
+      <SosCenterBoard padded={false} />
     </AdminLayout>
   );
 }

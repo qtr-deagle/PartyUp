@@ -1,5 +1,5 @@
-﻿import { useEffect, useState, useCallback, useMemo } from 'react';
-import { CheckCircle, XCircle, Clock, BarChart3 } from 'lucide-react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { CheckCircle, Clock, BarChart3, ShieldCheck } from 'lucide-react';
 import AdminLayout from '@/components/AdminLayout';
 import { ImageLightbox } from '@/components/ImageLightbox';
 import { listIdVerifications, getSignedImageUrl, reviewIdVerification, type IdVerificationRow, type VerificationStatus } from '@/lib/verification';
@@ -7,14 +7,37 @@ import LegalNameCheck from '@/components/LegalNameCheck';
 import { useAiResultPoll } from '@/hooks/useAiResultPoll';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
 import { useClientPagination } from '@/hooks/usePagination';
-import TablePagination from '@/components/TablePagination';
-import AiAddressBadge from '@/components/AiAddressBadge';
+import { AiAddressCheck } from '@/components/AiAddressBadge';
 import AiSimilarityBadge from '@/components/AiSimilarityBadge';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog';
+import {
+  DecisionBar,
+  DetailHeading,
+  DetailPanel,
+  EmptyDetail,
+  InfoCard,
+  InfoRow,
+  PhotoViewer,
+  QueueItem,
+  QueuePanel,
+  ReviewPage,
+  ReviewToolbar,
+  SearchField,
+  Segmented,
+  StatChip,
+  StatusPill,
+  neighborId,
+  useReviewShortcuts,
+} from '@/components/review/ReviewWorkspace';
 import { runUndoable } from '@/lib/undoable';
 import { formatDateTime } from '@/lib/datetime';
 
 type FilterStatus = 'all' | VerificationStatus;
+
+const STATUS_OPTIONS = (['pending', 'approved', 'rejected', 'all'] as const).map((value) => ({
+  value,
+  label: value.charAt(0).toUpperCase() + value.slice(1),
+}));
 
 export default function AdminIDVerificationReview() {
   const [rawVerifications, setVerifications] = useState<IdVerificationRow[]>([]);
@@ -23,12 +46,13 @@ export default function AdminIDVerificationReview() {
   const [confirmApprove, setConfirmApprove] = useState<IdVerificationRow | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [images, setImages] = useState<{ front: string | null; back: string | null; selfie: string | null }>({ front: null, back: null, selfie: null });
+  const [images, setImages] = useState<{ front?: string | null; back?: string | null; selfie?: string | null }>({});
   const [rejectionReason, setRejectionReason] = useState<string>('');
   const [otherReason, setOtherReason] = useState('');
   const [showRejectionModal, setShowRejectionModal] = useState(false);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('pending');
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // `silent` refreshes (realtime / tab focus) keep the list on screen instead of
   // flashing the loading state.
@@ -55,7 +79,28 @@ export default function AdminIDVerificationReview() {
     [rawVerifications, statusPatch, filterStatus]
   );
 
-  const queuePage = useClientPagination(verifications, [filterStatus]);
+  const queue = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return verifications;
+    return verifications.filter((v) =>
+      [v.profiles?.display_name, v.profiles?.email].some((field) => field?.toLowerCase().includes(term))
+    );
+  }, [verifications, searchTerm]);
+
+  const queuePage = useClientPagination(queue, [filterStatus, searchTerm], 25);
+  const queueIds = useMemo(() => queue.map((v) => v.id), [queue]);
+
+  // Selecting from the keyboard can land on another page of the queue.
+  const selectItem = (id: string | null) => {
+    setSelectedId(id);
+    const index = id ? queueIds.indexOf(id) : -1;
+    if (index >= 0) queuePage.setPage(Math.floor(index / queuePage.pageSize) + 1);
+  };
+
+  // Always have something open so the reviewer can start right away.
+  useEffect(() => {
+    if (!isLoading && queueIds.length && (!selectedId || !queueIds.includes(selectedId))) setSelectedId(queueIds[0]);
+  }, [isLoading, queueIds, selectedId]);
 
   const selected = verifications.find((v) => v.id === selectedId) ?? null;
   const frontPath = selected?.front_image_path ?? null;
@@ -66,10 +111,8 @@ export default function AdminIDVerificationReview() {
   // Keyed on the paths, not the row object, so a background refresh doesn't
   // re-sign and reload the photos being reviewed.
   useEffect(() => {
-    if (!hasSelected) {
-      setImages({ front: null, back: null, selfie: null });
-      return;
-    }
+    setImages({});
+    if (!hasSelected) return;
     let cancelled = false;
     Promise.all([getSignedImageUrl(frontPath), getSignedImageUrl(backPath), getSignedImageUrl(selfiePath)]).then(([front, back, selfie]) => {
       if (!cancelled) setImages({ front, back, selfie });
@@ -89,7 +132,9 @@ export default function AdminIDVerificationReview() {
       description: 'They get a notification and an email once this saves.',
       onHide: () => {
         setStatusPatch((prev) => ({ ...prev, [row.id]: decision }));
-        setSelectedId((current) => (current === row.id ? null : current));
+        // Move on to the next submission so the reviewer never has to hunt for it.
+        const next = neighborId(queueIds, row.id);
+        setSelectedId((current) => (current === row.id ? next : current));
       },
       onRestore: () => setStatusPatch(({ [row.id]: _, ...rest }) => rest),
       commit: () => reviewIdVerification(row.id, decision, notes),
@@ -122,6 +167,15 @@ export default function AdminIDVerificationReview() {
     setOtherReason('');
   };
 
+  useReviewShortcuts({
+    ids: queueIds,
+    selectedId,
+    onSelect: selectItem,
+    onApprove: selected?.status === 'pending' ? () => handleApprove(selected.id) : undefined,
+    onReject: selected?.status === 'pending' ? () => handleRejectClick(selected.id) : undefined,
+    enabled: !showRejectionModal && !lightboxSrc,
+  });
+
   const stats = useMemo(() => {
     const pending = verifications.filter((v) => v.status === 'pending').length;
     const approved = verifications.filter((v) => v.status === 'approved').length;
@@ -131,260 +185,124 @@ export default function AdminIDVerificationReview() {
     return { pending, total, approvalRate };
   }, [verifications]);
 
+  const name = selected?.profiles?.display_name ?? 'Unknown user';
+
   return (
     <AdminLayout>
-      <div className="space-y-8">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">ID Verification Management</h1>
-          <p className="text-sm text-muted-foreground mt-2">Monitor and manage user identity verification submissions</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-            <div className="flex items-center justify-between mb-4">
-              <div className="bg-primary/10 p-3 rounded-lg">
-                <Clock className="w-6 h-6 text-primary" />
-              </div>
-            </div>
-            <p className="text-muted-foreground text-sm mb-1">Pending Verifications</p>
-            <p className="text-3xl font-bold text-foreground">{stats.pending}</p>
-          </div>
-          <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-            <div className="flex items-center justify-between mb-4">
-              <div className="bg-green-500/10 p-3 rounded-lg">
-                <CheckCircle className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-            <p className="text-muted-foreground text-sm mb-1">Approval Rate (loaded set)</p>
-            <p className="text-3xl font-bold text-foreground">{stats.approvalRate}%</p>
-          </div>
-          <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-            <div className="flex items-center justify-between mb-4">
-              <div className="bg-blue-500/10 p-3 rounded-lg">
-                <BarChart3 className="w-6 h-6 text-blue-600" />
-              </div>
-            </div>
-            <p className="text-muted-foreground text-sm mb-1">Total Loaded</p>
-            <p className="text-3xl font-bold text-foreground">{stats.total}</p>
-          </div>
-        </div>
-
-        <div className="bg-card rounded-2xl p-4 shadow-elevation-2 border border-border">
-          <div className="flex gap-2 flex-wrap">
-            {(['all', 'pending', 'approved', 'rejected'] as const).map((status) => (
-              <button
-                key={status}
-                onClick={() => setFilterStatus(status)}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  filterStatus === status ? 'bg-primary text-primary-foreground' : 'bg-secondary text-foreground hover:bg-secondary/80'
-                }`}
-              >
-                {status.charAt(0).toUpperCase() + status.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1">
-            <h2 className="text-lg font-bold text-foreground mb-4">Queue ({verifications.length})</h2>
-            <div data-paginated className="bg-card rounded-2xl p-4 shadow-elevation-2 border border-border">
-              {isLoading ? (
-                <p className="text-sm text-muted-foreground text-center py-4">Loading...</p>
-              ) : (
+      <ReviewPage
+        toolbar={
+          <ReviewToolbar title="ID Verification" subtitle="Compare each ID with the selfie and the declared legal name">
+            <StatChip icon={Clock} label="Pending" value={stats.pending} tone="bg-primary/10 text-primary" />
+            <StatChip icon={CheckCircle} label="Approval rate" value={`${stats.approvalRate}%`} tone="bg-green-500/10 text-green-600" />
+            <StatChip icon={BarChart3} label="Loaded" value={stats.total} tone="bg-blue-500/10 text-blue-600" />
+            <SearchField value={searchTerm} onChange={setSearchTerm} placeholder="Search by name or email..." />
+            <Segmented value={filterStatus} options={STATUS_OPTIONS} onChange={setFilterStatus} />
+          </ReviewToolbar>
+        }
+      >
+        <QueuePanel
+          title="Queue"
+          count={queue.length}
+          isLoading={isLoading}
+          emptyText={searchTerm.trim() ? 'No verifications match your search' : 'No verifications to review'}
+          pagination={queuePage}
+          itemLabel="verifications"
+        >
+          {queuePage.pageItems.map((v) => (
+            <QueueItem
+              key={v.id}
+              selected={selectedId === v.id}
+              onSelect={() => setSelectedId(v.id)}
+              title={v.profiles?.display_name ?? 'Unknown user'}
+              subtitle={v.profiles?.email}
+              status={v.status}
+              meta={formatDateTime(v.submitted_at)}
+              badges={
                 <>
-                <div className="space-y-2">
-                  {verifications.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">No verifications to review</p>
-                  ) : (
-                    queuePage.pageItems.map((v) => (
-                      <button
-                        key={v.id}
-                        onClick={() => setSelectedId(v.id)}
-                        className={`w-full text-left p-4 rounded-xl border-2 transition-colors ${
-                          selectedId === v.id ? 'bg-primary/10 border-primary' : 'bg-secondary border-border hover:border-primary/50'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <p className="font-semibold text-foreground">{v.profiles?.display_name ?? 'Unknown user'}</p>
-                            <p className="text-xs text-muted-foreground mt-1">{v.profiles?.email}</p>
-                            <p className="text-xs text-muted-foreground mt-2">{formatDateTime(v.submitted_at)}</p>
-                          </div>
-                          <div className="flex flex-col items-end gap-1 ml-2">
-                            <span
-                              className={`text-xs font-bold px-2.5 py-1 rounded-lg whitespace-nowrap capitalize ${
-                                v.status === 'approved'
-                                  ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300'
-                                  : v.status === 'pending'
-                                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300'
-                                    : 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300'
-                              }`}
-                            >
-                              {v.status}
-                            </span>
-                            <AiSimilarityBadge score={v.ai_similarity_score} flag={v.ai_flag} submittedAt={v.submitted_at} />
-                            {v.ai_underage_flag && (
-                              <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300 whitespace-nowrap">Age flag</span>
-                            )}
-                          </div>
-                        </div>
-                      </button>
-                    ))
+                  <AiSimilarityBadge score={v.ai_similarity_score} flag={v.ai_flag} submittedAt={v.submitted_at} />
+                  {v.ai_underage_flag && (
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300 whitespace-nowrap">Age flag</span>
                   )}
-                </div>
-                <TablePagination pagination={queuePage} itemLabel="verifications" compact className="mt-3 px-1 pt-3 pb-0" />
                 </>
-              )}
-            </div>
-          </div>
+              }
+            />
+          ))}
+        </QueuePanel>
 
-          {selected ? (
-            <div className="lg:col-span-2 bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-bold text-foreground">{selected.profiles?.display_name ?? 'Unknown user'}</h3>
-                  <p className="text-sm text-muted-foreground mt-1">{selected.profiles?.email}</p>
-                  <p className="text-xs text-muted-foreground mt-2">Document: {selected.document_type.replace('_', ' ')}</p>
+        {selected ? (
+          <DetailPanel
+            header={
+              <DetailHeading name={name} email={selected.profiles?.email}>
+                <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-secondary text-foreground capitalize">
+                  {selected.document_type.replace('_', ' ')}
+                </span>
+                <StatusPill status={selected.status} />
+              </DetailHeading>
+            }
+            footer={
+              <DecisionBar
+                pending={selected.status === 'pending'}
+                onApprove={() => handleApprove(selected.id)}
+                onReject={() => handleRejectClick(selected.id)}
+                closedNote={
+                  <>
+                    Already <span className="capitalize font-medium text-foreground">{selected.status}</span>
+                  </>
+                }
+              />
+            }
+          >
+            <div className="grid h-full min-h-0 gap-4 lg:grid-cols-2 lg:grid-rows-[minmax(0,1fr)_auto] 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_17rem] 2xl:grid-rows-[minmax(0,1fr)]">
+              <PhotoViewer
+                title="ID document"
+                photos={[
+                  { key: 'front', label: 'Front', src: images.front },
+                  ...(selected.back_image_path ? [{ key: 'back', label: 'Back', src: images.back }] : []),
+                ]}
+                onOpen={setLightboxSrc}
+                keyboard
+              />
+              <PhotoViewer title="Selfie" photos={[{ key: 'selfie', label: 'Selfie', src: images.selfie }]} onOpen={setLightboxSrc} />
+
+              <aside className="min-h-0 grid gap-3 content-start lg:col-span-2 lg:grid-cols-3 2xl:col-span-1 2xl:grid-cols-1 2xl:overflow-y-auto 2xl:overscroll-contain 2xl:-mr-1 2xl:pr-1">
+                <div className="[&>div]:mt-0">
                   <LegalNameCheck profile={selected.profiles} />
                 </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase">Front of ID</p>
-                    <div className="bg-secondary rounded-lg overflow-hidden h-56 flex items-center justify-center border border-border">
-                      {images.front ? (
-                        <img
-                          src={images.front}
-                          alt="ID front"
-                          className="h-full w-full object-contain cursor-zoom-in"
-                          onClick={() => setLightboxSrc(images.front)}
-                        />
-                      ) : (
-                        <p className="text-sm text-muted-foreground">Loading...</p>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase">Selfie</p>
-                    <div className="bg-secondary rounded-lg overflow-hidden h-56 flex items-center justify-center border border-border">
-                      {images.selfie ? (
-                        <img
-                          src={images.selfie}
-                          alt="Selfie"
-                          className="h-full w-full object-contain cursor-zoom-in"
-                          onClick={() => setLightboxSrc(images.selfie)}
-                        />
-                      ) : (
-                        <p className="text-sm text-muted-foreground">Loading...</p>
-                      )}
-                    </div>
-                  </div>
-                  {selected.back_image_path && (
-                    <div>
-                      <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase">Back of ID</p>
-                      <div className="bg-secondary rounded-lg overflow-hidden h-56 flex items-center justify-center border border-border">
-                        {images.back ? (
-                          <img
-                            src={images.back}
-                            alt="ID back"
-                            className="h-full w-full object-contain cursor-zoom-in"
-                            onClick={() => setLightboxSrc(images.back)}
-                          />
-                        ) : (
-                          <p className="text-sm text-muted-foreground">Loading...</p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-secondary rounded-lg p-3 space-y-2 border border-border">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">AI facial similarity match:</span>
+                <InfoCard title="AI checks">
+                  <InfoRow label="Face match">
                     <AiSimilarityBadge score={selected.ai_similarity_score} flag={selected.ai_flag} submittedAt={selected.submitted_at} />
-                  </div>
-                  <div className="flex justify-between items-center text-sm gap-4">
-                    <span className="text-muted-foreground shrink-0">AI Bulacan address check:</span>
-                    <AiAddressBadge
-                      flag={selected.ai_address_flag}
-                      detected={selected.ai_detected_municipality}
-                      declared={selected.profiles?.city ?? null}
-                      submittedAt={selected.submitted_at}
-                    />
-                  </div>
+                  </InfoRow>
+                  <AiAddressCheck
+                    flag={selected.ai_address_flag}
+                    detected={selected.ai_detected_municipality}
+                    declared={selected.profiles?.city ?? null}
+                    submittedAt={selected.submitted_at}
+                  />
                   {selected.ai_age_low !== null && selected.ai_age_high !== null && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">AI estimated age range:</span>
-                      <span className={`font-medium ${selected.ai_underage_flag ? 'text-orange-600' : 'text-foreground'}`}>
+                    <InfoRow label="Est. age">
+                      <span className={selected.ai_underage_flag ? 'text-orange-600' : undefined}>
                         {selected.ai_age_low}-{selected.ai_age_high}
-                        {selected.ai_underage_flag ? ' (below 18 -- verify carefully)' : ''}
+                        {selected.ai_underage_flag ? ' (below 18)' : ''}
                       </span>
-                    </div>
+                    </InfoRow>
                   )}
-                  {selected.ai_error && (
-                    <div className="flex justify-between text-sm gap-4">
-                      <span className="text-muted-foreground shrink-0">AI note:</span>
-                      <span className="font-medium text-foreground text-right">{selected.ai_error}</span>
-                    </div>
-                  )}
-                  <p className="text-xs text-muted-foreground italic pt-1 border-t border-border">
-                    AI results are advisory only -- always confirm against the photos before deciding.
-                  </p>
-                </div>
-
-                <div className="bg-secondary rounded-lg p-3 space-y-2 border border-border">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Submitted:</span>
-                    <span className="font-medium text-foreground">{formatDateTime(selected.submitted_at)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Status:</span>
-                    <span className="font-medium text-foreground capitalize">{selected.status}</span>
-                  </div>
-                  {selected.reviewer_notes && (
-                    <div className="flex justify-between text-sm gap-4">
-                      <span className="text-muted-foreground shrink-0">Reviewer notes:</span>
-                      <span className="font-medium text-foreground text-right">{selected.reviewer_notes}</span>
-                    </div>
-                  )}
-                </div>
-
-                {selected.status === 'pending' && (
-                  <div className="flex gap-3 pt-4 border-t border-border">
-                    <button
-                      onClick={() => handleApprove(selected.id)}
-                      
-                      className="flex-1 bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 font-semibold transition-smooth hover:shadow-lg flex items-center justify-center gap-2"
-                    >
-                      <CheckCircle className="w-5 h-5" />
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => handleRejectClick(selected.id)}
-                      
-                      className="flex-1 bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 disabled:opacity-50 font-semibold transition-smooth hover:shadow-lg flex items-center justify-center gap-2"
-                    >
-                      <XCircle className="w-5 h-5" />
-                      Reject
-                    </button>
-                  </div>
-                )}
-              </div>
+                  {selected.ai_error && <p className="text-xs font-medium text-foreground">{selected.ai_error}</p>}
+                  <p className="pt-1 text-[11px] italic text-muted-foreground">Advisory only. Always confirm against the photos.</p>
+                </InfoCard>
+                <InfoCard title="Submission">
+                  <InfoRow label="Submitted">{formatDateTime(selected.submitted_at)}</InfoRow>
+                  {selected.reviewer_notes && <InfoRow label="Notes">{selected.reviewer_notes}</InfoRow>}
+                </InfoCard>
+              </aside>
             </div>
-          ) : (
-            <div className="lg:col-span-2 bg-card rounded-2xl p-12 shadow-elevation-2 border border-border flex items-center justify-center">
-              <div className="text-center">
-                <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-                <p className="text-muted-foreground">Select a verification to review</p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+          </DetailPanel>
+        ) : (
+          <EmptyDetail icon={ShieldCheck} text={isLoading ? 'Loading the queue…' : 'Nothing to review here'} />
+        )}
+      </ReviewPage>
 
       {showRejectionModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-card rounded-2xl max-w-md w-full shadow-elevation-3 border border-border">
             <div className="p-6 border-b border-border">
               <h3 className="text-lg font-bold text-foreground">Reject Verification</h3>

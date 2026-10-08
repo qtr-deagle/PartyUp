@@ -20,7 +20,7 @@ export default function Carpooling() {
     if (!selectedRideForPayment) return null;
     const deadline = new Date(selectedRideForPayment.paymentDeadline);
     const today = new Date('2026-02-11'); // Using fixed date for demo
-    const daysLeft = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
+    const daysLeft = Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     
     return {
       daysLeft,
@@ -35,9 +35,9 @@ export default function Carpooling() {
   };
 
   const handleProcessPayment = async () => {
-    if (paymentMethod === 'card') {
+    if (paymentMethod === 'maya') {
       if (!cardData.cardNumber || !cardData.expiry || !cardData.cvc || !cardData.name) {
-        toast.error('Please fill in all card details');
+        toast.error('Please fill in all Maya details');
         return;
       }
     } else {
@@ -183,6 +183,8 @@ export default function Carpooling() {
     ride.from.toLowerCase().includes(searchTerm.toLowerCase()) ||
     ride.to.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const deadlineStatus = getDeadlineStatus();
 
   return (
     <Layout>
@@ -491,25 +493,25 @@ export default function Carpooling() {
                 </div>
 
                 {/* Payment Deadline */}
-                {getDeadlineStatus() && (
+                {deadlineStatus && (
                   <div className={`rounded p-2 border text-xs ${
-                    getDeadlineStatus().isPassed 
+                    deadlineStatus.isPassed 
                       ? 'bg-red-500/10 border-red-500/30' 
-                      : getDeadlineStatus().isUrgent 
+                      : deadlineStatus.isUrgent 
                       ? 'bg-orange-500/10 border-orange-500/30'
                       : 'bg-green-500/10 border-green-500/30'
                   }`}>
                     <p className="font-semibold mb-1 flex items-center gap-1">
-                      {getDeadlineStatus().isPassed ? (
+                      {deadlineStatus.isPassed ? (
                         <span className="text-red-700">❌ Deadline Passed</span>
-                      ) : getDeadlineStatus().isUrgent ? (
-                        <span className="text-orange-700">⏰ {getDeadlineStatus().daysLeft} days left</span>
+                      ) : deadlineStatus.isUrgent ? (
+                        <span className="text-orange-700">⏰ {deadlineStatus.daysLeft} days left</span>
                       ) : (
-                        <span className="text-green-700">📅 {getDeadlineStatus().daysLeft} days</span>
+                        <span className="text-green-700">📅 {deadlineStatus.daysLeft} days</span>
                       )}
                     </p>
                     <p className="text-muted-foreground">Pay by <strong>{selectedRideForPayment.paymentDeadline}</strong></p>
-                    {getDeadlineStatus().isUrgent && !getDeadlineStatus().isPassed && (
+                    {deadlineStatus.isUrgent && !deadlineStatus.isPassed && (
                       <p className="text-orange-700 bg-orange-500/20 p-1 rounded mt-1">
                         🔒 After payment: ₱50 cancellation fee applies
                       </p>

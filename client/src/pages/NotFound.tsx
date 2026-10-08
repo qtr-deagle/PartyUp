@@ -47,8 +47,8 @@ export default function NotFound() {
         {/* Help Text */}
         <p className="mt-8 text-sm text-muted-foreground">
           Need help? Contact our support team at{' '}
-          <a href="mailto:support@partyup.com" className="text-primary font-medium hover:underline">
-            support@partyup.com
+          <a href="mailto:partyup.demo.bulacan@gmail.com" className="text-primary font-medium hover:underline">
+            partyup.demo.bulacan@gmail.com
           </a>
         </p>
       </div>

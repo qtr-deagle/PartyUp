@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Crown, Star, X } from 'lucide-react';
+import { Check, Crown, Inbox, Star, X } from 'lucide-react';
+import { Avatar, EmptyState, Pill, TableMessage, TD, TH, TR } from '@/components/admin/AdminUI';
 import { toast } from 'sonner';
 import {
   decideLeaderApplication,
@@ -24,7 +25,7 @@ const timeAgo = (iso: string | null) => formatAgo(iso, 'never');
  * (completed and hosted trips, rating, verified ID) apply in the mobile app; approving makes them a Guild Leader and
  * founds their proposed guild. Decisions happen in an in-place dialog.
  */
-export function LeaderApplications({ onDecided }: { onDecided: () => void }) {
+export function LeaderApplications({ onDecided, onCount }: { onDecided: () => void; onCount?: (count: number) => void }) {
   const [rows, setRows] = useState<LeaderApplicationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [deciding, setDeciding] = useState<{ row: LeaderApplicationRow; approve: boolean } | null>(null);
@@ -72,56 +73,68 @@ export function LeaderApplications({ onDecided }: { onDecided: () => void }) {
   const pendingKeys = usePendingUndoKeys();
   const shownRows = rows.filter((row) => !pendingKeys.has(`leader-app:${row.id}`));
   const appsPage = useClientPagination(shownRows);
+  const shownCount = shownRows.length;
+  useEffect(() => {
+    if (!loading) onCount?.(shownCount);
+  }, [loading, shownCount, onCount]);
 
   return (
-    <div data-paginated className="bg-card rounded-2xl shadow-elevation-2 border border-border p-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Crown className="w-5 h-5 text-amber-600" />
-          <h2 className="text-lg font-bold text-foreground">Leader Applications</h2>
+    <div data-paginated className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
+      <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
+        <div>
+          <h2 className="flex items-center gap-2 text-base font-bold text-foreground">
+            <Crown className="w-4 h-4 text-yellow-600 dark:text-yellow-400" /> Leader applications
+          </h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            Applicants already meet the bar: 10+ completed trips, 2+ hosted trips, a 4+ rating from at least 3 buddies, and a verified ID.
+          </p>
         </div>
-        <span className="text-sm text-muted-foreground">{loading ? '' : `${shownRows.length} waiting`}</span>
+        {!loading && <Pill tone={shownRows.length ? 'orange' : 'gray'}>{shownRows.length} waiting</Pill>}
       </div>
-      <p className="text-xs text-muted-foreground mt-1">
-        Applicants already meet the bar: 10+ completed trips, 2+ hosted trips, a 4+ rating from at least 3 buddies, and a verified ID.
-      </p>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground mt-4">Loading...</p>
+        <div className="space-y-3 p-5">
+          {[0, 1].map((i) => (
+            <div key={i} className="h-28 rounded-xl bg-secondary animate-pulse" />
+          ))}
+        </div>
       ) : shownRows.length === 0 ? (
-        <p className="text-sm text-muted-foreground mt-4">No applications waiting.</p>
+        <EmptyState icon={Inbox} title="No applications waiting" text="New applications from the app show up here live." />
       ) : (
-        <div className="mt-4 space-y-3">
+        <div className="space-y-3 p-5">
           {appsPage.pageItems.map((row) => (
-            <div key={row.id} className="rounded-xl border border-border p-4 flex flex-col gap-3 md:flex-row md:items-start">
+            <div key={row.id} className="rounded-xl border border-border p-4 flex flex-col gap-4 md:flex-row md:items-start hover:border-primary/40 transition-smooth">
+              <Avatar name={row.display_name} size="lg" />
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="font-semibold text-foreground">{row.display_name}</p>
-                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+                  <Pill tone="yellow">
                     {rankName(row.lifetime_points)} · {row.lifetime_points} pts
-                  </span>
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Star className="w-3.5 h-3.5 text-amber-500" />
+                  </Pill>
+                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
                     {row.rating_count === 0 ? 'No ratings yet' : `${row.avg_rating?.toFixed(1)} (${row.rating_count})`}
                   </span>
                   <span className="text-xs text-muted-foreground">· applied {timeAgo(row.created_at)}</span>
                 </div>
-                <p className="text-sm text-foreground mt-1">
+                <p className="text-sm text-foreground mt-1.5">
                   Wants to found <span className="font-semibold">{row.guild_name}</span>
                   {row.current_guild ? <span className="text-muted-foreground"> (currently in {row.current_guild})</span> : null}
                 </p>
-                <p className="text-sm text-muted-foreground mt-1 whitespace-pre-line">“{row.pitch}”</p>
+                <blockquote className="mt-2 rounded-lg border-l-2 border-primary/50 bg-secondary/50 px-3 py-2 text-sm text-muted-foreground whitespace-pre-line">
+                  {row.pitch}
+                </blockquote>
               </div>
-              <div className="flex gap-2 md:flex-col">
+              <div className="flex gap-2 md:flex-col md:w-32">
                 <button
                   onClick={() => open(row, true)}
-                  className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:shadow-lg transition-smooth"
+                  className="flex-1 flex items-center justify-center gap-1.5 h-9 px-4 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-smooth"
                 >
                   <Check className="w-4 h-4" /> Approve
                 </button>
                 <button
                   onClick={() => open(row, false)}
-                  className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg border border-border text-foreground text-sm font-medium hover:bg-secondary transition-smooth"
+                  className="flex-1 flex items-center justify-center gap-1.5 h-9 px-4 rounded-lg border border-red-300 text-red-600 text-sm font-semibold hover:bg-red-50 dark:border-red-500/40 dark:text-red-400 dark:hover:bg-red-500/10 transition-smooth"
                 >
                   <X className="w-4 h-4" /> Decline
                 </button>
@@ -133,7 +146,7 @@ export function LeaderApplications({ onDecided }: { onDecided: () => void }) {
       )}
 
       {deciding && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-card rounded-2xl max-w-md w-full shadow-elevation-3 border border-border">
             <div className="p-6 border-b border-border flex items-center justify-between">
               <h3 className="text-lg font-bold text-foreground">
@@ -219,8 +232,8 @@ export function LeaderScorecards({ refreshKey }: { refreshKey: number }) {
 
   return (
     <div className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
-      <div className="p-6 pb-3">
-        <h2 className="text-lg font-bold text-foreground">Leader Scorecards</h2>
+      <div className="border-b border-border px-5 py-4">
+        <h2 className="text-base font-bold text-foreground">Leader scorecards</h2>
         <p className="text-xs text-muted-foreground mt-1">
           Last 30 days of guild activity. Leaders inactive for 30+ days are flagged.
         </p>
@@ -238,57 +251,56 @@ export function LeaderScorecards({ refreshKey }: { refreshKey: number }) {
             <col style={{ width: 190 }} />
           </colgroup>
           <thead>
-            <tr className="border-y border-border bg-secondary">
-              <SortableTh label="Leader" sortKey="leader" sort={scoreSort.sort} onSort={scoreSort.toggle} />
-              <SortableTh label="Guild" sortKey="guild" sort={scoreSort.sort} onSort={scoreSort.toggle} />
-              <SortableTh label="New members" sortKey="newMembers" sort={scoreSort.sort} onSort={scoreSort.toggle} />
-              <SortableTh label="Member trips" sortKey="trips" sort={scoreSort.sort} onSort={scoreSort.toggle} />
-              <SortableTh label="Guild pts" sortKey="points" sort={scoreSort.sort} onSort={scoreSort.toggle} />
-              <SortableTh label="Join requests" sortKey="requests" sort={scoreSort.sort} onSort={scoreSort.toggle} />
-              <SortableTh label="Last active" sortKey="lastActive" sort={scoreSort.sort} onSort={scoreSort.toggle} />
+            <tr className="border-b border-border bg-secondary/50">
+              <SortableTh label="Leader" sortKey="leader" className={TH} sort={scoreSort.sort} onSort={scoreSort.toggle} />
+              <SortableTh label="Guild" sortKey="guild" className={TH} sort={scoreSort.sort} onSort={scoreSort.toggle} />
+              <SortableTh label="New members" sortKey="newMembers" className={TH} sort={scoreSort.sort} onSort={scoreSort.toggle} />
+              <SortableTh label="Member trips" sortKey="trips" className={TH} sort={scoreSort.sort} onSort={scoreSort.toggle} />
+              <SortableTh label="Guild pts" sortKey="points" className={TH} sort={scoreSort.sort} onSort={scoreSort.toggle} />
+              <SortableTh label="Join requests" sortKey="requests" className={TH} sort={scoreSort.sort} onSort={scoreSort.toggle} />
+              <SortableTh label="Last active" sortKey="lastActive" className={TH} sort={scoreSort.sort} onSort={scoreSort.toggle} />
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-border">
             {loading ? (
-              <tr>
-                <td colSpan={8} className="px-6 py-6 text-center text-sm text-muted-foreground">
-                  Loading...
-                </td>
-              </tr>
+              <TableMessage colSpan={7} icon={Crown} title="Loading" loading />
             ) : rows.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="px-6 py-6 text-center text-sm text-muted-foreground">
-                  No Guild Leaders yet
-                </td>
-              </tr>
+              <TableMessage colSpan={7} icon={Crown} title="No Guild Leaders yet" />
             ) : (
               scoreSort.sorted.map((row) => {
                 const inactive = !row.last_active || Date.now() - new Date(row.last_active).getTime() > 30 * 86_400_000;
                 return (
-                  <tr key={row.user_id} className="border-b border-border">
-                    <td className="px-6 py-3">
-                      <p className="truncate font-medium text-foreground">{row.display_name}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {rankName(row.lifetime_points)} · {row.lifetime_points} pts
-                      </p>
+                  <tr key={row.user_id} className={TR}>
+                    <td className={TD}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Avatar name={row.display_name} />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">{row.display_name}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {rankName(row.lifetime_points)} · {row.lifetime_points} pts
+                          </p>
+                        </div>
+                      </div>
                     </td>
-                    <td className="px-6 py-3 text-sm text-foreground truncate">
+                    <td className="px-5 py-3.5 text-sm text-foreground truncate">
                       {row.guild_name ? `${row.guild_name} (${row.member_count})` : <span className="text-muted-foreground">No guild yet</span>}
                     </td>
-                    <td className="px-6 py-3 text-sm font-semibold text-foreground">{row.new_members_30d}</td>
-                    <td className="px-6 py-3 text-sm text-foreground">{row.member_trips_30d}</td>
-                    <td className="px-6 py-3 text-sm text-foreground">{row.guild_points_30d}</td>
-                    <td className="px-6 py-3 text-sm">
-                      <span className={row.pending_requests > 0 ? 'font-semibold text-amber-600' : 'text-muted-foreground'}>
-                        {row.pending_requests} waiting
-                      </span>
+                    <td className="px-5 py-3.5 text-sm font-semibold text-foreground">{row.new_members_30d}</td>
+                    <td className="px-5 py-3.5 text-sm text-foreground">{row.member_trips_30d}</td>
+                    <td className="px-5 py-3.5 text-sm text-foreground">{row.guild_points_30d}</td>
+                    <td className="px-5 py-3.5 text-sm">
+                      <Pill tone={row.pending_requests > 0 ? 'orange' : 'gray'}>{row.pending_requests} waiting</Pill>
                       <span className="block text-xs text-muted-foreground">
                         {row.avg_response_hours === null ? 'no answers yet' : `answers in ~${row.avg_response_hours}h`}
                       </span>
                     </td>
-                    <td className={`px-6 py-3 text-sm ${inactive ? 'text-amber-600 font-medium' : 'text-muted-foreground'}`}>
+                    <td className={`px-5 py-3.5 text-sm ${inactive ? 'text-amber-600 font-medium' : 'text-muted-foreground'}`}>
                       {timeAgo(row.last_active)}
-                      {inactive ? ' · inactive' : ''}
+                      {inactive && (
+                        <Pill tone="orange" className="ml-2">
+                          inactive
+                        </Pill>
+                      )}
                     </td>
                   </tr>
                 );

@@ -15,9 +15,10 @@ export interface AuditLogRow {
   entity_id: string | null;
   metadata: Record<string, unknown>;
   created_at: string;
-  // From audit_logs_view (partyup-mobile migration 202610070004): the admin's
-  // name ('System' when there's no actor) and severity as 3/2/1. The view is
-  // the one place the severity rules live.
+  // From audit_logs_view (partyup-mobile migrations 202610070004, 202610090004):
+  // the admin's name (kept even after their account is deleted; 'Deleted admin'
+  // for older entries) and severity as 3/2/1. The view is the one place the
+  // severity rules live.
   actor_name: string;
   severity_rank: 1 | 2 | 3;
 }

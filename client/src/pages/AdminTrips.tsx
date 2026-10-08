@@ -4,7 +4,7 @@ import TripMonitoringBoard from '@/components/trip-monitoring/TripMonitoringBoar
 export default function AdminTrips() {
   return (
     <AdminLayout>
-      <TripMonitoringBoard />
+      <TripMonitoringBoard padded={false} />
     </AdminLayout>
   );
 }

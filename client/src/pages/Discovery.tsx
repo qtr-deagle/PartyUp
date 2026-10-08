@@ -47,6 +47,7 @@ type FilterState = {
   interests: string[];
   seatsAvailableOnly: boolean;
   minCompatibility: number;
+  budgets: BudgetRange[];
 };
 
 const purposeLabels: Record<TripPurpose, string> = {
@@ -889,7 +890,7 @@ export default function Discovery() {
               {/* Quick Stats */}
               <div className="flex gap-2 text-xs text-muted-foreground">
                 <span className="px-2 py-1 bg-primary/10 text-primary rounded-full">
-                  {Object.values(filters).filter(v => v && (Array.isArray(v) ? v.length > 0 : v !== false && v !== 0 && v !== 60)).length} active
+                  {Object.values(filters).filter(v => v && (Array.isArray(v) ? v.length > 0 : v !== 0 && v !== 60)).length} active
                 </span>
               </div>
 

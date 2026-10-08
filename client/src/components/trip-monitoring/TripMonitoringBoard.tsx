@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import Map, { Marker, Popup } from 'react-map-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import mapboxgl from 'mapbox-gl';
 import {
@@ -12,6 +11,7 @@ import {
   History,
   ListOrdered,
   MapPin,
+  Maximize2,
   Navigation,
   Phone,
   Search,
@@ -31,9 +31,11 @@ import {
 import { useTableRealtime } from '@/hooks/useTableRealtime';
 import { useClientPagination } from '@/hooks/usePagination';
 import TablePagination from '@/components/TablePagination';
+import { SearchField, Segmented } from '@/components/admin/AdminUI';
 import ResolveSosDialog, { useSosResolving } from '@/components/sos/ResolveSosDialog';
 import { formatDateShort, formatDateTime } from '@/lib/datetime';
 import { useTripMonitoringRealtime } from '@/hooks/useTripMonitoringRealtime';
+import { LIVE_WITHIN_MS, MapLegend, TripMap, TripMapFullscreen } from '@/components/trip-monitoring/TripMapView';
 
 const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
 if (mapboxToken) {
@@ -79,8 +81,6 @@ function StatusPill({ status, overdue = false }: { status: string; overdue?: boo
   return <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${styles[status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300'}`}>{status}</span>;
 }
 
-// A member's phone counts as "live" if it reported a position this recently.
-const LIVE_WITHIN_MS = 5 * 60_000;
 
 type StatusFilter = 'all' | 'ongoing' | 'open' | 'full';
 
@@ -137,8 +137,8 @@ function Avatar({ name, url, size = 'md' }: { name: string; url: string | null |
 
 function StatCard({ icon, iconClass, label, value, hint }: { icon: ReactNode; iconClass: string; label: string; value: string; hint: string }) {
   return (
-    <div className="bg-card rounded-2xl p-5 shadow-elevation-2 border border-border flex items-center gap-4">
-      <div className={`p-3 rounded-xl ${iconClass}`}>{icon}</div>
+    <div className="bg-card rounded-2xl p-4 shadow-elevation-1 border border-border flex items-center gap-4">
+      <div className={`p-2.5 rounded-xl ${iconClass}`}>{icon}</div>
       <div className="min-w-0">
         <p className="text-xs text-muted-foreground">{label}</p>
         <p className="text-2xl font-bold text-foreground leading-tight">{value}</p>
@@ -161,7 +161,8 @@ function useNow(intervalMs = 15_000) {
   return now;
 }
 
-export default function TripMonitoringBoard() {
+/** `padded={false}` when the layout already pads its content (AdminLayout). */
+export default function TripMonitoringBoard({ padded = true }: { padded?: boolean }) {
   const { theme } = useTheme();
   const mapStyle = theme === 'dark' ? 'mapbox://styles/mapbox/navigation-night-v1' : 'mapbox://styles/mapbox/navigation-day-v1';
 
@@ -179,7 +180,8 @@ export default function TripMonitoringBoard() {
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   const [detail, setDetail] = useState<TripMonitoringDetail | null>(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
-  const [popupUserId, setPopupUserId] = useState<string | null>(null);
+  const [mapExpanded, setMapExpanded] = useState(false);
+  const [detailTab, setDetailTab] = useState<'map' | 'members' | 'itinerary' | 'safety'>('map');
 
   const [resolvingAlertId, setResolvingAlertId] = useState<string | null>(null);
   const isResolving = useSosResolving();
@@ -255,7 +257,8 @@ export default function TripMonitoringBoard() {
     }
     let cancelled = false;
     setIsDetailLoading(true);
-    setPopupUserId(null);
+    setMapExpanded(false);
+    setDetailTab('map');
     getTripMonitoringDetail(selectedTripId).then(({ data, error }) => {
       if (cancelled) return;
       if (error) {
@@ -322,10 +325,10 @@ export default function TripMonitoringBoard() {
   })();
 
   return (
-    <div className="space-y-6 p-8">
+    <div className={`flex flex-col gap-5 lg:h-full lg:min-h-0 ${padded ? 'p-8' : ''}`}>
       <div>
         <h1 className="text-3xl font-bold text-foreground">Trip Monitoring</h1>
-        <p className="text-sm text-muted-foreground mt-2">Monitor active trips, live locations, and safety alerts</p>
+        <p className="text-sm text-muted-foreground mt-1.5">Monitor active trips, live locations, and safety alerts</p>
       </div>
 
       {bannerAlerts.length > 0 && (
@@ -383,31 +386,20 @@ export default function TripMonitoringBoard() {
         />
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search by destination or organizer..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-smooth"
-          />
-        </div>
-      </div>
-
-      <div className="flex gap-2 flex-wrap">
-        {(['all', 'ongoing', 'open', 'full'] as const).map((value) => (
-          <button
-            key={value}
-            onClick={() => setStatusFilter(value)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium capitalize transition-colors ${
-              statusFilter === value ? 'bg-primary text-primary-foreground' : 'bg-card border border-border text-foreground hover:bg-secondary'
-            }`}
-          >
-            {value} <span className="opacity-70">({stats.counts[value]})</span>
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-3">
+        <Segmented
+          value={statusFilter}
+          options={(['all', 'ongoing', 'open', 'full'] as const).map((value) => ({
+            value,
+            label: (
+              <span className="capitalize">
+                {value} <span className="opacity-60 tabular-nums">{stats.counts[value]}</span>
+              </span>
+            ),
+          }))}
+          onChange={setStatusFilter}
+        />
+        <SearchField value={searchTerm} onChange={setSearchTerm} placeholder="Search destination or organizer..." />
         {/* Live trips only by default; this adds completed + cancelled ones. */}
         <button
           type="button"
@@ -415,7 +407,7 @@ export default function TripMonitoringBoard() {
           aria-checked={includeCompleted}
           onClick={() => setIncludeCompleted((on) => !on)}
           title={includeCompleted ? 'Hide completed and cancelled trips' : 'Also show completed and cancelled trips'}
-          className={`sm:ml-auto inline-flex items-center gap-2.5 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+          className={`sm:ml-auto inline-flex h-10 items-center gap-2.5 px-4 rounded-lg text-sm font-medium border transition-colors ${
             includeCompleted ? 'bg-primary/10 border-primary/40 text-primary' : 'bg-card border-border text-foreground hover:bg-secondary'
           }`}
         >
@@ -429,9 +421,9 @@ export default function TripMonitoringBoard() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        <div className="lg:col-span-2">
-          <div data-paginated className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 lg:flex-1 lg:min-h-0 lg:grid-rows-[minmax(0,1fr)]">
+        <div className="lg:col-span-2 lg:min-h-0">
+          <div data-paginated className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden flex flex-col lg:h-full max-lg:max-h-[32rem]">
             {isLoading ? (
               <p className="text-sm text-muted-foreground text-center py-8">Loading...</p>
             ) : loadError ? (
@@ -444,7 +436,7 @@ export default function TripMonitoringBoard() {
               </div>
             ) : (
               <>
-              <div className="divide-y divide-border">
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain divide-y divide-border">
                 {tripsPage.pageItems.map((trip) => {
                   const hasActiveSos = tripIdsWithActiveSos.has(trip.id) || trip.active_sos_count > 0;
                   const seatsFilled = trip.seats_total ? trip.seats_total - (trip.seats_available ?? 0) : null;
@@ -519,13 +511,13 @@ export default function TripMonitoringBoard() {
                   );
                 })}
               </div>
-              <TablePagination pagination={tripsPage} itemLabel="trips" />
+              <TablePagination pagination={tripsPage} itemLabel="trips" compact className="border-t border-border px-3 py-2" />
               </>
             )}
           </div>
         </div>
 
-        <div className="lg:col-span-3">
+        <div className="lg:col-span-3 lg:min-h-0">
           {!selectedTrip ? (
             <div className="bg-card rounded-2xl p-10 shadow-elevation-2 border border-border h-full flex flex-col items-center justify-center text-center gap-4">
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
@@ -550,8 +542,8 @@ export default function TripMonitoringBoard() {
               </div>
             </div>
           ) : (
-            <div className="space-y-4">
-              <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border space-y-4">
+            <div className="flex flex-col gap-4 lg:h-full lg:min-h-0">
+              <div className="shrink-0 bg-card rounded-2xl p-5 shadow-elevation-2 border border-border space-y-4">
                 <div className="flex items-start gap-4">
                   <div className="p-3 rounded-xl bg-primary/10 text-primary shrink-0">
                     <TripTypeIcon type={selectedTrip.trip_type} className="w-6 h-6" />
@@ -601,13 +593,13 @@ export default function TripMonitoringBoard() {
               </div>
 
               {isDetailLoading ? (
-                <div className="bg-card rounded-2xl p-8 shadow-elevation-2 border border-border">
+                <div className="bg-card rounded-2xl p-8 shadow-elevation-2 border border-border lg:flex-1">
                   <p className="text-sm text-muted-foreground text-center">Loading trip detail...</p>
                 </div>
               ) : detail ? (
                 <>
                   {detail.sosAlerts.filter((alert) => alert.status === 'active').length > 0 && (
-                    <div className="bg-destructive/10 border-2 border-destructive rounded-2xl p-5 space-y-3">
+                    <div className="shrink-0 bg-destructive/10 border-2 border-destructive rounded-2xl p-4 space-y-3">
                       <h4 className="font-bold text-destructive flex items-center gap-2">
                         <Siren className="w-5 h-5" /> Active SOS
                       </h4>
@@ -645,127 +637,61 @@ export default function TripMonitoringBoard() {
                   )}
 
                   {selectedTripSafetySessions.length > 0 && (
-                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-4 flex items-center gap-2 text-sm text-blue-700">
+                    <div className="shrink-0 bg-blue-500/10 border border-blue-500/30 rounded-2xl px-4 py-3 flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
                       <ShieldAlert className="w-4 h-4" />
                       {selectedTripSafetySessions.length} member{selectedTripSafetySessions.length > 1 ? 's' : ''} currently in Warning Mode
                     </div>
                   )}
 
-                  <div className="relative bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden h-[420px]">
-                    {!mapboxToken ? (
-                      <div className="h-full flex items-center justify-center text-sm text-muted-foreground">Map unavailable: VITE_MAPBOX_TOKEN is not set</div>
-                    ) : (
-                      <Map
-                        key={`${selectedTripId}:${sosFocus ? 'sos' : 'trip'}`}
-                        initialViewState={
-                          sosFocus
-                            ? { longitude: sosFocus.longitude, latitude: sosFocus.latitude, zoom: 15 }
-                            : {
-                                longitude: selectedTrip.destination_lng ?? 121.0244,
-                                latitude: selectedTrip.destination_lat ?? 14.5547,
-                                zoom: 11,
-                              }
-                        }
-                        style={{ width: '100%', height: '100%' }}
-                        mapStyle={mapStyle}
-                        mapboxAccessToken={mapboxToken}
-                        attributionControl={false}
-                      >
-                        {selectedTrip.destination_lat !== null && selectedTrip.destination_lng !== null && (
-                          <Marker longitude={selectedTrip.destination_lng} latitude={selectedTrip.destination_lat} anchor="center">
-                            <div title="Destination">
-                              <MapPin className="w-6 h-6 text-primary" fill="currentColor" />
-                            </div>
-                          </Marker>
-                        )}
+                  <Segmented
+                    value={detailTab}
+                    options={[
+                      { value: 'map' as const, label: <><Navigation className="w-4 h-4" /> Live map</> },
+                      { value: 'members' as const, label: <><Users className="w-4 h-4" /> Members <span className="opacity-60">{detail.members.length}</span></> },
+                      ...(detail.itinerary.length > 0
+                        ? [{ value: 'itinerary' as const, label: <><ListOrdered className="w-4 h-4" /> Itinerary</> }]
+                        : []),
+                      {
+                        value: 'safety' as const,
+                        label: (
+                          <>
+                            <ShieldAlert className="w-4 h-4" /> Safety & reports
+                            {pastSafetyEvents.length + detail.reports.length > 0 && (
+                              <span className="opacity-60">{pastSafetyEvents.length + detail.reports.length}</span>
+                            )}
+                          </>
+                        ),
+                      },
+                    ]}
+                    onChange={setDetailTab}
+                  />
 
-                        {sosFocus && (
-                          <Marker longitude={sosFocus.longitude} latitude={sosFocus.latitude} anchor="center">
-                            <div title="SOS — live position" className="relative flex items-center justify-center">
-                              <span className="absolute w-10 h-10 rounded-full bg-destructive/40 animate-ping" />
-                              <span className="relative w-5 h-5 rounded-full border-2 border-white bg-destructive shadow-lg" />
-                            </div>
-                          </Marker>
-                        )}
-
-                        {detail.members
-                          .filter((m) => m.status === 'accepted')
-                          .filter((m) => !(sosFocus && detail.sosAlerts.some((a) => a.user_id === m.user_id && a.status === 'active')))
-                          .map((member) => {
-                            const live = livePositions[member.user_id];
-                            const fallback = detail.locations.find((loc) => loc.user_id === member.user_id && loc.is_visible);
-                            const position = live ?? (fallback ? { latitude: fallback.latitude, longitude: fallback.longitude } : null);
-                            if (!position) return null;
-                            const isSos = detail.sosAlerts.some((a) => a.user_id === member.user_id && a.status === 'active');
-                            return (
-                              <Marker
-                                key={member.user_id}
-                                longitude={position.longitude}
-                                latitude={position.latitude}
-                                anchor="center"
-                                onClick={() => setPopupUserId(member.user_id)}
-                              >
-                                <button className="focus:outline-none">
-                                  <div
-                                    className={`w-4 h-4 rounded-full border-2 ${
-                                      isSos
-                                        ? 'bg-destructive border-destructive animate-pulse'
-                                        : member.member_role === 'driver'
-                                          ? 'bg-blue-500 border-blue-600'
-                                          : 'bg-primary/60 border-primary'
-                                    }`}
-                                  />
-                                </button>
-                              </Marker>
-                            );
-                          })}
-
-                        {popupUserId &&
-                          (() => {
-                            const member = detail.members.find((m) => m.user_id === popupUserId);
-                            const live = livePositions[popupUserId];
-                            const fallback = detail.locations.find((loc) => loc.user_id === popupUserId);
-                            const position = live ?? fallback;
-                            if (!member || !position) return null;
-                            return (
-                              <Popup longitude={position.longitude} latitude={position.latitude} anchor="bottom" onClose={() => setPopupUserId(null)}>
-                                <div className="p-1 text-sm">
-                                  <p className="font-medium">{member.profiles?.display_name ?? 'Unknown user'}</p>
-                                  <p className="text-xs text-gray-600 capitalize">{member.member_role}</p>
-                                </div>
-                              </Popup>
-                            );
-                          })()}
-                      </Map>
-                    )}
+                  <div className="lg:flex-1 lg:min-h-0">
+                  {detailTab === 'map' && (
+                  <div className="relative bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden h-[420px] lg:h-full">
+                    <TripMap data={{ trip: selectedTrip, detail, livePositions, sosFocus }} mapStyle={mapStyle} />
                     {mapboxToken && (
                       <>
-                        <div className="absolute top-3 left-3 rounded-lg bg-card/90 border border-border px-3 py-2 text-xs text-foreground flex items-center gap-2">
+                        <div className="absolute top-3 left-3 rounded-lg bg-card/90 backdrop-blur border border-border px-3 py-2 text-xs text-foreground flex items-center gap-2">
                           <span className={`w-2 h-2 rounded-full ${liveMemberCount > 0 ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground'}`} />
                           {liveMemberCount} of {acceptedMembers.length} sharing live location
                         </div>
-                        <div className="absolute bottom-3 right-3 flex flex-wrap items-center gap-3 rounded-lg bg-card/90 border border-border px-3 py-2 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1.5">
-                            <MapPin className="w-3.5 h-3.5 text-primary" fill="currentColor" /> Destination
-                          </span>
-                          <span className="flex items-center gap-1.5">
-                            <span className="w-3 h-3 rounded-full bg-primary/60 border-2 border-primary" /> Member
-                          </span>
-                          <span className="flex items-center gap-1.5">
-                            <span className="w-3 h-3 rounded-full bg-blue-500 border-2 border-blue-600" /> Driver
-                          </span>
-                          <span className="flex items-center gap-1.5">
-                            <span className="w-3 h-3 rounded-full bg-destructive border-2 border-white" /> SOS
-                          </span>
-                        </div>
+                        <button
+                          onClick={() => setMapExpanded(true)}
+                          title="Open the full-screen monitor"
+                          className="absolute top-3 right-3 inline-flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground shadow-elevation-2 hover:shadow-elevation-3 transition-smooth"
+                        >
+                          <Maximize2 className="w-4 h-4" /> Expand
+                        </button>
+                        <MapLegend className="absolute bottom-3 right-3" />
                       </>
                     )}
                   </div>
 
-                  <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-                    <h4 className="font-bold text-foreground mb-3 flex items-center gap-2">
-                      <Users className="w-5 h-5 text-muted-foreground" /> Members ({detail.members.length})
-                    </h4>
+                  )}
+
+                  {detailTab === 'members' && (
+                  <div className="bg-card rounded-2xl px-6 py-3 shadow-elevation-2 border border-border lg:h-full overflow-y-auto overscroll-contain">
                     <div className="divide-y divide-border">
                       {detail.members.map((member) => {
                         const name = member.profiles?.display_name ?? 'Unknown user';
@@ -826,11 +752,10 @@ export default function TripMonitoringBoard() {
                     </div>
                   </div>
 
-                  {detail.itinerary.length > 0 && (
-                    <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-                      <h4 className="font-bold text-foreground mb-4 flex items-center gap-2">
-                        <ListOrdered className="w-5 h-5 text-muted-foreground" /> Itinerary
-                      </h4>
+                  )}
+
+                  {detailTab === 'itinerary' && detail.itinerary.length > 0 && (
+                    <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border lg:h-full overflow-y-auto overscroll-contain">
                       <ol className="relative border-l-2 border-border ml-3 space-y-4">
                         {detail.itinerary.map((day) => (
                           <li key={day.id} className="pl-6 relative">
@@ -845,6 +770,15 @@ export default function TripMonitoringBoard() {
                     </div>
                   )}
 
+                  {detailTab === 'safety' && (
+                  <div className="space-y-4 lg:h-full overflow-y-auto overscroll-contain">
+                  {pastSafetyEvents.length === 0 && detail.reports.length === 0 && (
+                    <div className="bg-card rounded-2xl border border-dashed border-border p-10 text-center">
+                      <ShieldAlert className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
+                      <p className="text-sm font-medium text-foreground">No safety events or reports</p>
+                      <p className="text-xs text-muted-foreground mt-1">SOS alerts, Warning Mode and reports on this trip show up here.</p>
+                    </div>
+                  )}
                   {pastSafetyEvents.length > 0 && (
                     <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
                       <h4 className="font-bold text-foreground mb-3 flex items-center gap-2">
@@ -883,12 +817,32 @@ export default function TripMonitoringBoard() {
                       </div>
                     </div>
                   )}
+                  </div>
+                  )}
+                  </div>
                 </>
               ) : null}
             </div>
           )}
         </div>
       </div>
+
+      {mapExpanded && selectedTrip && detail && (
+        <TripMapFullscreen
+          data={{ trip: selectedTrip, detail, livePositions, sosFocus }}
+          mapStyle={mapStyle}
+          now={now}
+          lastSeenAt={lastSeenAt}
+          warningUserIds={new Set(selectedTripSafetySessions.map((session) => session.user_id))}
+          isResolving={isResolving}
+          onResolveSos={setResolvingAlertId}
+          onOpenSosCenter={() => {
+            const alert = detail.sosAlerts.find((a) => a.status === 'active');
+            navigate(alert ? `${sosCenterPath}?alert=${alert.id}` : sosCenterPath);
+          }}
+          onClose={() => setMapExpanded(false)}
+        />
+      )}
 
       {(() => {
         const alert = resolvingAlertId ? detail?.sosAlerts.find((a) => a.id === resolvingAlertId) : null;

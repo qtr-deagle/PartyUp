@@ -1,11 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { ImageLightbox } from '@/components/ImageLightbox';
-import { Search, DollarSign, AlertCircle, CheckCircle, Clock, Filter, Camera, AlertTriangle, XCircle, Eye, Percent } from 'lucide-react';
+import { AlertCircle, Camera, CheckCircle, Clock, Eye, Percent, Receipt, Search, Wallet, XCircle } from 'lucide-react';
+import { PageHeader, PersonCell, Pill, SearchField, Segmented, StatGrid, StatTile, TableMessage, TD, TH, TR, Toolbar, type PillTone } from '@/components/admin/AdminUI';
 import { getReportEvidenceUrl, listReports, updateReportStatus, type ReportRow, type ReportStatus } from '@/lib/reports';
 import SortableTh from '@/components/SortableTh';
 import { useSortable } from '@/hooks/useSortable';
-import { formatPeso, listPaymentHistory, partyUpFee, PLATFORM_FEE_RATE, type PaymentHistoryRow } from '@/lib/payments';
+import {
+  cancelPayment,
+  formatPeso,
+  listPaymentHistory,
+  markPaymentPaid,
+  partyUpFee,
+  PLATFORM_FEE_RATE,
+  type PaymentHistoryRow,
+} from '@/lib/payments';
+import ConfirmActionDialog from '@/components/ConfirmActionDialog';
+import { toast } from 'sonner';
 import { runUndoable } from '@/lib/undoable';
 import { formatDate, formatDateTime } from '@/lib/datetime';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
@@ -18,13 +29,16 @@ import TablePagination from '@/components/TablePagination';
  * Admin can:
  * - Review payment-related reports (reports table, report_type='payment') and
  *   investigate / resolve / dismiss them, same action set as the Support page's Reports tab
- * - View real payment/transaction history (payment_history table)
+ * - View real payment/transaction history (payment_history table, PayMongo only)
+ * - Settle a stuck pending payment: mark it paid (after checking the PayMongo
+ *   dashboard) or cancel it. Abandoned checkouts also expire after 24 hours.
  */
 export default function AdminPaymentManagement() {
   const [activeTab, setActiveTab] = useState<'issues' | 'history'>('issues');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
-  const [filterGateway, setFilterGateway] = useState('');
+  const [filterPaymentStatus, setFilterPaymentStatus] = useState('');
+  const [settling, setSettling] = useState<{ payment: PaymentHistoryRow; outcome: 'paid' | 'cancelled' } | null>(null);
 
   const [rawIssues, setIssues] = useState<ReportRow[]>([]);
   const [statusPatch, setStatusPatch] = useState<Record<string, ReportStatus>>({});
@@ -87,10 +101,10 @@ export default function AdminPaymentManagement() {
           (transaction.user?.display_name ?? '').toLowerCase().includes(searchLower) ||
           transaction.id.toLowerCase().includes(searchLower) ||
           (transaction.reference ?? '').toLowerCase().includes(searchLower);
-        const matchesGateway = !filterGateway || transaction.gateway === filterGateway;
-        return matchesSearch && matchesGateway;
+        const matchesStatus = !filterPaymentStatus || transaction.status === filterPaymentStatus;
+        return matchesSearch && matchesStatus;
       }),
-    [transactions, searchTerm, filterGateway]
+    [transactions, searchTerm, filterPaymentStatus]
   );
 
   // Click a column title: ascending, descending, then off (newest first).
@@ -115,14 +129,13 @@ export default function AdminPaymentManagement() {
       trip: (t) => t.trip?.title,
       amount: (t) => Number(t.amount),
       fee: (t) => partyUpFee(t),
-      gateway: (t) => t.gateway,
-      reference: (t) => t.reference,
+      reference: (t) => t.gateway_payment_intent_id ?? t.reference,
       status: (t) => t.status,
       date: (t) => t.created_at,
     },
     { key: 'date', direction: 'desc' }
   );
-  const transactionsPage = useClientPagination(transactionSort.sorted, [searchTerm, filterGateway, transactionSort.sort]);
+  const transactionsPage = useClientPagination(transactionSort.sorted, [searchTerm, filterPaymentStatus, transactionSort.sort]);
 
   // Status changes message the reporter, so they're held for the Undo window.
   const changeStatus = (report: ReportRow, status: ReportStatus, notes?: string) => {
@@ -143,6 +156,22 @@ export default function AdminPaymentManagement() {
             : 'Payment issue dismissed. The reporter got a reply.',
       error: 'Failed to update payment issue',
     });
+  };
+
+  const handleSettle = async (note: string) => {
+    if (!settling) return;
+    const { payment, outcome } = settling;
+    const { error } = outcome === 'paid' ? await markPaymentPaid(payment.id, note) : await cancelPayment(payment.id, note);
+    if (error) {
+      toast.error(error.message);
+      return false;
+    }
+    toast.success(
+      outcome === 'paid'
+        ? `Marked ${payment.user?.display_name ?? 'the rider'}'s payment as paid`
+        : `Cancelled ${payment.user?.display_name ?? 'the rider'}'s payment. They can pay again from the trip.`
+    );
+    void loadHistory(true);
   };
 
   const handleQuickStatus = (report: ReportRow, status: ReportStatus) => changeStatus(report, status);
@@ -166,290 +195,189 @@ export default function AdminPaymentManagement() {
   const totalFees = paidTransactions.reduce((sum, t) => sum + partyUpFee(t), 0);
   const feePercent = `${Math.round(PLATFORM_FEE_RATE * 100)}%`;
 
-  const issueStats = [
-    {
-      label: 'Total Issues',
-      value: String(issues.length),
-      icon: AlertCircle,
-      color: 'bg-orange-500/10',
-      textColor: 'text-orange-500',
-    },
-    {
-      label: 'Open',
-      value: String(issues.filter((i) => i.status === 'open').length),
-      icon: Clock,
-      color: 'bg-red-500/10',
-      textColor: 'text-red-500',
-    },
-    {
-      label: 'Reviewing',
-      value: String(issues.filter((i) => i.status === 'reviewing').length),
-      icon: AlertCircle,
-      color: 'bg-blue-500/10',
-      textColor: 'text-blue-500',
-    },
-    {
-      label: 'Resolved',
-      value: String(issues.filter((i) => i.status === 'resolved').length),
-      icon: CheckCircle,
-      color: 'bg-green-500/10',
-      textColor: 'text-green-500',
-    },
-  ];
-
-  const transactionStats = [
-    {
-      label: 'Total Volume (Paid)',
-      value: `₱${totalVolume.toLocaleString()}`,
-      icon: DollarSign,
-      color: 'bg-green-500/10',
-      textColor: 'text-green-500',
-    },
-    {
-      label: `PartyUp Fees (${feePercent})`,
-      value: formatPeso(totalFees),
-      icon: Percent,
-      color: 'bg-primary/10',
-      textColor: 'text-primary',
-    },
-    {
-      label: 'Paid',
-      value: String(paidTransactions.length),
-      icon: CheckCircle,
-      color: 'bg-green-500/10',
-      textColor: 'text-green-500',
-    },
-    {
-      label: 'Pending',
-      value: String(transactions.filter((t) => t.status === 'pending').length),
-      icon: Clock,
-      color: 'bg-yellow-500/10',
-      textColor: 'text-yellow-500',
-    },
-    {
-      label: 'Refunded',
-      value: String(transactions.filter((t) => t.status === 'refunded').length),
-      icon: AlertCircle,
-      color: 'bg-destructive/10',
-      textColor: 'text-destructive',
-    },
-  ];
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'open':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300';
-      case 'reviewing':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300';
-      case 'resolved':
-        return 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300';
-      case 'dismissed':
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300';
-      case 'paid':
-        return 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300';
-      case 'refunded':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300';
-      case 'demo':
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300';
-    }
+  const STATUS_TONE: Record<string, PillTone> = {
+    open: 'yellow',
+    reviewing: 'blue',
+    resolved: 'green',
+    dismissed: 'gray',
+    paid: 'green',
+    pending: 'yellow',
+    cancelled: 'red',
+    refunded: 'blue',
+    demo: 'gray',
   };
+  const openIssues = issues.filter((i) => i.status === 'open').length;
+  const pendingPayments = transactions.filter((t) => t.status === 'pending').length;
+  const switchTab = (tab: 'issues' | 'history') => {
+    setActiveTab(tab);
+    setSearchTerm('');
+    setFilterStatus('');
+    setFilterPaymentStatus('');
+  };
+  const toggle = (current: string, value: string, set: (v: string) => void) => set(current === value ? '' : value);
 
   return (
     <AdminLayout>
       <div className="space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Payment Management</h1>
-          <p className="text-sm text-muted-foreground mt-2">Manage payment disputes and track transaction analytics</p>
-        </div>
-
-        {/* Tab Navigation */}
-        <div className="flex gap-2 border-b border-border">
-          <button
-            onClick={() => {
-              setActiveTab('issues');
-              setSearchTerm('');
-              setFilterStatus('');
-            }}
-            className={`px-6 py-3 font-semibold transition-colors ${
-              activeTab === 'issues'
-                ? 'text-primary border-b-2 border-primary'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            Issues
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab('history');
-              setSearchTerm('');
-              setFilterGateway('');
-            }}
-            className={`px-6 py-3 font-semibold transition-colors ${
-              activeTab === 'history'
-                ? 'text-primary border-b-2 border-primary'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            Payment History
-          </button>
-        </div>
+        <PageHeader title="Payments" subtitle="Payment disputes and PayMongo transaction history">
+          <Segmented
+            value={activeTab}
+            options={[
+              {
+                value: 'issues' as const,
+                label: (
+                  <>
+                    <AlertCircle className="w-4 h-4" /> Issues
+                    {openIssues > 0 && <span className="min-w-5 rounded-full bg-orange-500 px-1.5 text-xs font-bold text-white">{openIssues}</span>}
+                  </>
+                ),
+              },
+              {
+                value: 'history' as const,
+                label: (
+                  <>
+                    <Receipt className="w-4 h-4" /> Payment history
+                    {pendingPayments > 0 && <span className="min-w-5 rounded-full bg-yellow-500 px-1.5 text-xs font-bold text-white">{pendingPayments}</span>}
+                  </>
+                ),
+              },
+            ]}
+            onChange={switchTab}
+          />
+        </PageHeader>
 
         {/* Issues Tab */}
         {activeTab === 'issues' && (
           <>
-            {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {issueStats.map((stat, index) => {
-                const Icon = stat.icon;
-                return (
-                  <div key={index} className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className={`${stat.color} p-3 rounded-lg`}>
-                        <Icon className={`${stat.textColor} w-6 h-6`} />
-                      </div>
-                    </div>
-                    <p className="text-muted-foreground text-sm mb-1">{stat.label}</p>
-                    <p className="text-3xl font-bold text-foreground">{stat.value}</p>
-                  </div>
-                );
-              })}
-            </div>
+            <StatGrid>
+              <StatTile icon={AlertCircle} tone="bg-orange-500/15 text-orange-600 dark:text-orange-400" label="Total issues" value={issues.length} onClick={() => setFilterStatus('')} active={filterStatus === ''} />
+              <StatTile icon={Clock} tone="bg-yellow-500/15 text-yellow-600 dark:text-yellow-400" label="Open" value={openIssues} onClick={() => toggle(filterStatus, 'open', setFilterStatus)} active={filterStatus === 'open'} />
+              <StatTile
+                icon={Eye}
+                tone="bg-blue-500/15 text-blue-600 dark:text-blue-400"
+                label="Investigating"
+                value={issues.filter((i) => i.status === 'reviewing').length}
+                onClick={() => toggle(filterStatus, 'reviewing', setFilterStatus)}
+                active={filterStatus === 'reviewing'}
+              />
+              <StatTile
+                icon={CheckCircle}
+                tone="bg-green-500/15 text-green-600 dark:text-green-400"
+                label="Resolved"
+                value={issues.filter((i) => i.status === 'resolved').length}
+                onClick={() => toggle(filterStatus, 'resolved', setFilterStatus)}
+                active={filterStatus === 'resolved'}
+              />
+            </StatGrid>
 
-            {/* Search & Filter */}
-            <div className="flex gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Search by user or details..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-smooth"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Filter className="w-5 h-5 text-muted-foreground mt-3" />
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="px-4 py-3 bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-smooth"
-                >
-                  <option value="">All Status</option>
-                  <option value="open">Open</option>
-                  <option value="reviewing">Reviewing</option>
-                  <option value="resolved">Resolved</option>
-                  <option value="dismissed">Dismissed</option>
-                </select>
-              </div>
-            </div>
+            <Toolbar>
+              <SearchField value={searchTerm} onChange={setSearchTerm} placeholder="Search by user or details..." />
+              <Segmented
+                value={filterStatus}
+                options={[
+                  { value: '', label: 'All' },
+                  { value: 'open', label: 'Open' },
+                  { value: 'reviewing', label: 'Investigating' },
+                  { value: 'resolved', label: 'Resolved' },
+                  { value: 'dismissed', label: 'Dismissed' },
+                ]}
+                onChange={setFilterStatus}
+              />
+            </Toolbar>
 
-            {/* Payment Issues Table */}
             <div data-paginated className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
               <div className="overflow-x-auto">
                 {/* Fixed column widths so sorting or paging doesn't shift the columns. */}
-                <table className="w-full table-fixed [&_td]:whitespace-nowrap" style={{ minWidth: 1070 }}>
+                <table className="w-full table-fixed [&_td]:whitespace-nowrap" style={{ minWidth: 1100 }}>
                   <colgroup>
-                    <col style={{ width: 180 }} />
+                    <col style={{ width: 210 }} />
                     <col />
                     <col style={{ width: 200 }} />
-                    <col style={{ width: 150 }} />
-                    <col style={{ width: 130 }} />
-                    <col style={{ width: 210 }} />
+                    <col style={{ width: 140 }} />
+                    <col style={{ width: 140 }} />
+                    <col style={{ width: 230 }} />
                   </colgroup>
                   <thead>
-                    <tr className="border-b border-border bg-secondary">
-                      <SortableTh label="Reporter" sortKey="reporter" sort={issueSort.sort} onSort={issueSort.toggle} />
-                      <SortableTh label="Details" sortKey="details" sort={issueSort.sort} onSort={issueSort.toggle} />
-                      <SortableTh label="Trip" sortKey="trip" sort={issueSort.sort} onSort={issueSort.toggle} />
-                      <SortableTh label="Reported" sortKey="reported" sort={issueSort.sort} onSort={issueSort.toggle} />
-                      <SortableTh label="Status" sortKey="status" sort={issueSort.sort} onSort={issueSort.toggle} />
-                      <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Actions</th>
+                    <tr className="border-b border-border bg-secondary/50">
+                      <SortableTh className={TH} label="Reporter" sortKey="reporter" sort={issueSort.sort} onSort={issueSort.toggle} />
+                      <SortableTh className={TH} label="Details" sortKey="details" sort={issueSort.sort} onSort={issueSort.toggle} />
+                      <SortableTh className={TH} label="Trip" sortKey="trip" sort={issueSort.sort} onSort={issueSort.toggle} />
+                      <SortableTh className={TH} label="Reported" sortKey="reported" sort={issueSort.sort} onSort={issueSort.toggle} />
+                      <SortableTh className={TH} label="Status" sortKey="status" sort={issueSort.sort} onSort={issueSort.toggle} />
+                      <th className={`${TH} text-right`}>Actions</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-border">
                     {isLoadingIssues ? (
-                      <tr>
-                        <td colSpan={6} className="px-6 py-8 text-center text-sm text-muted-foreground">
-                          Loading...
-                        </td>
-                      </tr>
+                      <TableMessage colSpan={6} icon={AlertCircle} title="Loading" loading />
                     ) : filteredIssues.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="px-6 py-8 text-center text-sm text-muted-foreground">
-                          No payment issues reported
-                        </td>
-                      </tr>
+                      <TableMessage
+                        colSpan={6}
+                        icon={searchTerm || filterStatus ? Search : CheckCircle}
+                        title={searchTerm || filterStatus ? 'No issues match these filters' : 'No payment issues reported'}
+                        text={searchTerm || filterStatus ? undefined : 'Nice, nothing to sort out.'}
+                      />
                     ) : (
                       issuesPage.pageItems.map((issue) => (
-                        <tr key={issue.id} className="border-b border-border hover:bg-secondary/50 transition-smooth">
-                          <td className="px-6 py-4">
-                            <span className="block truncate text-sm font-medium text-foreground" title={issue.reporter?.display_name ?? undefined}>{issue.reporter?.display_name ?? 'Unknown'}</span>
+                        <tr key={issue.id} className={TR}>
+                          <td className={TD}>
+                            <PersonCell name={issue.reporter?.display_name} />
                           </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm text-muted-foreground truncate block" title={issue.details}>
+                          <td className={TD}>
+                            <span className="text-sm text-foreground truncate block" title={issue.details}>
                               {issue.details}
                             </span>
                           </td>
-                          <td className="px-6 py-4">
-                            <span className="block truncate text-sm text-muted-foreground" title={issue.trip?.title ?? undefined}>{issue.trip?.title ?? '—'}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm text-muted-foreground">{formatDate(issue.created_at)}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${getStatusColor(issue.status)}`}>
-                              {issue.status}
+                          <td className={TD}>
+                            <span className="block truncate text-sm text-muted-foreground" title={issue.trip?.title ?? undefined}>
+                              {issue.trip?.title ?? '—'}
                             </span>
                           </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-2">
+                          <td className={`${TD} text-sm text-muted-foreground`}>{formatDate(issue.created_at)}</td>
+                          <td className={TD}>
+                            <Pill tone={STATUS_TONE[issue.status] ?? 'gray'} dot>
+                              {issue.status === 'reviewing' ? 'Investigating' : issue.status.charAt(0).toUpperCase() + issue.status.slice(1)}
+                            </Pill>
+                          </td>
+                          <td className={TD}>
+                            <div className="flex items-center justify-end gap-1.5">
                               {issue.evidence_paths.length > 0 && (
                                 <button
                                   onClick={() => handleViewEvidence(issue)}
-                                  className="p-2 hover:bg-secondary rounded-lg transition-smooth inline-flex items-center gap-1"
+                                  className="inline-flex h-8 items-center gap-1 rounded-lg border border-border px-2.5 text-xs font-medium text-muted-foreground hover:bg-secondary transition-smooth"
                                   title={`View ${issue.evidence_paths.length} evidence photo(s)`}
                                 >
-                                  <Camera className="w-4 h-4 text-muted-foreground" />
-                                  <span className="text-xs font-medium text-muted-foreground">{issue.evidence_paths.length}</span>
+                                  <Camera className="w-3.5 h-3.5" />
+                                  {issue.evidence_paths.length}
                                 </button>
                               )}
                               {issue.status === 'open' && (
                                 <button
                                   onClick={() => handleQuickStatus(issue, 'reviewing')}
                                   disabled={isSubmitting}
-                                  className="p-2 hover:bg-secondary rounded-lg transition-smooth disabled:opacity-50"
+                                  className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-smooth disabled:opacity-50"
                                   title="Start investigating"
                                 >
-                                  <Eye className="w-4 h-4 text-primary" />
+                                  <Eye className="w-4 h-4" />
                                 </button>
                               )}
                               {(issue.status === 'open' || issue.status === 'reviewing') && (
                                 <>
                                   <button
-                                    onClick={() => setResolvingReport({ report: issue, status: 'resolved' })}
-                                    className="p-2 hover:bg-secondary rounded-lg transition-smooth"
-                                    title="Resolve"
-                                  >
-                                    <CheckCircle className="w-4 h-4 text-green-600" />
-                                  </button>
-                                  <button
                                     onClick={() => setResolvingReport({ report: issue, status: 'dismissed' })}
-                                    className="p-2 hover:bg-secondary rounded-lg transition-smooth"
+                                    className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-smooth"
                                     title="Dismiss"
                                   >
-                                    <XCircle className="w-4 h-4 text-destructive" />
+                                    <XCircle className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => setResolvingReport({ report: issue, status: 'resolved' })}
+                                    className="inline-flex h-8 items-center gap-1 rounded-lg bg-green-600 px-3 text-xs font-semibold text-white hover:bg-green-700 transition-smooth"
+                                    title="Resolve"
+                                  >
+                                    <CheckCircle className="w-3.5 h-3.5" /> Resolve
                                   </button>
                                 </>
-                              )}
-                              {issue.status === 'reviewing' && (
-                                <span title="Under investigation">
-                                  <AlertTriangle className="w-4 h-4 text-orange-500" />
-                                </span>
                               )}
                             </div>
                           </td>
@@ -467,129 +395,145 @@ export default function AdminPaymentManagement() {
         {/* Payment History Tab */}
         {activeTab === 'history' && (
           <>
-            {/* Transaction Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-6">
-              {transactionStats.map((stat, index) => {
-                const Icon = stat.icon;
-                return (
-                  <div key={index} className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className={`${stat.color} p-3 rounded-lg`}>
-                        <Icon className={`${stat.textColor} w-6 h-6`} />
-                      </div>
-                    </div>
-                    <p className="text-muted-foreground text-sm mb-1">{stat.label}</p>
-                    <p className="text-3xl font-bold text-foreground">{stat.value}</p>
-                  </div>
-                );
-              })}
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+              <StatTile icon={Wallet} tone="bg-green-500/15 text-green-600 dark:text-green-400" label="Total volume (paid)" value={formatPeso(totalVolume)} />
+              <StatTile icon={Percent} tone="bg-primary/10 text-primary" label={`PartyUp fees (${feePercent})`} value={formatPeso(totalFees)} />
+              <StatTile
+                icon={CheckCircle}
+                tone="bg-green-500/15 text-green-600 dark:text-green-400"
+                label="Paid"
+                value={paidTransactions.length}
+                onClick={() => toggle(filterPaymentStatus, 'paid', setFilterPaymentStatus)}
+                active={filterPaymentStatus === 'paid'}
+              />
+              <StatTile
+                icon={Clock}
+                tone="bg-yellow-500/15 text-yellow-600 dark:text-yellow-400"
+                label="Pending"
+                value={pendingPayments}
+                hint={pendingPayments ? 'May need settling' : undefined}
+                onClick={() => toggle(filterPaymentStatus, 'pending', setFilterPaymentStatus)}
+                active={filterPaymentStatus === 'pending'}
+              />
+              <StatTile
+                icon={XCircle}
+                tone="bg-red-500/15 text-red-600 dark:text-red-400"
+                label="Cancelled"
+                value={transactions.filter((t) => t.status === 'cancelled').length}
+                onClick={() => toggle(filterPaymentStatus, 'cancelled', setFilterPaymentStatus)}
+                active={filterPaymentStatus === 'cancelled'}
+              />
             </div>
 
-            {/* Search & Filter */}
-            <div className="flex gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Search by user, transaction ID, or reference..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-smooth"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Filter className="w-5 h-5 text-muted-foreground mt-3" />
-                <select
-                  value={filterGateway}
-                  onChange={(e) => setFilterGateway(e.target.value)}
-                  className="px-4 py-3 bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-smooth"
-                >
-                  <option value="">All Gateways</option>
-                  <option value="manual">Manual (self-reported)</option>
-                  <option value="paymongo">PayMongo</option>
-                </select>
-              </div>
-            </div>
+            <Toolbar>
+              <SearchField value={searchTerm} onChange={setSearchTerm} placeholder="Search user, transaction ID or reference..." />
+              <Segmented
+                value={filterPaymentStatus}
+                options={[
+                  { value: '', label: 'All' },
+                  { value: 'pending', label: 'Pending' },
+                  { value: 'paid', label: 'Paid' },
+                  { value: 'cancelled', label: 'Cancelled' },
+                  { value: 'refunded', label: 'Refunded' },
+                ]}
+                onChange={setFilterPaymentStatus}
+              />
+            </Toolbar>
 
-            {/* Payment History Table */}
             <div data-paginated className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
               <div className="overflow-x-auto">
                 {/* Fixed column widths: with auto layout, sorting or paging brought
                     different text into view and every column shifted. */}
-                <table className="w-full table-fixed [&_td]:whitespace-nowrap" style={{ minWidth: 1490 }}>
+                <table className="w-full table-fixed [&_td]:whitespace-nowrap" style={{ minWidth: 1500 }}>
                   <colgroup>
                     <col style={{ width: 130 }} />
-                    <col style={{ width: 180 }} />
+                    <col style={{ width: 200 }} />
                     {/* Trip: no width, takes the rest */}
                     <col />
                     <col style={{ width: 120 }} />
+                    <col style={{ width: 170 }} />
                     <col style={{ width: 200 }} />
-                    <col style={{ width: 120 }} />
+                    <col style={{ width: 130 }} />
                     <col style={{ width: 190 }} />
                     <col style={{ width: 120 }} />
-                    <col style={{ width: 210 }} />
                   </colgroup>
                   <thead>
-                    <tr className="border-b border-border bg-secondary">
-                      <SortableTh label="Transaction ID" sortKey="id" sort={transactionSort.sort} onSort={transactionSort.toggle} />
-                      <SortableTh label="User" sortKey="user" sort={transactionSort.sort} onSort={transactionSort.toggle} />
-                      <SortableTh label="Trip" sortKey="trip" sort={transactionSort.sort} onSort={transactionSort.toggle} />
-                      <SortableTh label="Amount" sortKey="amount" sort={transactionSort.sort} onSort={transactionSort.toggle} />
-                      <SortableTh label={`PartyUp Fee (${feePercent})`} sortKey="fee" sort={transactionSort.sort} onSort={transactionSort.toggle} />
-                      <SortableTh label="Gateway" sortKey="gateway" sort={transactionSort.sort} onSort={transactionSort.toggle} />
-                      <SortableTh label="Reference" sortKey="reference" sort={transactionSort.sort} onSort={transactionSort.toggle} />
-                      <SortableTh label="Status" sortKey="status" sort={transactionSort.sort} onSort={transactionSort.toggle} />
-                      <SortableTh label="Date" sortKey="date" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                    <tr className="border-b border-border bg-secondary/50">
+                      <SortableTh className={TH} label="Transaction" sortKey="id" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <SortableTh className={TH} label="User" sortKey="user" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <SortableTh className={TH} label="Trip" sortKey="trip" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <SortableTh className={TH} label="Amount" sortKey="amount" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <SortableTh className={TH} label={`Fee (${feePercent})`} sortKey="fee" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <SortableTh className={TH} label="PayMongo ID" sortKey="reference" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <SortableTh className={TH} label="Status" sortKey="status" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <SortableTh className={TH} label="Date" sortKey="date" sort={transactionSort.sort} onSort={transactionSort.toggle} />
+                      <th className={`${TH} text-right`}>Settle</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-border">
                     {isLoadingHistory ? (
-                      <tr>
-                        <td colSpan={9} className="px-6 py-8 text-center text-sm text-muted-foreground">
-                          Loading...
-                        </td>
-                      </tr>
+                      <TableMessage colSpan={9} icon={Receipt} title="Loading" loading />
                     ) : filteredTransactions.length === 0 ? (
-                      <tr>
-                        <td colSpan={9} className="px-6 py-8 text-center text-sm text-muted-foreground">
-                          No transactions found
-                        </td>
-                      </tr>
+                      <TableMessage
+                        colSpan={9}
+                        icon={searchTerm || filterPaymentStatus ? Search : Receipt}
+                        title={searchTerm || filterPaymentStatus ? 'No transactions match these filters' : 'No transactions yet'}
+                      />
                     ) : (
                       transactionsPage.pageItems.map((transaction) => (
-                        <tr key={transaction.id} className="border-b border-border hover:bg-secondary/50 transition-smooth">
-                          <td className="px-6 py-4">
-                            <span className="text-sm font-mono text-foreground" title={transaction.id}>
+                        <tr key={transaction.id} className={`${TR} ${transaction.status === 'pending' ? 'bg-yellow-500/[0.03]' : ''}`}>
+                          <td className={TD}>
+                            <span className="rounded-md border border-border bg-secondary/50 px-2 py-0.5 font-mono text-xs text-foreground" title={transaction.id}>
                               {transaction.id.slice(0, 8)}
                             </span>
                           </td>
-                          <td className="px-6 py-4">
-                            <span className="block truncate text-sm text-foreground" title={transaction.user?.display_name ?? undefined}>{transaction.user?.display_name ?? 'Unknown'}</span>
+                          <td className={TD}>
+                            <PersonCell name={transaction.user?.display_name} />
                           </td>
-                          <td className="px-6 py-4">
-                            <span className="block truncate text-sm text-muted-foreground" title={transaction.trip?.title ?? undefined}>{transaction.trip?.title ?? '—'}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm font-semibold text-foreground">
-                              ₱{transaction.amount.toLocaleString()}
+                          <td className={TD}>
+                            <span className="block truncate text-sm text-muted-foreground" title={transaction.trip?.title ?? undefined}>
+                              {transaction.trip?.title ?? '—'}
                             </span>
                           </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm font-semibold text-primary">{formatPeso(partyUpFee(transaction))}</span>
+                          <td className={`${TD} text-sm font-bold tabular-nums text-foreground`}>{formatPeso(Number(transaction.amount))}</td>
+                          <td className={`${TD} text-sm font-semibold tabular-nums text-primary`}>{formatPeso(partyUpFee(transaction))}</td>
+                          <td className={TD}>
+                            <span
+                              className="block truncate font-mono text-xs text-muted-foreground"
+                              title={transaction.gateway_payment_intent_id ?? transaction.reference ?? undefined}
+                            >
+                              {transaction.gateway_payment_intent_id ?? transaction.reference ?? '—'}
+                            </span>
                           </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm font-medium text-foreground capitalize">{transaction.gateway}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="block truncate text-sm font-mono text-muted-foreground" title={transaction.reference ?? undefined}>{transaction.reference ?? '—'}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${getStatusColor(transaction.status)}`}>
+                          <td className={TD}>
+                            <Pill tone={STATUS_TONE[transaction.status] ?? 'gray'} dot className="capitalize">
                               {transaction.status}
-                            </span>
+                            </Pill>
                           </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm text-muted-foreground">{formatDateTime(transaction.created_at)}</span>
+                          <td className={`${TD} text-sm text-muted-foreground`}>{formatDateTime(transaction.created_at)}</td>
+                          <td className={TD}>
+                            {transaction.status === 'pending' ? (
+                              <div className="flex items-center justify-end gap-1">
+                                <button
+                                  onClick={() => setSettling({ payment: transaction, outcome: 'cancelled' })}
+                                  className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-smooth"
+                                  title="Cancel payment"
+                                  aria-label={`Cancel ${transaction.user?.display_name ?? 'this'} payment`}
+                                >
+                                  <XCircle className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => setSettling({ payment: transaction, outcome: 'paid' })}
+                                  className="p-2 rounded-lg text-green-600 hover:bg-green-500/10 transition-smooth"
+                                  title="Mark as paid"
+                                  aria-label={`Mark ${transaction.user?.display_name ?? 'this'} payment as paid`}
+                                >
+                                  <CheckCircle className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="block text-right text-sm text-muted-foreground">—</span>
+                            )}
                           </td>
                         </tr>
                       ))
@@ -604,7 +548,7 @@ export default function AdminPaymentManagement() {
       </div>
 
       {resolvingReport && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-card rounded-2xl max-w-md w-full shadow-elevation-3 border border-border">
             <div className="p-6 border-b border-border">
               <h3 className="text-lg font-bold text-foreground capitalize">{resolvingReport.status} Report</h3>
@@ -646,7 +590,7 @@ export default function AdminPaymentManagement() {
       )}
 
       {evidenceReportId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setEvidenceReportId(null)}>
+        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setEvidenceReportId(null)}>
           <div className="bg-card rounded-2xl max-w-lg w-full shadow-elevation-3 border border-border" onClick={(e) => e.stopPropagation()}>
             <div className="p-6 border-b border-border">
               <h3 className="text-lg font-bold text-foreground">Evidence Photos</h3>
@@ -677,6 +621,30 @@ export default function AdminPaymentManagement() {
           </div>
         </div>
       )}
+
+      <ConfirmActionDialog
+        open={settling !== null}
+        onOpenChange={(open) => !open && setSettling(null)}
+        tone={settling?.outcome === 'cancelled' ? 'destructive' : 'default'}
+        title={
+          settling?.outcome === 'paid'
+            ? `Mark ${settling.payment.user?.display_name ?? 'this'} payment as paid?`
+            : `Cancel ${settling?.payment.user?.display_name ?? 'this'} payment?`
+        }
+        description={
+          settling?.outcome === 'paid'
+            ? `Only do this after confirming in the PayMongo dashboard that ${settling ? formatPeso(Number(settling.payment.amount)) : 'the amount'} was received. The rider and driver will be notified.`
+            : 'The rider is told the payment was not completed, and their seat goes back to unpaid so they can pay again. If PayMongo later confirms this checkout, it is still marked paid.'
+        }
+        confirmLabel={settling?.outcome === 'paid' ? 'Mark as paid' : 'Cancel payment'}
+        cancelLabel="Back"
+        notes={{
+          label: settling?.outcome === 'paid' ? 'How did you confirm it?' : 'Reason',
+          required: true,
+          placeholder: settling?.outcome === 'paid' ? 'e.g. Seen as paid in the PayMongo dashboard' : 'e.g. Rider abandoned the checkout',
+        }}
+        onConfirm={handleSettle}
+      />
 
       <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
     </AdminLayout>

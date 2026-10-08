@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import GuildDetailDialog from '@/components/GuildDetailDialog';
-import { Search, Edit2, Trash2, Plus, X, KeyRound, Crown } from 'lucide-react';
+import { BarChart3, Crown, Inbox, KeyRound, Mail, Plus, Search, Shield, Trash2, UserCheck, Users, UserX, X, type LucideIcon } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { PageHeader, PersonCell, Pill, SearchField, Segmented, StatGrid, StatTile, TableMessage, TD, TH, TR, Toolbar } from '@/components/admin/AdminUI';
 import { toast } from 'sonner';
 import {
   listLeaderGuildMembers,
@@ -57,6 +59,8 @@ export default function AdminStaff() {
   const [viewingGuildId, setViewingGuildId] = useState<string | null>(null);
   // Bumped after an application decision so the scorecards pick up the new leader.
   const [scorecardKey, setScorecardKey] = useState(0);
+  const [tab, setTab] = useState<'leaders' | 'applications' | 'scorecards'>('leaders');
+  const [applicationCount, setApplicationCount] = useState(0);
 
   // `silent` refreshes (realtime / tab focus) skip the loading state.
   const loadStaff = useCallback(async (silent = false) => {
@@ -200,188 +204,188 @@ export default function AdminStaff() {
     toast.success(`Password reset link sent to ${member.email}`);
   };
 
+  const activeCount = staff.filter((member) => activePatch[member.id] ?? member.is_active).length;
+  const withGuild = staff.filter((member) => member.guild_id).length;
+  const tabs = [
+    { value: 'leaders' as const, label: <><Users className="w-4 h-4" /> Leaders</> },
+    {
+      value: 'applications' as const,
+      label: (
+        <>
+          <Crown className="w-4 h-4" /> Applications
+          {applicationCount > 0 && <span className="min-w-5 rounded-full bg-orange-500 px-1.5 text-xs font-bold text-white">{applicationCount}</span>}
+        </>
+      ),
+    },
+    { value: 'scorecards' as const, label: <><BarChart3 className="w-4 h-4" /> Scorecards</> },
+  ];
+
   return (
     <AdminLayout>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Guild Leader Management</h1>
-            <p className="text-sm text-muted-foreground mt-2">Approve new leaders, track how their guilds are doing, and manage access</p>
-          </div>
+        <PageHeader title="Guild Leaders" subtitle="Approve new leaders, track how their guilds are doing, and manage access">
           <button
             onClick={() => setShowAddStaffForm(!showAddStaffForm)}
-            className="flex shrink-0 items-center gap-2 px-5 py-2.5 border border-border text-foreground rounded-lg font-medium hover:bg-secondary transition-smooth"
+            className={`flex shrink-0 items-center gap-2 h-10 px-4 rounded-lg text-sm font-semibold transition-smooth ${
+              showAddStaffForm ? 'bg-secondary text-foreground' : 'border border-border text-foreground hover:bg-secondary'
+            }`}
           >
-            <Plus className="w-5 h-5" />
+            {showAddStaffForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
             Promote directly
           </button>
-        </div>
+        </PageHeader>
+
+        <StatGrid>
+          <StatTile icon={Crown} tone="bg-yellow-500/15 text-yellow-600 dark:text-yellow-400" label="Guild Leaders" value={staff.length} />
+          <StatTile icon={UserCheck} tone="bg-green-500/15 text-green-600 dark:text-green-400" label="Active" value={activeCount} hint={`${staff.length - activeCount} inactive`} />
+          <StatTile icon={Shield} tone="bg-blue-500/15 text-blue-600 dark:text-blue-400" label="Running a guild" value={withGuild} hint={`${staff.length - withGuild} haven't founded one`} />
+          <StatTile
+            icon={Inbox}
+            tone="bg-orange-500/15 text-orange-600 dark:text-orange-400"
+            label="Applications waiting"
+            value={applicationCount}
+            onClick={() => setTab('applications')}
+            active={tab === 'applications'}
+          />
+        </StatGrid>
 
         {/* Promote directly (special cases; the normal path is an application) */}
         {showAddStaffForm && (
-          <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-            <h3 className="text-lg font-bold text-foreground mb-2">Promote a Traveler to Guild Leader</h3>
-            <p className="text-xs text-muted-foreground mb-4">
-              Normally travelers earn this by meeting the leader requirements and applying in the app. Use this only for special cases. They
-              must already have a PartyUp account. To add a PartyUp team member, use the Admins page.
-            </p>
-            <div className="space-y-4">
-              <input
-                type="email"
-                placeholder="Traveler's email address"
-                value={newLeaderEmail}
-                onChange={(e) => setNewLeaderEmail(e.target.value)}
-                className="w-full px-4 py-2.5 bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-smooth"
-              />
-              <div className="flex gap-3">
-                <button
-                  onClick={handleAddLeader}
-                  className="flex-1 px-4 py-2.5 bg-primary text-primary-foreground rounded-lg font-medium hover:shadow-lg transition-smooth disabled:opacity-50"
-                >
-                  Make Guild Leader
-                </button>
-                <button
-                  onClick={() => setShowAddStaffForm(false)}
-                  className="flex-1 px-4 py-2.5 border border-border text-foreground rounded-lg font-medium hover:bg-secondary transition-smooth"
-                >
-                  Cancel
-                </button>
+          <div className="rounded-2xl border border-primary/30 bg-primary/5 p-5 animate-in fade-in slide-in-from-bottom-2 duration-200">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                <Crown className="w-5 h-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-bold text-foreground">Promote a traveler to Guild Leader</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Normally travelers earn this by applying in the app. Use this only for special cases; they must already have a PartyUp account.
+                  To add a PartyUp team member, use the Admins page.
+                </p>
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <div className="relative flex-1">
+                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input
+                      type="email"
+                      placeholder="Traveler's email address"
+                      value={newLeaderEmail}
+                      onChange={(e) => setNewLeaderEmail(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddLeader()}
+                      className="w-full h-10 pl-10 pr-4 bg-card border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary transition-smooth"
+                    />
+                  </div>
+                  <button
+                    onClick={handleAddLeader}
+                    className="h-10 px-5 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:shadow-lg transition-smooth"
+                  >
+                    Make Guild Leader
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Leader applications from the mobile app */}
-        <LeaderApplications
-          onDecided={() => {
-            void loadStaff(true);
-            setScorecardKey((key) => key + 1);
-          }}
-        />
+        <Toolbar>
+          <Segmented value={tab} options={tabs} onChange={setTab} />
+          {tab === 'leaders' && <SearchField value={searchTerm} onChange={setSearchTerm} placeholder="Search by name, email or guild..." />}
+        </Toolbar>
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search by name, email or guild..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-smooth"
+        {/* Leader applications from the mobile app (kept mounted so the count stays live) */}
+        <div className={tab === 'applications' ? undefined : 'hidden'}>
+          <LeaderApplications
+            onCount={setApplicationCount}
+            onDecided={() => {
+              void loadStaff(true);
+              setScorecardKey((key) => key + 1);
+            }}
           />
         </div>
 
-        {/* Leaders table */}
-        <div data-paginated className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
-          <div className="overflow-x-auto">
-            {/* Fixed column widths so sorting or paging doesn't shift the columns. */}
-            <table className="w-full table-fixed [&_td]:whitespace-nowrap" style={{ minWidth: 890 }}>
-              <colgroup>
-                <col />
-                <col />
-                <col style={{ width: 140 }} />
-                <col style={{ width: 170 }} />
-                <col style={{ width: 180 }} />
-              </colgroup>
-              <thead>
-                <tr className="border-b border-border bg-secondary">
-                  <SortableTh label="Leader" sortKey="leader" sort={staffSort.sort} onSort={staffSort.toggle} />
-                  <SortableTh label="Guild" sortKey="guild" sort={staffSort.sort} onSort={staffSort.toggle} />
-                  <SortableTh label="Status" sortKey="status" sort={staffSort.sort} onSort={staffSort.toggle} />
-                  <SortableTh label="Joined" sortKey="joined" sort={staffSort.sort} onSort={staffSort.toggle} />
-                  <th className="px-6 py-4 text-left text-sm font-bold text-foreground">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {isLoading ? (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-sm text-muted-foreground">
-                      Loading...
-                    </td>
+        {tab === 'leaders' && (
+          <div data-paginated className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
+            <div className="overflow-x-auto">
+              {/* Fixed column widths so sorting or paging doesn't shift the columns. */}
+              <table className="w-full table-fixed [&_td]:whitespace-nowrap" style={{ minWidth: 890 }}>
+                <colgroup>
+                  <col />
+                  <col />
+                  <col style={{ width: 140 }} />
+                  <col style={{ width: 160 }} />
+                  <col style={{ width: 150 }} />
+                </colgroup>
+                <thead>
+                  <tr className="border-b border-border bg-secondary/50">
+                    <SortableTh className={TH} label="Leader" sortKey="leader" sort={staffSort.sort} onSort={staffSort.toggle} />
+                    <SortableTh className={TH} label="Guild" sortKey="guild" sort={staffSort.sort} onSort={staffSort.toggle} />
+                    <SortableTh className={TH} label="Status" sortKey="status" sort={staffSort.sort} onSort={staffSort.toggle} />
+                    <SortableTh className={TH} label="Joined" sortKey="joined" sort={staffSort.sort} onSort={staffSort.toggle} />
+                    <th className={`${TH} text-right`}>Actions</th>
                   </tr>
-                ) : filteredStaff.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-sm text-muted-foreground">
-                      No Guild Leaders found
-                    </td>
-                  </tr>
-                ) : (
-                  staffPage.pageItems.map((row) => ({ ...row, is_active: activePatch[row.id] ?? row.is_active })).map((member) => (
-                    <tr key={member.id} className="border-b border-border hover:bg-secondary/50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="truncate font-medium text-foreground">{member.display_name}</p>
-                          <p className="truncate text-xs text-muted-foreground">{member.email}</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm">
-                        {member.guild_id && member.guild_name ? (
-                          <button
-                            onClick={() => setViewingGuildId(member.guild_id)}
-                            title={`View ${member.guild_name}`}
-                            className="group flex max-w-full items-center gap-1.5 text-left text-foreground"
-                          >
-                            <Crown className="w-4 h-4 text-amber-600" />
-                            <span className="truncate font-medium group-hover:text-primary group-hover:underline underline-offset-2">{member.guild_name}</span>
-                            <span className="text-muted-foreground">· {member.member_count} {member.member_count === 1 ? 'member' : 'members'}</span>
-                          </button>
-                        ) : (
-                          <span className="text-muted-foreground">No guild founded yet</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-sm">
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            member.is_active
-                              ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300'
-                              : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300'
-                          }`}
-                        >
-                          {member.is_active ? 'active' : 'inactive'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-muted-foreground">{formatDate(member.created_at)}</td>
-                      <td className="px-6 py-4 text-sm space-x-2 flex">
-                        <button
-                          onClick={() => openEdit(member)}
-                          className="p-2 hover:bg-primary/10 rounded-lg text-primary transition-colors"
-                          title="Activate or deactivate"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setResettingStaff(member)}
-                          disabled={!member.email}
-                          className="p-2 hover:bg-primary/10 rounded-lg text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                          title="Send password reset link"
-                        >
-                          <KeyRound className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => void openRevoke(member)}
-                          className="p-2 hover:bg-destructive/10 rounded-lg text-destructive transition-colors"
-                          title="Revoke Guild Leader role"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {isLoading ? (
+                    <TableMessage colSpan={5} icon={Users} title="Loading" loading />
+                  ) : filteredStaff.length === 0 ? (
+                    <TableMessage
+                      colSpan={5}
+                      icon={searchTerm ? Search : Crown}
+                      title={searchTerm ? 'No leaders match your search' : 'No Guild Leaders yet'}
+                      text={searchTerm ? 'Try a different name, email or guild.' : 'Approve an application to add the first one.'}
+                    />
+                  ) : (
+                    staffPage.pageItems.map((row) => ({ ...row, is_active: activePatch[row.id] ?? row.is_active })).map((member) => (
+                      <tr key={member.id} className={`group ${TR}`}>
+                        <td className={TD}>
+                          <PersonCell name={member.display_name} sub={member.email} />
+                        </td>
+                        <td className={`${TD} text-sm`}>
+                          {member.guild_id && member.guild_name ? (
+                            <button
+                              onClick={() => setViewingGuildId(member.guild_id)}
+                              title={`View ${member.guild_name}`}
+                              className="group/guild inline-flex max-w-full items-center gap-2 rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 text-left hover:border-primary/50 hover:bg-primary/5 transition-smooth"
+                            >
+                              <Crown className="w-3.5 h-3.5 shrink-0 text-yellow-600 dark:text-yellow-400" />
+                              <span className="truncate font-medium text-foreground group-hover/guild:text-primary">{member.guild_name}</span>
+                              <span className="shrink-0 inline-flex items-center gap-0.5 text-xs text-muted-foreground">
+                                <Users className="w-3 h-3" /> {member.member_count}
+                              </span>
+                            </button>
+                          ) : (
+                            <span className="text-xs italic text-muted-foreground">No guild founded yet</span>
+                          )}
+                        </td>
+                        <td className={TD}>
+                          <Pill tone={member.is_active ? 'green' : 'gray'} dot>
+                            {member.is_active ? 'Active' : 'Inactive'}
+                          </Pill>
+                        </td>
+                        <td className={`${TD} text-sm text-muted-foreground`}>{formatDate(member.created_at)}</td>
+                        <td className={TD}>
+                          <div className="flex justify-end gap-1">
+                            <IconAction onClick={() => openEdit(member)} title="Activate or deactivate" icon={member.is_active ? UserX : UserCheck} />
+                            <IconAction onClick={() => setResettingStaff(member)} disabled={!member.email} title="Send password reset link" icon={KeyRound} />
+                            <IconAction onClick={() => void openRevoke(member)} title="Revoke Guild Leader role" icon={Trash2} danger />
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <TablePagination pagination={staffPage} itemLabel="Guild Leaders" />
           </div>
-          <TablePagination pagination={staffPage} itemLabel="Guild Leaders" />
-        </div>
+        )}
 
         {/* How each leader's guild is doing */}
-        <LeaderScorecards refreshKey={scorecardKey} />
+        {tab === 'scorecards' && <LeaderScorecards refreshKey={scorecardKey} />}
       </div>
 
       {/* Edit Leader Modal */}
       {editingStaff && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-card rounded-2xl max-w-md w-full shadow-elevation-3 border border-border">
             <div className="p-6 border-b border-border flex items-center justify-between">
               <h3 className="text-lg font-bold text-foreground">Edit {editingStaff.display_name}</h3>
@@ -390,9 +394,12 @@ export default function AdminStaff() {
               </button>
             </div>
             <div className="p-6 space-y-4">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input type="checkbox" checked={editActive} onChange={(e) => setEditActive(e.target.checked)} className="w-4 h-4" />
-                <span className="text-sm font-medium text-foreground">Active</span>
+              <label className="flex items-center justify-between gap-3 rounded-xl border border-border bg-secondary/40 p-3 cursor-pointer">
+                <span>
+                  <span className="block text-sm font-medium text-foreground">Account active</span>
+                  <span className="block text-xs text-muted-foreground">{editActive ? 'Can sign in' : "Can't sign in"}</span>
+                </span>
+                <Switch checked={editActive} onCheckedChange={setEditActive} />
               </label>
               <p className="text-xs text-muted-foreground">
                 An inactive account can&apos;t sign in. To remove the Guild Leader role, use Revoke instead.
@@ -451,7 +458,7 @@ export default function AdminStaff() {
 
       {/* Revoke Modal: the guild must go somewhere */}
       {revokingStaff && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-card rounded-2xl max-w-md w-full shadow-elevation-3 border border-border">
             <div className="p-6 border-b border-border">
               <h3 className="text-lg font-bold text-foreground">Revoke Guild Leader Role</h3>
@@ -553,5 +560,32 @@ export default function AdminStaff() {
       {/* Guild inspector: members, level, perks and activity */}
       {viewingGuildId && <GuildDetailDialog guildId={viewingGuildId} onClose={() => setViewingGuildId(null)} />}
     </AdminLayout>
+  );
+}
+
+function IconAction({
+  icon: Icon,
+  title,
+  onClick,
+  disabled = false,
+  danger = false,
+}: {
+  icon: LucideIcon;
+  title: string;
+  onClick: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+        danger ? 'text-muted-foreground hover:text-destructive hover:bg-destructive/10' : 'text-muted-foreground hover:text-primary hover:bg-primary/10'
+      }`}
+    >
+      <Icon className="w-4 h-4" />
+    </button>
   );
 }

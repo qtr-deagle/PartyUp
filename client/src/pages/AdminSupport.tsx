@@ -1,17 +1,18 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearch } from 'wouter';
 import { toast } from 'sonner';
-import { AlertCircle, CheckCircle, Eye, LifeBuoy, Search, Send, XCircle } from 'lucide-react';
+import { AlertCircle, Archive, CheckCircle, Eye, Flag, HelpCircle, LifeBuoy, Plane, RotateCcw, Send, UserRound, XCircle } from 'lucide-react';
+import { Avatar, Pill, SearchField, Segmented, type PillTone } from '@/components/admin/AdminUI';
+import { EmptyDetail, Kbd, QueueItem, QueuePanel, ReviewPage, ReviewToolbar, useReviewShortcuts } from '@/components/review/ReviewWorkspace';
 import AdminLayout from '@/components/AdminLayout';
 import GuildAuditLogDialog from '@/components/GuildAuditLogDialog';
 import GuildEmblem from '@/components/GuildEmblem';
 import { ImageLightbox } from '@/components/ImageLightbox';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
 import { useClientPagination } from '@/hooks/usePagination';
-import TablePagination from '@/components/TablePagination';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog';
 import { instantUndoable, runUndoable } from '@/lib/undoable';
-import { formatDateTime } from '@/lib/datetime';
+import { formatDateTime, timeAgo } from '@/lib/datetime';
 import { updateReportStatus, type ReportStatus } from '@/lib/reports';
 import {
   getTicketMessages,
@@ -30,23 +31,11 @@ const STATUS_FILTERS: Array<TicketStatus | 'all'> = ['open', 'answered', 'closed
 
 // Reports are tickets too (one per report); "Questions" are everything else.
 type View = 'all' | 'reports' | 'questions';
-const VIEWS: Array<{ id: View; label: string }> = [
-  { id: 'all', label: 'Everything' },
-  { id: 'reports', label: 'Reports' },
-  { id: 'questions', label: 'Questions' },
-];
-
-const REPORT_STATUS_STYLES: Record<ReportStatus, string> = {
-  open: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300',
-  reviewing: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300',
-  resolved: 'bg-accent/20 text-accent',
-  dismissed: 'bg-muted text-muted-foreground',
-};
-
-const STATUS_STYLES: Record<TicketStatus, string> = {
-  open: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300',
-  answered: 'bg-primary/20 text-primary',
-  closed: 'bg-muted text-muted-foreground',
+const REPORT_STATUS_TONE: Record<ReportStatus, PillTone> = {
+  open: 'yellow',
+  reviewing: 'orange',
+  resolved: 'green',
+  dismissed: 'gray',
 };
 
 /**
@@ -142,7 +131,7 @@ export default function AdminSupport() {
         (ticket.guild?.name ?? '').toLowerCase().includes(term))
     );
   }, [tickets, searchTerm, view]);
-  const ticketsPage = useClientPagination(filteredTickets, [searchTerm, view, statusFilter]);
+  const ticketsPage = useClientPagination(filteredTickets, [searchTerm, view, statusFilter], 25);
 
   // A sent message can't be unsent, so replies are confirm-only.
   const handleReply = async () => {
@@ -202,212 +191,271 @@ export default function AdminSupport() {
     });
   };
 
+  const ticketIds = useMemo(() => filteredTickets.map((ticket) => ticket.id), [filteredTickets]);
+  const selectTicket = (id: string) => {
+    setSelectedId(id);
+    setDecision(null);
+    const index = ticketIds.indexOf(id);
+    if (index >= 0) ticketsPage.setPage(Math.floor(index / ticketsPage.pageSize) + 1);
+  };
+  useReviewShortcuts({ ids: ticketIds, selectedId, onSelect: selectTicket, enabled: !lightboxSrc && !auditGuild });
+
+  // Newest message in view whenever the thread changes.
+  const threadEnd = useRef<HTMLDivElement>(null);
+
+  // The reply box starts one line tall (same height as Send) and grows with the text, up to ~8 lines.
+  const replyBox = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const box = replyBox.current;
+    if (!box) return;
+    box.style.height = 'auto';
+    box.style.height = `${Math.min(box.scrollHeight, 180)}px`;
+  }, [reply, selectedId]);
+  useEffect(() => {
+    threadEnd.current?.scrollIntoView({ block: 'end' });
+  }, [messages, selectedId]);
+
+  const openCount = tickets.filter((ticket) => ticket.status === 'open').length;
+
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <LifeBuoy className="w-7 h-7 text-primary" />
-          <h1 className="text-3xl font-bold text-foreground">Support & Reports</h1>
-        </div>
-
-        <div className="flex gap-2 flex-wrap">
-          {VIEWS.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setView(item.id)}
-              className={`px-4 py-2 rounded-lg font-semibold transition-smooth border ${
-                view === item.id ? 'border-primary text-primary bg-primary/10' : 'border-border text-foreground hover:bg-secondary'
-              }`}
-            >
-              {item.label}
-            </button>
+      <ReviewPage
+        toolbar={
+          <ReviewToolbar title="Support & Reports" subtitle="One inbox for help requests and reports from the app">
+            <Segmented
+              value={view}
+              options={[
+                { value: 'all' as const, label: 'Everything' },
+                { value: 'reports' as const, label: <><Flag className="w-3.5 h-3.5" /> Reports</> },
+                { value: 'questions' as const, label: <><HelpCircle className="w-3.5 h-3.5" /> Questions</> },
+              ]}
+              onChange={setView}
+            />
+            <SearchField value={searchTerm} onChange={setSearchTerm} placeholder="Search subject, traveler or guild..." />
+            <Segmented
+              value={statusFilter}
+              options={STATUS_FILTERS.map((status) => ({
+                value: status,
+                label:
+                  status === 'open' && statusFilter === 'open' && openCount > 0 ? (
+                    <>
+                      Open <span className="min-w-5 rounded-full bg-orange-500 px-1.5 text-xs font-bold text-white">{openCount}</span>
+                    </>
+                  ) : status === 'all' ? (
+                    'All'
+                  ) : (
+                    TICKET_STATUS_LABELS[status]
+                  ),
+              }))}
+              onChange={setStatusFilter}
+            />
+          </ReviewToolbar>
+        }
+      >
+        <QueuePanel
+          title="Inbox"
+          count={filteredTickets.length}
+          isLoading={isLoading}
+          emptyText={searchTerm ? 'No tickets match your search' : 'Inbox zero. Nothing here.'}
+          pagination={ticketsPage}
+          itemLabel="tickets"
+        >
+          {ticketsPage.pageItems.map((ticket) => (
+            <QueueItem
+              key={ticket.id}
+              selected={selectedId === ticket.id}
+              onSelect={() => selectTicket(ticket.id)}
+              title={ticket.subject}
+              avatar={ticket.user?.display_name ?? '?'}
+              subtitle={`${ticket.user?.display_name ?? 'Unknown'} · ${TICKET_CATEGORY_LABELS[ticket.category]}`}
+              status={ticket.status === 'open' ? 'pending' : ticket.status === 'answered' ? 'approved' : undefined}
+              meta={timeAgo(ticket.last_message_at)}
+              badges={
+                ticket.report ? (
+                  <Pill tone="red" className="capitalize">
+                    <Flag className="w-3 h-3" /> {ticket.report.report_type}
+                  </Pill>
+                ) : undefined
+              }
+            />
           ))}
-        </div>
+        </QueuePanel>
 
-        <div className="flex gap-2 flex-wrap">
-          {STATUS_FILTERS.map((status) => (
-            <button
-              key={status}
-              onClick={() => setStatusFilter(status)}
-              className={`px-4 py-2 rounded-lg font-medium transition-smooth ${
-                statusFilter === status ? 'bg-primary text-primary-foreground' : 'bg-secondary text-foreground hover:bg-secondary/80'
-              }`}
-            >
-              {status === 'all' ? 'All' : TICKET_STATUS_LABELS[status]}
-            </button>
-          ))}
-        </div>
+        {selected ? (
+          <section className="flex flex-col min-h-0 rounded-2xl border border-border bg-card shadow-elevation-2 overflow-hidden">
+            {/* Header */}
+            <header className="flex flex-wrap items-start gap-x-4 gap-y-2 border-b border-border px-5 py-3.5">
+              <Avatar name={selected.user?.display_name} />
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate text-base font-bold text-foreground">{selected.subject}</h2>
+                <p className="truncate text-xs text-muted-foreground">
+                  {selected.user?.display_name ?? 'Unknown'} · {TICKET_CATEGORY_LABELS[selected.category]} · opened {formatDateTime(selected.created_at)}
+                </p>
+              </div>
+              <Pill tone={selected.status === 'open' ? 'yellow' : selected.status === 'answered' ? 'blue' : 'gray'} dot>
+                {TICKET_STATUS_LABELS[selected.status]}
+              </Pill>
+              {selected.status !== 'closed' ? (
+                <button
+                  onClick={() => handleStatus('closed')}
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border text-xs font-semibold hover:bg-secondary transition-colors"
+                >
+                  <Archive className="w-3.5 h-3.5" /> Close
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleStatus('open')}
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border text-xs font-semibold hover:bg-secondary transition-colors"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" /> Reopen
+                </button>
+              )}
+            </header>
 
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search by subject, traveler, reported user or guild..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-smooth"
-          />
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-          {/* Ticket list */}
-          <div data-paginated className="self-start bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
-            {isLoading ? (
-              <p className="px-6 py-8 text-center text-sm text-muted-foreground">Loading...</p>
-            ) : filteredTickets.length === 0 ? (
-              <p className="px-6 py-8 text-center text-sm text-muted-foreground">No tickets found</p>
-            ) : (
-              <>
-              <ul className="divide-y divide-border">
-                {ticketsPage.pageItems.map((ticket) => (
-                  <li key={ticket.id}>
-                    <button
-                      onClick={() => {
-                        setSelectedId(ticket.id);
-                        setDecision(null);
-                      }}
-                      className={`w-full text-left px-5 py-4 transition-smooth hover:bg-secondary/50 ${selectedId === ticket.id ? 'bg-secondary' : ''}`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="font-semibold text-foreground truncate">{ticket.subject}</p>
-                        <span className={`shrink-0 px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[ticket.status]}`}>
-                          {TICKET_STATUS_LABELS[ticket.status]}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {ticket.report && <span className="font-semibold text-destructive capitalize">{ticket.report.report_type} report · </span>}
-                        {ticket.user?.display_name ?? 'Unknown'} · {TICKET_CATEGORY_LABELS[ticket.category]} · {formatDateTime(ticket.last_message_at)}
-                      </p>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              <TablePagination pagination={ticketsPage} itemLabel="tickets" compact />
-              </>
-            )}
-          </div>
-
-          {/* Selected ticket */}
-          <div className="bg-card rounded-2xl shadow-elevation-2 border border-border p-6 min-h-[320px]">
-            {!selected ? (
-              <p className="text-sm text-muted-foreground text-center py-16">Pick a ticket to read and reply.</p>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h2 className="text-xl font-bold text-foreground">{selected.subject}</h2>
-                    <p className="text-sm text-muted-foreground">
-                      {selected.user?.display_name ?? 'Unknown'} · {TICKET_CATEGORY_LABELS[selected.category]} · opened {formatDateTime(selected.created_at)}
-                    </p>
-                  </div>
-                  <div className="flex gap-2 shrink-0">
-                    {selected.status !== 'closed' ? (
-                      <button onClick={() => handleStatus('closed')} className="px-3 py-1.5 rounded-lg border border-border text-sm font-semibold hover:bg-secondary transition-colors">
-                        Close
-                      </button>
-                    ) : (
-                      <button onClick={() => handleStatus('open')} className="px-3 py-1.5 rounded-lg border border-border text-sm font-semibold hover:bg-secondary transition-colors">
-                        Reopen
-                      </button>
-                    )}
-                  </div>
-                </div>
-
+            {/* Context: who it's about, guild, trip, report actions, photos */}
+            {(selected.reported_user || selected.guild || selected.trip || selected.report || photos.length > 0) && (
+              <div className="space-y-3 border-b border-border bg-secondary/30 px-5 py-3">
                 {(selected.reported_user || selected.guild || selected.trip) && (
-                  <div className="bg-secondary rounded-lg p-3 border border-border text-sm space-y-1.5">
-                    {selected.reported_user && <p><span className="text-muted-foreground">About:</span> {selected.reported_user.display_name}{selected.category === 'guild_leader' ? ' (Guild Leader)' : ''}</p>}
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    {selected.reported_user && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1">
+                        <UserRound className="w-3.5 h-3.5 text-muted-foreground" />
+                        About <span className="font-semibold text-foreground">{selected.reported_user.display_name}</span>
+                        {selected.category === 'guild_leader' ? ' (Guild Leader)' : ''}
+                      </span>
+                    )}
                     {selected.guild && (
                       <button
                         onClick={() => setAuditGuild(selected.guild)}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-0.5 text-xs font-medium text-foreground hover:bg-secondary/70 transition-smooth"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 font-medium text-foreground hover:border-primary/50 hover:text-primary transition-smooth"
                         title="Open the guild's audit log"
                       >
                         <GuildEmblem emblem={selected.guild.emblem} color={selected.guild.color} size={16} />
-                        From guild {selected.guild.name} · audit log
+                        {selected.guild.name} · audit log
                       </button>
                     )}
-                    {selected.trip && <p><span className="text-muted-foreground">Trip:</span> {selected.trip.title}</p>}
+                    {selected.trip && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1">
+                        <Plane className="w-3.5 h-3.5 text-muted-foreground" />
+                        <span className="font-medium text-foreground">{selected.trip.title}</span>
+                      </span>
+                    )}
                   </div>
                 )}
 
                 {selected.report && (
-                  <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <AlertCircle className="w-4 h-4 text-destructive" />
-                      <span className="text-sm font-semibold text-foreground capitalize">{selected.report.report_type} report</span>
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${REPORT_STATUS_STYLES[selected.report.status]}`}>
-                        {selected.report.status}
-                      </span>
-                      {selected.report.guild_report_id && <span className="text-xs text-muted-foreground">Escalated by the guild</span>}
-                    </div>
-                    {selected.report.resolution_notes && (
-                      <p className="text-xs text-muted-foreground whitespace-pre-wrap">Notes: {selected.report.resolution_notes}</p>
-                    )}
+                  <div className="flex flex-wrap items-center gap-2 rounded-xl border border-red-300/60 bg-red-500/5 px-3 py-2.5 dark:border-red-500/30">
+                    <AlertCircle className="w-4 h-4 text-red-500" />
+                    <span className="text-sm font-semibold text-foreground capitalize">{selected.report.report_type} report</span>
+                    <Pill tone={REPORT_STATUS_TONE[selected.report.status]} className="capitalize">
+                      {selected.report.status === 'reviewing' ? 'investigating' : selected.report.status}
+                    </Pill>
+                    {selected.report.guild_report_id && <span className="text-xs text-muted-foreground">Escalated by the guild</span>}
                     {(selected.report.status === 'open' || selected.report.status === 'reviewing') && (
-                      <div className="flex gap-2 flex-wrap">
+                      <div className="ml-auto flex flex-wrap gap-2">
                         {selected.report.status === 'open' && (
-                          <button onClick={() => handleDecision('reviewing')} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-semibold hover:bg-secondary">
-                            <Eye className="w-4 h-4 text-primary" /> Investigate
+                          <button
+                            onClick={() => handleDecision('reviewing')}
+                            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-card text-xs font-semibold hover:bg-secondary"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-primary" /> Investigate
                           </button>
                         )}
-                        <button onClick={() => setDecision({ status: 'resolved', notes: '' })} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-semibold hover:bg-secondary">
-                          <CheckCircle className="w-4 h-4 text-green-600" /> Resolve
+                        <button
+                          onClick={() => setDecision({ status: 'dismissed', notes: '' })}
+                          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-red-300 text-red-600 text-xs font-semibold hover:bg-red-50 dark:border-red-500/40 dark:text-red-400 dark:hover:bg-red-500/10"
+                        >
+                          <XCircle className="w-3.5 h-3.5" /> Dismiss
                         </button>
-                        <button onClick={() => setDecision({ status: 'dismissed', notes: '' })} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-semibold hover:bg-secondary">
-                          <XCircle className="w-4 h-4 text-destructive" /> Dismiss
+                        <button
+                          onClick={() => setDecision({ status: 'resolved', notes: '' })}
+                          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-green-600 text-white text-xs font-semibold hover:bg-green-700"
+                        >
+                          <CheckCircle className="w-3.5 h-3.5" /> Resolve
                         </button>
                       </div>
+                    )}
+                    {selected.report.resolution_notes && (
+                      <p className="basis-full text-xs text-muted-foreground whitespace-pre-wrap">Notes: {selected.report.resolution_notes}</p>
                     )}
                   </div>
                 )}
 
                 {photos.length > 0 && (
-                  <div className="flex gap-2 flex-wrap">
+                  <div className="flex gap-2 overflow-x-auto">
                     {photos.map((url) => (
-                      <button key={url} onClick={() => setLightboxSrc(url)} className="w-20 h-20 rounded-lg overflow-hidden border border-border">
-                        <img src={url} alt="Ticket attachment" className="w-full h-full object-cover" />
+                      <button
+                        key={url}
+                        onClick={() => setLightboxSrc(url)}
+                        className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-border hover:ring-2 hover:ring-primary transition-smooth"
+                      >
+                        <img src={url} alt="Ticket attachment" className="h-full w-full object-cover" />
                       </button>
                     ))}
                   </div>
                 )}
-
-                <div className="space-y-3 max-h-[45vh] overflow-y-auto pr-1">
-                  {messages.map((message) => (
-                    <div key={message.id} className={`flex ${message.from_staff ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${message.from_staff ? 'bg-primary text-primary-foreground' : 'bg-secondary text-foreground'}`}>
-                        <p className={`text-xs font-semibold mb-1 ${message.from_staff ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
-                          {message.from_staff ? `PartyUp (${message.sender?.display_name ?? 'admin'})` : (message.sender?.display_name ?? 'Traveler')}
-                        </p>
-                        <p className="text-sm whitespace-pre-wrap">{message.body}</p>
-                        <p className={`text-[11px] mt-1 ${message.from_staff ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>{formatDateTime(message.created_at)}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex gap-2 items-end">
-                  <textarea
-                    value={reply}
-                    onChange={(e) => setReply(e.target.value)}
-                    rows={3}
-                    maxLength={2000}
-                    placeholder="Reply to the traveler (they get a notification)"
-                    className="flex-1 bg-secondary border border-border rounded-lg px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary transition-colors"
-                  />
-                  <button
-                    onClick={() => setConfirmReply(true)}
-                    disabled={!reply.trim()}
-                    className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Send className="w-4 h-4" />
-                    Send
-                  </button>
-                </div>
               </div>
             )}
-          </div>
-        </div>
-      </div>
+
+            {/* Conversation */}
+            <div className="flex-1 min-h-[14rem] overflow-y-auto overscroll-contain px-5 py-4 space-y-3">
+              {messages.map((message) => (
+                <div key={message.id} className={`flex items-end gap-2 ${message.from_staff ? 'flex-row-reverse' : ''}`}>
+                  {message.from_staff ? (
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">P</span>
+                  ) : (
+                    <Avatar name={message.sender?.display_name} size="sm" />
+                  )}
+                  <div
+                    className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${
+                      message.from_staff ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md bg-secondary text-foreground'
+                    }`}
+                  >
+                    <p className={`text-[11px] font-semibold mb-0.5 ${message.from_staff ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+                      {message.from_staff ? `PartyUp · ${message.sender?.display_name ?? 'admin'}` : (message.sender?.display_name ?? 'Traveler')}
+                    </p>
+                    <p className="text-sm whitespace-pre-wrap">{message.body}</p>
+                    <p className={`text-[10px] mt-1 ${message.from_staff ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>{formatDateTime(message.created_at)}</p>
+                  </div>
+                </div>
+              ))}
+              <div ref={threadEnd} />
+            </div>
+
+            {/* Composer */}
+            <footer className="border-t border-border bg-card px-4 py-3">
+              <div className="flex items-end gap-2 rounded-xl border border-border bg-secondary/40 p-1.5 pl-2 focus-within:ring-2 focus-within:ring-primary">
+                <textarea
+                  ref={replyBox}
+                  value={reply}
+                  onChange={(e) => setReply(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && reply.trim()) setConfirmReply(true);
+                  }}
+                  rows={1}
+                  maxLength={2000}
+                  placeholder={`Reply to ${selected.user?.display_name ?? 'the traveler'} (they get a notification)`}
+                  className="block min-h-9 flex-1 resize-none overflow-y-auto bg-transparent px-2 py-2 text-sm leading-5 text-foreground placeholder:text-muted-foreground focus:outline-none"
+                />
+                <button
+                  onClick={() => setConfirmReply(true)}
+                  disabled={!reply.trim()}
+                  className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Send className="w-4 h-4" />
+                  Send
+                </button>
+              </div>
+              <p className="mt-1.5 hidden xl:flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <Kbd>Ctrl</Kbd>+<Kbd>Enter</Kbd> to send · <Kbd>J</Kbd>
+                <Kbd>K</Kbd> next / previous ticket
+              </p>
+            </footer>
+          </section>
+        ) : (
+          <EmptyDetail icon={LifeBuoy} text={isLoading ? 'Loading the inbox…' : 'Pick a ticket to read and reply'} />
+        )}
+      </ReviewPage>
 
       {/* Resolve / dismiss a report */}
       <ConfirmActionDialog

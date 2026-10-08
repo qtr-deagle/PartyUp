@@ -31,6 +31,8 @@ export interface ConfirmActionDialogProps {
   notes?: { label: string; required?: boolean; placeholder?: string; initial?: string };
   /** The admin must type this exact text to enable the confirm button. */
   typeToConfirm?: string;
+  /** Keeps the confirm button disabled, e.g. while a precondition is loading or unmet. */
+  confirmDisabled?: boolean;
   /**
    * Runs on confirm with the typed notes. If it returns a promise the dialog
    * stays open (busy) until it settles; return false to keep it open.
@@ -50,6 +52,7 @@ export default function ConfirmActionDialog({
   checkbox,
   notes,
   typeToConfirm,
+  confirmDisabled = false,
   onConfirm,
 }: ConfirmActionDialogProps) {
   const [checked, setChecked] = useState(false);
@@ -71,6 +74,7 @@ export default function ConfirmActionDialog({
   const destructive = tone === 'destructive';
   const ready =
     !busy &&
+    !confirmDisabled &&
     (!checkbox || checked) &&
     (!notes?.required || noteText.trim().length > 0) &&
     (!typeToConfirm || typed.trim() === typeToConfirm.trim());

@@ -2,13 +2,13 @@ import { supabase } from '@/lib/supabase';
 
 // Backs the staff/admin Payment Monitoring dashboard -- reads the real
 // payment_history table (see supabase/migrations/202608080001_partyup_initial_schema.sql
-// and 202609150001_add_gateway_payments.sql in partyup-mobile). Rows come from
-// two sources: the manual honor-system flow (report_payment/confirm_payment_received
-// RPCs, gateway='manual') and the sandbox PayMongo flow (create-gateway-payment /
-// paymongo-webhook Edge Functions, gateway='paymongo').
+// and 202609150001_add_gateway_payments.sql in partyup-mobile). Every row is a
+// PayMongo payment (create-gateway-payment / paymongo-webhook Edge Functions);
+// the old manual honor-system flow was removed in 202610090002_paymongo_only_payments.sql.
+// Pending checkouts are cancelled automatically after 24 hours.
 
-export type PaymentStatus = 'demo' | 'pending' | 'paid' | 'refunded';
-export type PaymentGateway = 'manual' | 'paymongo';
+export type PaymentStatus = 'demo' | 'pending' | 'paid' | 'refunded' | 'cancelled';
+export type PaymentGateway = 'paymongo';
 
 export interface PaymentHistoryRow {
   id: string;
@@ -54,6 +54,18 @@ export function partyUpFee(row: PaymentHistoryRow) {
 
 export function formatPeso(value: number) {
   return `₱${value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+}
+
+// Settle a stuck pending payment by hand. The note is required and audited;
+// the rider (and driver, when paid) are notified.
+export async function markPaymentPaid(paymentId: string, note: string) {
+  const { error } = await supabase.rpc('admin_mark_payment_paid', { p_payment_id: paymentId, p_note: note });
+  return { error };
+}
+
+export async function cancelPayment(paymentId: string, note: string) {
+  const { error } = await supabase.rpc('admin_cancel_payment', { p_payment_id: paymentId, p_note: note });
+  return { error };
 }
 
 export async function listPaymentHistory() {

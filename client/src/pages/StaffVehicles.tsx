@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { CheckCircle, XCircle, Clock, BarChart3, Car, IdCard } from 'lucide-react';
+import { CheckCircle, Clock, BarChart3, Car, IdCard } from 'lucide-react';
 import AdminLayout from '@/components/AdminLayout';
 import { ImageLightbox } from '@/components/ImageLightbox';
 import {
@@ -15,8 +15,27 @@ import {
 import DriverLicensePanel from '@/components/DriverLicensePanel';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
 import { useClientPagination } from '@/hooks/usePagination';
-import TablePagination from '@/components/TablePagination';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog';
+import {
+  DecisionBar,
+  DetailHeading,
+  DetailPanel,
+  EmptyDetail,
+  InfoCard,
+  InfoRow,
+  PhotoViewer,
+  QueueItem,
+  QueuePanel,
+  ReviewPage,
+  ReviewToolbar,
+  SearchField,
+  Segmented,
+  StatChip,
+  StatusPill,
+  neighborId,
+  useReviewShortcuts,
+  type ViewerPhoto,
+} from '@/components/review/ReviewWorkspace';
 import { runUndoable } from '@/lib/undoable';
 import { formatDateTime } from '@/lib/datetime';
 
@@ -35,43 +54,34 @@ import { formatDateTime } from '@/lib/datetime';
  * - "Driver's licenses" tab: licenses submitted without a vehicle (license
  *   only, or a reused verified-ID license whose QR check didn't pass), which
  *   would otherwise never get reviewed
+ *
+ * Fixed-height review workspace (see ReviewWorkspace): every document sits in
+ * one photo viewer, so the page itself never scrolls while reviewing.
  */
 // 'unverified' vehicles were never submitted, so they never show up here.
 type FilterStatus = 'all' | Exclude<VehicleVerificationStatus, 'unverified'>;
 
-type VehicleImages = {
-  exterior: string | null;
-  orcr: string | null;
-  plate: string | null;
-  authorizationLetter: string | null;
-  ownerIdFront: string | null;
-  ownerIdBack: string | null;
-  ownerSignatures: string | null;
-};
+// undefined = loading, null = not provided.
+type VehicleImages = Partial<
+  Record<'exterior' | 'orcr' | 'plate' | 'authorizationLetter' | 'ownerIdFront' | 'ownerIdBack' | 'ownerSignatures', string | null>
+>;
+type LicensePhotos = { front?: string | null; back?: string | null } | null;
 
-const EMPTY_IMAGES: VehicleImages = {
-  exterior: null,
-  orcr: null,
-  plate: null,
-  authorizationLetter: null,
-  ownerIdFront: null,
-  ownerIdBack: null,
-  ownerSignatures: null,
-};
+const STATUS_OPTIONS = (['pending', 'approved', 'rejected', 'all'] as const).map((value) => ({
+  value,
+  label: value.charAt(0).toUpperCase() + value.slice(1),
+}));
 
-function DocumentImage({ label, src, alt, onOpen }: { label: string; src: string | null; alt: string; onOpen: (src: string) => void }) {
-  return (
-    <div>
-      <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase">{label}</p>
-      <div className="bg-secondary rounded-lg overflow-hidden h-40 flex items-center justify-center border border-border">
-        {src ? (
-          <img src={src} alt={alt} className="h-full w-full object-contain cursor-zoom-in" onClick={() => onOpen(src)} />
-        ) : (
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        )}
-      </div>
-    </div>
-  );
+function matchesSearch(term: string, fields: (string | null | undefined)[]) {
+  return !term || fields.some((field) => field?.toLowerCase().includes(term));
+}
+
+function licenseViewerPhotos(photos: LicensePhotos | undefined): ViewerPhoto[] {
+  if (photos === null) return [];
+  return [
+    { key: 'license-front', label: 'License front', src: photos?.front },
+    { key: 'license-back', label: 'License back', src: photos?.back },
+  ];
 }
 
 export default function StaffVehicles() {
@@ -81,7 +91,8 @@ export default function StaffVehicles() {
   const [confirmApprove, setConfirmApprove] = useState<VehicleRow | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [images, setImages] = useState<VehicleImages>(EMPTY_IMAGES);
+  const [images, setImages] = useState<VehicleImages>({});
+  const [licensePhotos, setLicensePhotos] = useState<LicensePhotos | undefined>(undefined);
   const [rejectionReason, setRejectionReason] = useState('');
   const [otherReason, setOtherReason] = useState('');
   const [showRejectionModal, setShowRejectionModal] = useState(false);
@@ -93,6 +104,8 @@ export default function StaffVehicles() {
   const [selectedLicenseUser, setSelectedLicenseUser] = useState<string | null>(null);
   const [licenseDecision, setLicenseDecision] = useState<{ license: DriverLicense; decision: 'approved' | 'rejected' } | null>(null);
   const [hiddenLicenses, setHiddenLicenses] = useState<Set<string>>(new Set());
+  const [searchTerm, setSearchTerm] = useState('');
+  const term = searchTerm.trim().toLowerCase();
 
   // `silent` refreshes (realtime / tab focus) keep the list on screen instead of
   // flashing the loading state.
@@ -125,7 +138,13 @@ export default function StaffVehicles() {
   useTableRealtime(['driver_licenses', 'vehicles'], () => void loadLicenses(true));
 
   const shownLicenses = licenseQueue.filter((l) => !hiddenLicenses.has(l.user_id));
-  const selectedLicense = shownLicenses.find((l) => l.user_id === selectedLicenseUser) ?? null;
+  const licenseMatches = useMemo(
+    () => shownLicenses.filter((l) => matchesSearch(term, [l.profiles?.display_name, l.profiles?.email])),
+    [shownLicenses, term]
+  );
+  const licensePage = useClientPagination(licenseMatches, [term], 25);
+  const licenseIds = useMemo(() => licenseMatches.map((l) => l.user_id), [licenseMatches]);
+  const selectedLicense = licenseMatches.find((l) => l.user_id === selectedLicenseUser) ?? null;
 
   const unhideLicense = (userId: string) =>
     setHiddenLicenses((prev) => {
@@ -137,13 +156,14 @@ export default function StaffVehicles() {
   // Same Undo window as vehicle reviews: the traveler is notified on save.
   const decideLicense = (license: DriverLicense, decision: 'approved' | 'rejected', notes: string) => {
     const name = license.profiles?.display_name ?? 'this traveler';
+    const next = neighborId(licenseIds, license.user_id);
     runUndoable({
       key: `license-review:${license.user_id}`,
       message: decision === 'approved' ? `Approving ${name}'s driver's license…` : `Rejecting ${name}'s driver's license…`,
       description: 'They get a notification once this saves.',
       onHide: () => {
         setHiddenLicenses((prev) => new Set(prev).add(license.user_id));
-        setSelectedLicenseUser((current) => (current === license.user_id ? null : current));
+        setSelectedLicenseUser((current) => (current === license.user_id ? next : current));
       },
       onRestore: () => unhideLicense(license.user_id),
       commit: () => reviewDriverLicense(license.user_id, decision, notes),
@@ -161,9 +181,24 @@ export default function StaffVehicles() {
     [rawVehicles, statusPatch, filterStatus]
   );
 
-  const queuePage = useClientPagination(vehicles, [filterStatus]);
+  const queue = useMemo(
+    () => vehicles.filter((v) => matchesSearch(term, [v.profiles?.display_name, v.profiles?.email, `${v.make} ${v.model}`, v.plate_number])),
+    [vehicles, term]
+  );
+  const queuePage = useClientPagination(queue, [filterStatus, term], 25);
+  const queueIds = useMemo(() => queue.map((v) => v.id), [queue]);
 
-  const selected = vehicles.find((v) => v.id === selectedId) ?? null;
+  // Always have something open so the reviewer can start right away.
+  useEffect(() => {
+    if (!isLoading && queueIds.length && (!selectedId || !queueIds.includes(selectedId))) setSelectedId(queueIds[0]);
+  }, [isLoading, queueIds, selectedId]);
+  useEffect(() => {
+    if (!licensesLoading && licenseIds.length && (!selectedLicenseUser || !licenseIds.includes(selectedLicenseUser))) {
+      setSelectedLicenseUser(licenseIds[0]);
+    }
+  }, [licensesLoading, licenseIds, selectedLicenseUser]);
+
+  const selected = queue.find((v) => v.id === selectedId) ?? null;
   // Changes only when the reviewed vehicle or its documents change, so a
   // background refresh doesn't re-sign and reload the photos on screen.
   const photoKey = selected
@@ -180,19 +215,18 @@ export default function StaffVehicles() {
     : null;
 
   useEffect(() => {
-    if (!selected) {
-      setImages(EMPTY_IMAGES);
-      return;
-    }
+    setImages({});
+    if (!selected) return;
     let cancelled = false;
+    const sign = (path: string | null) => (path ? getVehiclePhotoUrl(path) : Promise.resolve(null));
     Promise.all([
-      getVehiclePhotoUrl(selected.exterior_image_path),
-      getVehiclePhotoUrl(selected.orcr_image_path),
-      getVehiclePhotoUrl(selected.plate_image_path),
-      getVehiclePhotoUrl(selected.authorization_letter_path),
-      getVehiclePhotoUrl(selected.owner_id_front_path),
-      getVehiclePhotoUrl(selected.owner_id_back_path),
-      getVehiclePhotoUrl(selected.owner_signatures_path),
+      sign(selected.exterior_image_path),
+      sign(selected.orcr_image_path),
+      sign(selected.plate_image_path),
+      sign(selected.authorization_letter_path),
+      sign(selected.owner_id_front_path),
+      sign(selected.owner_id_back_path),
+      sign(selected.owner_signatures_path),
     ]).then(([exterior, orcr, plate, authorizationLetter, ownerIdFront, ownerIdBack, ownerSignatures]) => {
       if (!cancelled) setImages({ exterior, orcr, plate, authorizationLetter, ownerIdFront, ownerIdBack, ownerSignatures });
     });
@@ -202,18 +236,24 @@ export default function StaffVehicles() {
     // photoKey captures every field read from `selected`.
   }, [photoKey]);
 
+  // The license panel reports its photos once it has loaded the new traveler's.
+  const selectedUserId = selected?.user_id;
+  useEffect(() => setLicensePhotos(undefined), [selectedUserId]);
+
   // Reviews notify and email the traveler, so they're held for the Undo
   // window: Undo means the decision never reached them.
   const review = (row: VehicleRow, decision: 'approved' | 'rejected', notes: string) => {
     const name = row.profiles?.display_name ?? 'this traveler';
     const car = `${row.make} ${row.model}`.trim();
+    const next = neighborId(queueIds, row.id);
     runUndoable({
       key: `vehicle-review:${row.id}`,
       message: decision === 'approved' ? `Approving ${name}'s ${car}…` : `Rejecting ${name}'s ${car}…`,
       description: 'They get a notification and an email once this saves.',
       onHide: () => {
         setStatusPatch((prev) => ({ ...prev, [row.id]: decision }));
-        setSelectedId((current) => (current === row.id ? null : current));
+        // Move on to the next vehicle so the reviewer never has to hunt for it.
+        setSelectedId((current) => (current === row.id ? next : current));
       },
       onRestore: () => setStatusPatch(({ [row.id]: _, ...rest }) => rest),
       commit: () => reviewVehicleVerification(row.id, decision, notes),
@@ -246,6 +286,36 @@ export default function StaffVehicles() {
     setOtherReason('');
   };
 
+  // Selecting from the keyboard can land on another page of the queue.
+  const selectVehicle = (id: string) => {
+    setSelectedId(id);
+    const index = queueIds.indexOf(id);
+    if (index >= 0) queuePage.setPage(Math.floor(index / queuePage.pageSize) + 1);
+  };
+  const selectLicense = (userId: string) => {
+    setSelectedLicenseUser(userId);
+    const index = licenseIds.indexOf(userId);
+    if (index >= 0) licensePage.setPage(Math.floor(index / licensePage.pageSize) + 1);
+  };
+
+  const modalsClosed = !showRejectionModal && !lightboxSrc;
+  useReviewShortcuts({
+    ids: queueIds,
+    selectedId,
+    onSelect: selectVehicle,
+    onApprove: selected?.verification_status === 'pending' ? () => handleApprove(selected.id) : undefined,
+    onReject: selected?.verification_status === 'pending' ? () => handleRejectClick(selected.id) : undefined,
+    enabled: view === 'vehicles' && modalsClosed,
+  });
+  useReviewShortcuts({
+    ids: licenseIds,
+    selectedId: selectedLicenseUser,
+    onSelect: selectLicense,
+    onApprove: selectedLicense ? () => setLicenseDecision({ license: selectedLicense, decision: 'approved' }) : undefined,
+    onReject: selectedLicense ? () => setLicenseDecision({ license: selectedLicense, decision: 'rejected' }) : undefined,
+    enabled: view === 'licenses' && modalsClosed,
+  });
+
   const stats = useMemo(() => {
     const pending = vehicles.filter((v) => v.verification_status === 'pending').length;
     const approved = vehicles.filter((v) => v.verification_status === 'approved').length;
@@ -255,261 +325,206 @@ export default function StaffVehicles() {
     return { pending, total, approvalRate };
   }, [vehicles]);
 
+  const vehiclePhotos: ViewerPhoto[] = selected
+    ? [
+        { key: 'exterior', label: 'Vehicle', src: images.exterior },
+        { key: 'orcr', label: 'OR/CR', src: images.orcr },
+        { key: 'plate', label: 'Plate', src: images.plate },
+        ...(selected.ownership_type === 'borrowed'
+          ? [
+              { key: 'letter', label: 'Authorization', src: images.authorizationLetter },
+              { key: 'signatures', label: 'Signatures', src: images.ownerSignatures },
+              { key: 'owner-front', label: 'Owner ID front', src: images.ownerIdFront },
+              { key: 'owner-back', label: 'Owner ID back', src: images.ownerIdBack },
+            ]
+          : []),
+        ...licenseViewerPhotos(licensePhotos),
+      ]
+    : [];
+
+  const viewTabs = [
+    { value: 'vehicles' as const, label: <><Car className="w-4 h-4" /> Vehicles</> },
+    {
+      value: 'licenses' as const,
+      label: (
+        <>
+          <IdCard className="w-4 h-4" /> Driver's licenses
+          {shownLicenses.length > 0 && (
+            <span className="min-w-5 rounded-full bg-orange-500 px-1.5 text-xs font-bold text-white">{shownLicenses.length}</span>
+          )}
+        </>
+      ),
+    },
+  ];
+
   return (
     <AdminLayout>
-      <div className="space-y-8">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Vehicle Verification</h1>
-          <p className="text-sm text-muted-foreground mt-2">Review and approve travelers' personal vehicles for carpooling</p>
-        </div>
-
-        <div className="inline-flex gap-1.5 rounded-xl border border-border bg-card p-1 shadow-elevation-1">
-          {(
-            [
-              { id: 'vehicles', label: 'Vehicles', icon: Car, count: 0 },
-              { id: 'licenses', label: "Driver's licenses", icon: IdCard, count: shownLicenses.length },
-            ] as const
-          ).map(({ id, label, icon: Icon, count }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setView(id)}
-              className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                view === id ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-secondary'
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              {label}
-              {count > 0 && (
-                <span className={`min-w-5 rounded-full px-1.5 text-xs font-bold ${view === id ? 'bg-white/25' : 'bg-orange-500 text-white'}`}>
-                  {count}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
+      <ReviewPage
+        toolbar={
+          <ReviewToolbar title="Vehicle Verification" subtitle="Make sure travelers' vehicles are safe and legitimate for carpooling">
+            {view === 'vehicles' ? (
+              <>
+                <StatChip icon={Clock} label="Pending" value={stats.pending} tone="bg-primary/10 text-primary" />
+                <StatChip icon={CheckCircle} label="Approval rate" value={`${stats.approvalRate}%`} tone="bg-green-500/10 text-green-600" />
+                <StatChip icon={BarChart3} label="Loaded" value={stats.total} tone="bg-blue-500/10 text-blue-600" />
+              </>
+            ) : (
+              <StatChip icon={IdCard} label="Licenses waiting" value={shownLicenses.length} tone="bg-orange-500/10 text-orange-600" />
+            )}
+            <Segmented value={view} options={viewTabs} onChange={setView} />
+            <SearchField
+              value={searchTerm}
+              onChange={setSearchTerm}
+              placeholder={view === 'vehicles' ? 'Search name, email, vehicle or plate...' : 'Search by name or email...'}
+            />
+            {view === 'vehicles' && <Segmented value={filterStatus} options={STATUS_OPTIONS} onChange={setFilterStatus} />}
+          </ReviewToolbar>
+        }
+      >
         {view === 'licenses' ? (
-          <LicenseQueue
-            licenses={shownLicenses}
-            isLoading={licensesLoading}
-            selected={selectedLicense}
-            onSelect={setSelectedLicenseUser}
-            onDecide={(license, decision) => setLicenseDecision({ license, decision })}
-            onOpenImage={setLightboxSrc}
-          />
+          <>
+            <QueuePanel
+              title="License-only queue"
+              count={licenseMatches.length}
+              isLoading={licensesLoading}
+              emptyText={term ? 'No licenses match your search' : 'No licenses waiting. A license sent with a vehicle is reviewed with that vehicle.'}
+              pagination={licensePage}
+              itemLabel="licenses"
+            >
+              {licensePage.pageItems.map((l) => (
+                <QueueItem
+                  key={l.user_id}
+                  selected={selectedLicenseUser === l.user_id}
+                  onSelect={() => setSelectedLicenseUser(l.user_id)}
+                  title={l.profiles?.display_name ?? 'Unknown traveler'}
+                  subtitle={l.profiles?.email}
+                  status="pending"
+                  meta={`${l.source === 'id_verification' ? 'Reused from ID' : 'Uploaded'} · ${formatDateTime(l.submitted_at)}`}
+                  badges={
+                    l.ai_flag && l.ai_flag !== 'passed' ? (
+                      <span className="text-xs font-bold px-2 py-0.5 rounded-lg whitespace-nowrap bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300">
+                        {l.ai_flag === 'mismatch' ? 'Mismatch' : l.ai_flag === 'error' ? 'Unchecked' : 'Needs a look'}
+                      </span>
+                    ) : undefined
+                  }
+                />
+              ))}
+            </QueuePanel>
+
+            {selectedLicense ? (
+              <LicenseDetail
+                key={selectedLicense.user_id}
+                license={selectedLicense}
+                onOpenImage={setLightboxSrc}
+                onDecide={(decision) => setLicenseDecision({ license: selectedLicense, decision })}
+              />
+            ) : (
+              <EmptyDetail icon={IdCard} text={licensesLoading ? 'Loading the queue…' : 'No licenses waiting'} />
+            )}
+          </>
         ) : (
-        <>
+          <>
+            <QueuePanel
+              title="Queue"
+              count={queue.length}
+              isLoading={isLoading}
+              emptyText={term ? 'No vehicles match your search' : 'No vehicles to review'}
+              pagination={queuePage}
+              itemLabel="vehicles"
+            >
+              {queuePage.pageItems.map((v) => (
+                <QueueItem
+                  key={v.id}
+                  selected={selectedId === v.id}
+                  onSelect={() => setSelectedId(v.id)}
+                  title={v.profiles?.display_name ?? 'Unknown traveler'}
+                  subtitle={`${v.make} ${v.model}${v.year ? ` (${v.year})` : ''}`}
+                  status={v.verification_status}
+                  meta={
+                    <>
+                      {v.plate_number && <span className="font-mono">{v.plate_number}</span>}
+                      {v.submitted_at && <span>{formatDateTime(v.submitted_at)}</span>}
+                    </>
+                  }
+                  badges={
+                    v.ownership_type === 'borrowed' ? (
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300">Borrowed</span>
+                    ) : undefined
+                  }
+                />
+              ))}
+            </QueuePanel>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-            <div className="flex items-center justify-between mb-4">
-              <div className="bg-primary/10 p-3 rounded-lg">
-                <Clock className="w-6 h-6 text-primary" />
-              </div>
-            </div>
-            <p className="text-muted-foreground text-sm mb-1">Pending Verifications</p>
-            <p className="text-3xl font-bold text-foreground">{stats.pending}</p>
-          </div>
-          <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-            <div className="flex items-center justify-between mb-4">
-              <div className="bg-green-500/10 p-3 rounded-lg">
-                <CheckCircle className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-            <p className="text-muted-foreground text-sm mb-1">Approval Rate (loaded set)</p>
-            <p className="text-3xl font-bold text-foreground">{stats.approvalRate}%</p>
-          </div>
-          <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-            <div className="flex items-center justify-between mb-4">
-              <div className="bg-blue-500/10 p-3 rounded-lg">
-                <BarChart3 className="w-6 h-6 text-blue-600" />
-              </div>
-            </div>
-            <p className="text-muted-foreground text-sm mb-1">Total Loaded</p>
-            <p className="text-3xl font-bold text-foreground">{stats.total}</p>
-          </div>
-        </div>
-
-        <div className="bg-card rounded-2xl p-4 shadow-elevation-2 border border-border">
-          <div className="flex gap-2 flex-wrap">
-            {(['all', 'pending', 'approved', 'rejected'] as const).map((status) => (
-              <button
-                key={status}
-                onClick={() => setFilterStatus(status)}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  filterStatus === status ? 'bg-primary text-primary-foreground' : 'bg-secondary text-foreground hover:bg-secondary/80'
-                }`}
-              >
-                {status.charAt(0).toUpperCase() + status.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1 lg:sticky lg:top-0 lg:self-start lg:max-h-[calc(100vh-4rem)] flex flex-col">
-            <h2 className="text-lg font-bold text-foreground mb-4">Queue ({vehicles.length})</h2>
-            <div data-paginated className="bg-card rounded-2xl p-4 shadow-elevation-2 border border-border flex flex-col min-h-0">
-              {isLoading ? (
-                <p className="text-sm text-muted-foreground text-center py-4">Loading...</p>
-              ) : (
-                <>
-                <div className="space-y-2 min-h-0 overflow-y-auto overscroll-contain -mr-2 pr-2">
-                  {vehicles.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No vehicles to review</p>}
-                  {queuePage.pageItems.map((v) => (
-                    <button
-                      key={v.id}
-                      onClick={() => setSelectedId(v.id)}
-                      className={`w-full text-left p-4 rounded-xl border-2 transition-colors ${
-                        selectedId === v.id ? 'bg-primary/10 border-primary' : 'bg-secondary border-border hover:border-primary/50'
+            {selected ? (
+              <DetailPanel
+                header={
+                  <DetailHeading name={selected.profiles?.display_name ?? 'Unknown traveler'} email={selected.profiles?.email}>
+                    <span
+                      className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                        selected.ownership_type === 'borrowed'
+                          ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300'
+                          : 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300'
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="font-semibold text-foreground">{v.profiles?.display_name ?? 'Unknown traveler'}</p>
-                        <span
-                          className={`text-xs font-bold px-2.5 py-1 rounded-lg whitespace-nowrap capitalize ${
-                            v.verification_status === 'approved'
-                              ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300'
-                              : v.verification_status === 'pending'
-                                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300'
-                                : 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300'
-                          }`}
-                        >
-                          {v.verification_status}
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">{v.profiles?.email}</p>
-                      <p className="text-sm text-muted-foreground mt-2">
-                        {v.make} {v.model} {v.year ? `(${v.year})` : ''}
-                      </p>
-                      {v.plate_number && <p className="text-xs text-muted-foreground mt-1">Plate: {v.plate_number}</p>}
-                      {v.ownership_type === 'borrowed' && (
-                        <span className="inline-block mt-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300">Borrowed</span>
-                      )}
-                      <p className="text-xs text-muted-foreground mt-2">
-                        {v.submitted_at ? formatDateTime(v.submitted_at) : ''}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-                <TablePagination pagination={queuePage} itemLabel="vehicles" compact className="mt-3 px-1 pt-3 pb-0" />
-                </>
-              )}
-            </div>
-          </div>
-
-          {selected ? (
-            <div className="lg:col-span-2 bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-bold text-foreground">{selected.profiles?.display_name ?? 'Unknown traveler'}</h3>
-                  <p className="text-sm text-muted-foreground mt-1">{selected.profiles?.email}</p>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {selected.make} {selected.model} {selected.year ? `(${selected.year})` : ''}
-                    {selected.color ? ` • ${selected.color}` : ''}
-                  </p>
-                  {selected.plate_number && <p className="text-xs text-muted-foreground mt-1">Plate: {selected.plate_number}</p>}
-                  <span
-                    className={`inline-block mt-2 text-xs font-semibold px-2 py-0.5 rounded-full ${
-                      selected.ownership_type === 'borrowed' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300' : 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300'
-                    }`}
-                  >
-                    {selected.ownership_type === 'borrowed' ? 'Borrowed vehicle' : 'Owned by traveler'}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  <DocumentImage label="Vehicle" src={images.exterior} alt="Vehicle exterior" onOpen={setLightboxSrc} />
-                  <DocumentImage label="OR/CR" src={images.orcr} alt="OR/CR document" onOpen={setLightboxSrc} />
-                  <DocumentImage label="Plate" src={images.plate} alt="License plate" onOpen={setLightboxSrc} />
-                </div>
-
-                {selected.ownership_type === 'borrowed' && (
-                  <div>
-                    <h4 className="text-sm font-bold text-foreground mb-3">Owner's Authorization</h4>
-                    <div className="grid grid-cols-2 gap-4">
-                      <DocumentImage label="Letter of Authorization" src={images.authorizationLetter} alt="Letter of authorization" onOpen={setLightboxSrc} />
-                      <DocumentImage label="Owner's 3 Signatures" src={images.ownerSignatures} alt="Owner specimen signatures" onOpen={setLightboxSrc} />
-                      <DocumentImage label="Owner ID (Front)" src={images.ownerIdFront} alt="Owner ID front" onOpen={setLightboxSrc} />
-                      <DocumentImage label="Owner ID (Back)" src={images.ownerIdBack} alt="Owner ID back" onOpen={setLightboxSrc} />
-                    </div>
-                  </div>
-                )}
-
-                <div className="border-t border-border pt-5">
-                  <DriverLicensePanel key={selected.user_id} userId={selected.user_id} onOpenImage={setLightboxSrc} />
-                </div>
-
-                <div className="bg-secondary rounded-lg p-3 space-y-2 border border-border">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Submitted:</span>
-                    <span className="font-medium text-foreground">
-                      {selected.submitted_at ? formatDateTime(selected.submitted_at) : 'Unknown'}
+                      {selected.ownership_type === 'borrowed' ? 'Borrowed vehicle' : 'Owned by traveler'}
                     </span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Status:</span>
-                    <span className="font-medium text-foreground capitalize">{selected.verification_status}</span>
-                  </div>
-                  {selected.reviewed_at && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Reviewed:</span>
-                      <span className="font-medium text-foreground">{formatDateTime(selected.reviewed_at)}</span>
+                    <StatusPill status={selected.verification_status} />
+                  </DetailHeading>
+                }
+                footer={
+                  <DecisionBar
+                    pending={selected.verification_status === 'pending'}
+                    onApprove={() => handleApprove(selected.id)}
+                    onReject={() => handleRejectClick(selected.id)}
+                    approveLabel="Approve vehicle"
+                    closedNote={
+                      <>
+                        Already <span className="capitalize font-medium text-foreground">{selected.verification_status}</span>
+                        {selected.reviewed_at ? ` · ${formatDateTime(selected.reviewed_at)}` : ''}
+                      </>
+                    }
+                  />
+                }
+              >
+                <div className="grid h-full min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+                  <PhotoViewer title="Documents" photos={vehiclePhotos} onOpen={setLightboxSrc} keyboard />
+
+                  <aside className="min-h-0 space-y-3 overflow-y-auto overscroll-contain lg:-mr-1 lg:pr-1">
+                    <InfoCard title="Vehicle">
+                      <InfoRow label="Make / model">
+                        {selected.make} {selected.model}
+                      </InfoRow>
+                      {selected.year && <InfoRow label="Year">{selected.year}</InfoRow>}
+                      {selected.color && <InfoRow label="Color">{selected.color}</InfoRow>}
+                      {selected.plate_number && (
+                        <InfoRow label="Plate">
+                          <span className="font-mono">{selected.plate_number}</span>
+                        </InfoRow>
+                      )}
+                      <InfoRow label="Submitted">{selected.submitted_at ? formatDateTime(selected.submitted_at) : 'Unknown'}</InfoRow>
+                      {selected.reviewer_notes && <InfoRow label="Notes">{selected.reviewer_notes}</InfoRow>}
+                    </InfoCard>
+                    <div className="rounded-xl border border-border p-3">
+                      <DriverLicensePanel
+                        key={selected.user_id}
+                        userId={selected.user_id}
+                        onOpenImage={setLightboxSrc}
+                        hidePhotos
+                        onPhotos={setLicensePhotos}
+                      />
                     </div>
-                  )}
-                  {selected.reviewer_notes && (
-                    <div className="flex justify-between text-sm gap-4">
-                      <span className="text-muted-foreground shrink-0">Reviewer notes:</span>
-                      <span className="font-medium text-foreground text-right">{selected.reviewer_notes}</span>
-                    </div>
-                  )}
+                  </aside>
                 </div>
-
-                {selected.verification_status === 'pending' && (
-                  <div className="flex gap-3 pt-4 border-t border-border">
-                    <button
-                      onClick={() => handleApprove(selected.id)}
-                      
-                      className="flex-1 bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 font-semibold transition-smooth hover:shadow-lg flex items-center justify-center gap-2"
-                    >
-                      <CheckCircle className="w-5 h-5" />
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => handleRejectClick(selected.id)}
-                      
-                      className="flex-1 bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 disabled:opacity-50 font-semibold transition-smooth hover:shadow-lg flex items-center justify-center gap-2"
-                    >
-                      <XCircle className="w-5 h-5" />
-                      Reject
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="lg:col-span-2 bg-card rounded-2xl p-12 shadow-elevation-2 border border-border flex items-center justify-center">
-              <div className="text-center">
-                <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-                <p className="text-muted-foreground">Select a vehicle to review</p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        </>
+              </DetailPanel>
+            ) : (
+              <EmptyDetail icon={Car} text={isLoading ? 'Loading the queue…' : 'Nothing to review here'} />
+            )}
+          </>
         )}
-
-        <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
-          <p className="text-sm text-foreground">
-            <strong>Verification Purpose:</strong> Ensure travelers' personal vehicles are safe and legitimate for carpooling. Check vehicle condition, ownership, and safety compliance.
-          </p>
-        </div>
-      </div>
+      </ReviewPage>
 
       {showRejectionModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-card rounded-2xl max-w-md w-full shadow-elevation-3 border border-border">
             <div className="p-6 border-b border-border">
               <h3 className="text-lg font-bold text-foreground">Reject Verification</h3>
@@ -603,97 +618,34 @@ export default function StaffVehicles() {
   );
 }
 
-function LicenseQueue({
-  licenses,
-  isLoading,
-  selected,
-  onSelect,
-  onDecide,
+function LicenseDetail({
+  license,
   onOpenImage,
+  onDecide,
 }: {
-  licenses: DriverLicense[];
-  isLoading: boolean;
-  selected: DriverLicense | null;
-  onSelect: (userId: string) => void;
-  onDecide: (license: DriverLicense, decision: 'approved' | 'rejected') => void;
+  license: DriverLicense;
   onOpenImage: (src: string) => void;
+  onDecide: (decision: 'approved' | 'rejected') => void;
 }) {
-  const page = useClientPagination(licenses, []);
+  const [photos, setPhotos] = useState<LicensePhotos | undefined>(undefined);
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-1 lg:sticky lg:top-0 lg:self-start lg:max-h-[calc(100vh-4rem)] flex flex-col">
-        <h2 className="text-lg font-bold text-foreground mb-1">License-only queue ({licenses.length})</h2>
-        <p className="text-xs text-muted-foreground mb-4">
-          Licenses submitted without a vehicle. A license sent with a vehicle is reviewed with that vehicle instead.
-        </p>
-        <div data-paginated className="bg-card rounded-2xl p-4 shadow-elevation-2 border border-border flex flex-col min-h-0">
-          {isLoading ? (
-            <p className="text-sm text-muted-foreground text-center py-4">Loading...</p>
-          ) : (
-            <>
-              <div className="space-y-2 min-h-0 overflow-y-auto overscroll-contain -mr-2 pr-2">
-                {licenses.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No licenses waiting</p>}
-                {page.pageItems.map((l) => (
-                  <button
-                    key={l.user_id}
-                    onClick={() => onSelect(l.user_id)}
-                    className={`w-full text-left p-4 rounded-xl border-2 transition-colors ${
-                      selected?.user_id === l.user_id ? 'bg-primary/10 border-primary' : 'bg-secondary border-border hover:border-primary/50'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="font-semibold text-foreground truncate">{l.profiles?.display_name ?? 'Unknown traveler'}</p>
-                      {l.ai_flag && l.ai_flag !== 'passed' && (
-                        <span className="text-xs font-bold px-2.5 py-1 rounded-lg whitespace-nowrap bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300">
-                          {l.ai_flag === 'mismatch' ? 'Mismatch' : l.ai_flag === 'error' ? 'Unchecked' : 'Needs a look'}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1 truncate">{l.profiles?.email}</p>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      {l.source === 'id_verification' ? 'Reused from verified ID' : 'Uploaded'} · {formatDateTime(l.submitted_at)}
-                    </p>
-                  </button>
-                ))}
-              </div>
-              <TablePagination pagination={page} itemLabel="licenses" compact className="mt-3 px-1 pt-3 pb-0" />
-            </>
-          )}
-        </div>
+    <DetailPanel
+      header={
+        <DetailHeading name={license.profiles?.display_name ?? 'Unknown traveler'} email={license.profiles?.email}>
+          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-secondary text-foreground">
+            {license.source === 'id_verification' ? 'Reused from verified ID' : 'Uploaded'}
+          </span>
+          <StatusPill status={license.status} />
+        </DetailHeading>
+      }
+      footer={<DecisionBar pending onApprove={() => onDecide('approved')} onReject={() => onDecide('rejected')} approveLabel="Approve license" />}
+    >
+      <div className="grid h-full min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <PhotoViewer title="Driver's license" photos={licenseViewerPhotos(photos)} onOpen={onOpenImage} keyboard />
+        <aside className="min-h-0 overflow-y-auto overscroll-contain rounded-xl border border-border p-3">
+          <DriverLicensePanel license={license} onOpenImage={onOpenImage} hidePhotos onPhotos={setPhotos} />
+        </aside>
       </div>
-
-      {selected ? (
-        <div className="lg:col-span-2 bg-card rounded-2xl p-6 shadow-elevation-2 border border-border space-y-6">
-          <div>
-            <h3 className="text-lg font-bold text-foreground">{selected.profiles?.display_name ?? 'Unknown traveler'}</h3>
-            <p className="text-sm text-muted-foreground mt-1">{selected.profiles?.email}</p>
-          </div>
-          <DriverLicensePanel key={selected.user_id} license={selected} onOpenImage={onOpenImage} />
-          <div className="flex gap-3 pt-4 border-t border-border">
-            <button
-              onClick={() => onDecide(selected, 'approved')}
-              className="flex-1 bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 font-semibold transition-smooth hover:shadow-lg flex items-center justify-center gap-2"
-            >
-              <CheckCircle className="w-5 h-5" />
-              Approve
-            </button>
-            <button
-              onClick={() => onDecide(selected, 'rejected')}
-              className="flex-1 bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 font-semibold transition-smooth hover:shadow-lg flex items-center justify-center gap-2"
-            >
-              <XCircle className="w-5 h-5" />
-              Reject
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="lg:col-span-2 bg-card rounded-2xl p-12 shadow-elevation-2 border border-border flex items-center justify-center">
-          <div className="text-center">
-            <IdCard className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-            <p className="text-muted-foreground">Select a license to review</p>
-          </div>
-        </div>
-      )}
-    </div>
+    </DetailPanel>
   );
 }

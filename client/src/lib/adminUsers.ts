@@ -14,6 +14,8 @@ export interface UserRow {
   city: string | null;
   is_active: boolean;
   verification_status: UserVerificationStatus | null;
+  /** Set while a requested deletion is in its 30-day grace period. */
+  deletion_scheduled_for: string | null;
   created_at: string;
 }
 
@@ -22,7 +24,7 @@ export interface UserFilters {
   status?: UserStatusFilter;
 }
 
-const SELECT_COLUMNS = 'id, display_name, email, avatar_url, role, city, is_active, verification_status, created_at';
+const SELECT_COLUMNS = 'id, display_name, email, avatar_url, role, city, is_active, verification_status, deletion_scheduled_for, created_at';
 
 export type UserSortColumn = 'display_name' | 'email' | 'role' | 'verification_status' | 'created_at';
 export type UserSort = { column: UserSortColumn; ascending: boolean };
@@ -96,6 +98,35 @@ export async function setUserActive(userId: string, active: boolean) {
   return { error };
 }
 
+// Account deletion (202610080001_account_deletion.sql): the account is
+// deactivated now and purged after 30 days. The RPCs refuse while the user
+// hosts upcoming trips, leads a guild with members, or has pending payments,
+// and write their own audit log entries.
+export async function scheduleUserDeletion(userId: string, reason: string) {
+  const { data, error } = await supabase.rpc('admin_schedule_account_deletion', {
+    p_user_id: userId,
+    p_reason: reason.trim() || null,
+  });
+  return { data: (data ?? null) as string | null, error };
+}
+
+export interface DeletionBlocker {
+  kind: 'hosted_trip' | 'ongoing_trip' | 'guild_leader' | 'pending_payment';
+  label: string;
+  ref_id: string;
+}
+
+// What has to be resolved before this user can be deleted (empty = good to go).
+export async function getUserDeletionBlockers(userId: string) {
+  const { data, error } = await supabase.rpc('account_deletion_blockers', { p_user_id: userId });
+  return { data: (data ?? []) as DeletionBlocker[], error };
+}
+
+export async function cancelUserDeletion(userId: string) {
+  const { error } = await supabase.rpc('admin_cancel_account_deletion', { p_user_id: userId });
+  return { error };
+}
+
 export interface UserReportSummary {
   id: string;
   report_type: string;
@@ -104,9 +135,19 @@ export interface UserReportSummary {
   created_at: string;
 }
 
+/** A mobile number change (partyup-mobile migration 202610090006). */
+export interface PhoneChange {
+  id: string;
+  old_phone: string | null;
+  new_phone: string | null;
+  changed_by: string | null;
+  changed_at: string;
+}
+
 export interface UserDetail {
   bio: string | null;
   phone: string | null;
+  phoneChanges: PhoneChange[];
   tripsCreated: number;
   tripsJoined: number;
   reportsAgainst: number;
@@ -115,7 +156,7 @@ export interface UserDetail {
 }
 
 export async function getUserDetail(userId: string): Promise<{ data: UserDetail | null; error: Error | null }> {
-  const [profile, created, joined, reports, guild] = await Promise.all([
+  const [profile, created, joined, reports, guild, phoneChanges] = await Promise.all([
     supabase.from('profiles').select('bio, phone').eq('id', userId).maybeSingle(),
     supabase.from('trips').select('id', { count: 'exact', head: true }).eq('creator_id', userId),
     supabase.from('trip_members').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'accepted'),
@@ -126,6 +167,12 @@ export async function getUserDetail(userId: string): Promise<{ data: UserDetail 
       .order('created_at', { ascending: false })
       .limit(5),
     supabase.from('guild_members').select('guilds(name)').eq('user_id', userId).maybeSingle(),
+    supabase
+      .from('profile_phone_changes')
+      .select('id, old_phone, new_phone, changed_by, changed_at')
+      .eq('user_id', userId)
+      .order('changed_at', { ascending: false })
+      .limit(10),
   ]);
 
   const error = profile.error ?? created.error ?? joined.error ?? reports.error ?? guild.error;
@@ -136,6 +183,8 @@ export async function getUserDetail(userId: string): Promise<{ data: UserDetail 
     data: {
       bio: profile.data?.bio ?? null,
       phone: profile.data?.phone ?? null,
+      // Missing table (migration not pushed yet) just means no history.
+      phoneChanges: phoneChanges.error ? [] : ((phoneChanges.data ?? []) as PhoneChange[]),
       tripsCreated: created.count ?? 0,
       tripsJoined: joined.count ?? 0,
       reportsAgainst: reports.count ?? 0,

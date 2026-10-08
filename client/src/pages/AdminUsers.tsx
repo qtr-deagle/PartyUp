@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import {
+  AlertCircle,
   Ban,
   BadgeCheck,
   CheckCircle,
@@ -12,15 +13,20 @@ import {
   RotateCcw,
   Search,
   Shield,
+  Trash2,
   Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
+  cancelUserDeletion,
+  getUserDeletionBlockers,
   getUserDetail,
   getUserStats,
   listUsers,
+  scheduleUserDeletion,
   setUserActive,
   setUserVerificationStatus,
+  type DeletionBlocker,
   type UserDetail,
   type UserFilters,
   type UserSort,
@@ -45,15 +51,16 @@ import {
 } from '@/components/ui/dropdown-menu';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog';
 import { runUndoable } from '@/lib/undoable';
-import { formatDate } from '@/lib/datetime';
+import { formatDate, formatDateTime, timeAgo } from '@/lib/datetime';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import SortableTh from '@/components/SortableTh';
 import { useSortState } from '@/hooks/useSortable';
+import { PageHeader, Pill, SearchField, Segmented, StatTile, TableMessage, TD, TH, TR, Toolbar, type PillTone } from '@/components/admin/AdminUI';
 
-const ROLE_BADGE: Record<string, string> = {
-  traveler: 'bg-secondary text-foreground',
-  guild_leader: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
-  admin: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300',
+const ROLE_TONE: Record<string, PillTone> = {
+  traveler: 'gray',
+  guild_leader: 'yellow',
+  admin: 'blue',
 };
 
 const joinedFormat = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric', timeZone: 'Asia/Manila' });
@@ -80,31 +87,33 @@ function UserAvatar({ user, size = 'md' }: { user: UserRow; size?: 'md' | 'lg' }
 
 function RoleBadge({ role }: { role: string }) {
   return (
-    <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${ROLE_BADGE[role] ?? ROLE_BADGE.traveler}`}>
+    <Pill tone={ROLE_TONE[role] ?? 'gray'}>
+      {role === 'guild_leader' && <Crown className="w-3 h-3" />}
+      {role === 'admin' && <Shield className="w-3 h-3" />}
       {roleLabel(role)}
-    </span>
+    </Pill>
   );
 }
 
 function VerificationBadge({ status }: { status: UserRow['verification_status'] }) {
   if (status === 'approved') {
     return (
-      <span className="inline-flex items-center gap-1 text-green-600 text-xs font-medium">
-        <CheckCircle className="w-4 h-4" /> Verified
-      </span>
+      <Pill tone="green">
+        <CheckCircle className="w-3 h-3" /> Verified
+      </Pill>
     );
   }
   if (status === 'pending' || status === 'resubmitted') {
     return (
-      <span className="inline-flex items-center gap-1 text-amber-600 text-xs font-medium">
-        <Clock className="w-4 h-4" /> Pending review
-      </span>
+      <Pill tone="orange">
+        <Clock className="w-3 h-3" /> Pending review
+      </Pill>
     );
   }
   if (status === 'rejected') {
-    return <span className="text-xs font-medium text-destructive">Rejected</span>;
+    return <Pill tone="red">Rejected</Pill>;
   }
-  return <span className="text-xs text-muted-foreground">Not submitted</span>;
+  return <Pill tone="gray">Not submitted</Pill>;
 }
 
 function SuspendedPill() {
@@ -115,14 +124,27 @@ function SuspendedPill() {
   );
 }
 
+function DeletionPill({ scheduledFor }: { scheduledFor: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-destructive/10 text-destructive">
+      <Trash2 className="w-3 h-3" /> Deletion pending · {formatDate(scheduledFor)}
+    </span>
+  );
+}
+
+function StatusPills({ user }: { user: UserRow }) {
+  if (user.deletion_scheduled_for) return <DeletionPill scheduledFor={user.deletion_scheduled_for} />;
+  return !user.is_active ? <SuspendedPill /> : null;
+}
+
 type StatKey = 'total' | 'verified' | 'pending' | 'guildLeaders' | 'suspended';
 
 const STAT_CARDS: { key: StatKey; label: string; icon: React.ElementType; tone: string; filters: UserFilters }[] = [
-  { key: 'total', label: 'Total users', icon: Users, tone: 'text-primary bg-primary/10', filters: {} },
-  { key: 'verified', label: 'Verified', icon: BadgeCheck, tone: 'text-green-600 bg-green-500/10', filters: { status: 'verified' } },
-  { key: 'pending', label: 'Pending ID', icon: Clock, tone: 'text-amber-600 bg-amber-500/10', filters: { status: 'pending' } },
-  { key: 'guildLeaders', label: 'Guild Leaders', icon: Crown, tone: 'text-amber-700 bg-amber-500/10', filters: { role: 'guild_leader' } },
-  { key: 'suspended', label: 'Suspended', icon: Ban, tone: 'text-destructive bg-destructive/10', filters: { status: 'suspended' } },
+  { key: 'total', label: 'All users', icon: Users, tone: 'text-primary bg-primary/10', filters: {} },
+  { key: 'verified', label: 'Verified', icon: BadgeCheck, tone: 'text-green-600 bg-green-500/15 dark:text-green-400', filters: { status: 'verified' } },
+  { key: 'pending', label: 'Pending ID', icon: Clock, tone: 'text-orange-600 bg-orange-500/15 dark:text-orange-400', filters: { status: 'pending' } },
+  { key: 'guildLeaders', label: 'Guild Leaders', icon: Crown, tone: 'text-yellow-600 bg-yellow-500/15 dark:text-yellow-400', filters: { role: 'guild_leader' } },
+  { key: 'suspended', label: 'Suspended', icon: Ban, tone: 'text-red-600 bg-red-500/15 dark:text-red-400', filters: { status: 'suspended' } },
 ];
 
 const sameFilters = (a: UserFilters, b: UserFilters) => a.role === b.role && a.status === b.status;
@@ -138,6 +160,9 @@ export default function AdminUsers() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [confirmVerify, setConfirmVerify] = useState<UserRow | null>(null);
   const [confirmSuspend, setConfirmSuspend] = useState<UserRow | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<UserRow | null>(null);
+  // null while the check is loading.
+  const [deleteBlockers, setDeleteBlockers] = useState<DeletionBlocker[] | null>(null);
   const [detailUser, setDetailUser] = useState<UserRow | null>(null);
   const [detail, setDetail] = useState<UserDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -252,86 +277,100 @@ export default function AdminUsers() {
     });
   };
 
+  // Check what blocks deletion as the dialog opens, so the admin sees it
+  // before writing a reason.
+  const openDeleteDialog = async (user: UserRow) => {
+    setConfirmDelete(user);
+    setDeleteBlockers(null);
+    const { data, error } = await getUserDeletionBlockers(user.id);
+    if (error) toast.error(`Couldn't check this account: ${error.message}`);
+    setDeleteBlockers(error ? [] : data);
+  };
+
+  const handleScheduleDeletion = async (user: UserRow, reason: string) => {
+    const { data, error } = await scheduleUserDeletion(user.id, reason);
+    if (error) {
+      // Something new blocks it since the dialog opened: show the fresh list.
+      const { data: blockers } = await getUserDeletionBlockers(user.id);
+      if (blockers.length) setDeleteBlockers(blockers);
+      else toast.error(error.message);
+      return false;
+    }
+    toast.success(`${user.display_name} will be deleted on ${data ? formatDate(data) : 'the scheduled date'}`);
+    void reload();
+    return true;
+  };
+
+  const handleCancelDeletion = async (user: UserRow) => {
+    const { error } = await cancelUserDeletion(user.id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(`Restored ${user.display_name}'s account`);
+    void reload();
+  };
+
   // Admins are managed on the Team page; nobody can suspend themselves.
   const canSuspend = (user: UserRow) => user.role !== 'admin' && user.id !== me?.id;
+  // A pending deletion owns is_active until it's cancelled or purged.
+  const pendingDeletion = (user: UserRow) => user.deletion_scheduled_for !== null;
 
   const actionButtons = (user: UserRow) => ({
-    verify: user.verification_status !== 'approved',
-    suspend: canSuspend(user) && user.is_active,
-    reactivate: canSuspend(user) && !user.is_active,
+    verify: user.verification_status !== 'approved' && !pendingDeletion(user),
+    suspend: canSuspend(user) && user.is_active && !pendingDeletion(user),
+    reactivate: canSuspend(user) && !user.is_active && !pendingDeletion(user),
+    scheduleDelete: canSuspend(user) && !pendingDeletion(user),
+    cancelDelete: canSuspend(user) && pendingDeletion(user),
   });
 
   return (
     <AdminLayout>
       <div className="space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Users Management</h1>
-          {stats && (
-            <p className="mt-1 text-sm text-muted-foreground">
-              {stats.total} users · {stats.pending} awaiting ID review
-              {stats.suspended > 0 ? ` · ${stats.suspended} suspended` : ''}
-            </p>
-          )}
-        </div>
+        <PageHeader
+          title="Users"
+          subtitle={
+            stats
+              ? `${stats.total} users · ${stats.pending} awaiting ID review${stats.suspended > 0 ? ` · ${stats.suspended} suspended` : ''}`
+              : 'Everyone with a PartyUp account'
+          }
+        />
 
         {/* Stat cards (click to filter) */}
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
-          {STAT_CARDS.map(({ key, label, icon: Icon, tone, filters: cardFilters }, i) => {
-            const active = sameFilters(filters, cardFilters);
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setFilters(cardFilters)}
-                style={{ animationDelay: `${i * 50}ms`, animationFillMode: 'both' }}
-                className={`animate-in fade-in slide-in-from-bottom-2 duration-300 text-left bg-card rounded-2xl border p-4 shadow-elevation-1 transition-smooth hover:border-primary/50 ${
-                  active ? 'border-primary ring-2 ring-primary/30' : 'border-border'
-                }`}
-              >
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${tone}`}>
-                  <Icon className="w-5 h-5" />
-                </div>
-                <div className="mt-3 text-2xl font-bold text-foreground">{stats ? stats[key] : '–'}</div>
-                <div className="text-xs text-muted-foreground">{label}</div>
-              </button>
-            );
-          })}
+          {STAT_CARDS.map(({ key, label, icon, tone, filters: cardFilters }) => (
+            <StatTile
+              key={key}
+              icon={icon as typeof Users}
+              tone={tone}
+              label={label}
+              value={stats ? stats[key] : '–'}
+              onClick={() => setFilters(cardFilters)}
+              active={sameFilters(filters, cardFilters)}
+            />
+          ))}
         </div>
 
         {/* Search + filters */}
-        <div className="flex flex-col md:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search users by name or email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-smooth"
-            />
-          </div>
-          <Select
+        <Toolbar>
+          <SearchField value={searchTerm} onChange={setSearchTerm} placeholder="Search by name or email..." />
+          <Segmented
             value={filters.role ?? 'all'}
-            onValueChange={(value) => setFilters((f) => ({ ...f, role: value === 'all' ? undefined : (value as UserRole) }))}
-          >
-            <SelectTrigger className="md:w-44 !h-auto py-3 bg-card">
-              <SelectValue placeholder="Role" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All roles</SelectItem>
-              <SelectItem value="traveler">Traveler</SelectItem>
-              <SelectItem value="guild_leader">Guild Leader</SelectItem>
-              <SelectItem value="admin">Admin</SelectItem>
-            </SelectContent>
-          </Select>
+            options={[
+              { value: 'all', label: 'All roles' },
+              { value: 'traveler', label: 'Travelers' },
+              { value: 'guild_leader', label: <><Crown className="w-3.5 h-3.5" /> Leaders</> },
+              { value: 'admin', label: <><Shield className="w-3.5 h-3.5" /> Admins</> },
+            ]}
+            onChange={(value) => setFilters((f) => ({ ...f, role: value === 'all' ? undefined : (value as UserRole) }))}
+          />
           <Select
             value={filters.status ?? 'all'}
             onValueChange={(value) =>
               setFilters((f) => ({ ...f, status: value === 'all' ? undefined : (value as UserStatusFilter) }))
             }
           >
-            <SelectTrigger className="md:w-44 !h-auto py-3 bg-card">
+            <SelectTrigger className="w-44 !h-10 bg-card">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -342,7 +381,7 @@ export default function AdminUsers() {
               <SelectItem value="suspended">Suspended</SelectItem>
             </SelectContent>
           </Select>
-        </div>
+        </Toolbar>
 
         {/* Users Table */}
         <div data-paginated className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
@@ -358,22 +397,18 @@ export default function AdminUsers() {
                 <col style={{ width: 110 }} />
               </colgroup>
               <thead>
-                <tr className="border-b border-border bg-secondary">
-                  <SortableTh label="User" sortKey="display_name" sort={userSort.sort} onSort={userSort.toggle} />
-                  <SortableTh label="Email" sortKey="email" sort={userSort.sort} onSort={userSort.toggle} />
-                  <SortableTh label="Role" sortKey="role" sort={userSort.sort} onSort={userSort.toggle} />
-                  <SortableTh label="Status" sortKey="verification_status" sort={userSort.sort} onSort={userSort.toggle} />
-                  <SortableTh label="Joined" sortKey="created_at" sort={userSort.sort} onSort={userSort.toggle} />
-                  <th className="px-6 py-4 text-right text-sm font-bold text-foreground">Actions</th>
+                <tr className="border-b border-border bg-secondary/50">
+                  <SortableTh label="User" sortKey="display_name" className={TH} sort={userSort.sort} onSort={userSort.toggle} />
+                  <SortableTh label="Email" sortKey="email" className={TH} sort={userSort.sort} onSort={userSort.toggle} />
+                  <SortableTh label="Role" sortKey="role" className={TH} sort={userSort.sort} onSort={userSort.toggle} />
+                  <SortableTh label="Status" sortKey="verification_status" className={TH} sort={userSort.sort} onSort={userSort.toggle} />
+                  <SortableTh label="Joined" sortKey="created_at" className={TH} sort={userSort.sort} onSort={userSort.toggle} />
+                  <th className={`${TH} text-right`}>Actions</th>
                 </tr>
               </thead>
-              <tbody className={isLoading && users.length > 0 ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
+              <tbody className={`divide-y divide-border transition-opacity ${isLoading && users.length > 0 ? 'opacity-60' : ''}`}>
                 {isLoading && users.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-8 text-center text-sm text-muted-foreground">
-                      Loading...
-                    </td>
-                  </tr>
+                  <TableMessage colSpan={6} icon={Users} title="Loading" loading />
                 ) : loadError ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-8 text-center text-sm text-destructive">
@@ -381,11 +416,7 @@ export default function AdminUsers() {
                     </td>
                   </tr>
                 ) : users.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-8 text-center text-sm text-muted-foreground">
-                      No users match these filters
-                    </td>
-                  </tr>
+                  <TableMessage colSpan={6} icon={Search} title="No users match these filters" text="Try a different search, role or status." />
                 ) : (
                   shownUsers.map((user) => {
                     const actions = actionButtons(user);
@@ -393,19 +424,17 @@ export default function AdminUsers() {
                       <tr
                         key={user.id}
                         onClick={() => void openDetail(user)}
-                        className={`border-b border-border hover:bg-secondary/50 transition-smooth cursor-pointer ${
-                          user.is_active ? '' : 'opacity-60'
+                        className={`${TR} cursor-pointer ${
+                          user.is_active && !user.deletion_scheduled_for ? '' : 'opacity-60'
                         }`}
                       >
-                        <td className="px-6 py-4">
+                        <td className="px-5 py-3.5">
                           <div className="flex items-center gap-3">
                             <UserAvatar user={user} />
                             <div className="min-w-0">
-                              <div className="font-medium text-foreground truncate">
-                                {user.display_name}
-                                {user.id === me?.id ? (
-                                  <span className="ml-2 text-xs font-normal text-muted-foreground">(you)</span>
-                                ) : null}
+                              <div className="flex items-center gap-1.5 text-sm font-medium text-foreground truncate">
+                                <span className="truncate">{user.display_name}</span>
+                                {user.id === me?.id ? <Pill tone="blue">You</Pill> : null}
                               </div>
                               {user.city && (
                                 <div className="flex items-center gap-1 truncate text-xs text-muted-foreground">
@@ -415,20 +444,20 @@ export default function AdminUsers() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-sm text-muted-foreground truncate" title={user.email ?? undefined}>{user.email ?? '—'}</td>
-                        <td className="px-6 py-4">
+                        <td className="px-5 py-3.5 text-sm text-muted-foreground truncate" title={user.email ?? undefined}>{user.email ?? '—'}</td>
+                        <td className="px-5 py-3.5">
                           <RoleBadge role={user.role} />
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-5 py-3.5">
                           <div className="flex flex-col items-start gap-1">
                             <VerificationBadge status={user.verification_status} />
-                            {!user.is_active && <SuspendedPill />}
+                            <StatusPills user={user} />
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-sm text-muted-foreground whitespace-nowrap">
+                        <td className="px-5 py-3.5 text-sm text-muted-foreground whitespace-nowrap">
                           {joinedFormat.format(new Date(user.created_at))}
                         </td>
-                        <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                        <td className="px-5 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <button
@@ -449,7 +478,9 @@ export default function AdminUsers() {
                                   <Shield className="w-4 h-4" /> Verify
                                 </DropdownMenuItem>
                               )}
-                              {(actions.suspend || actions.reactivate) && <DropdownMenuSeparator />}
+                              {(actions.suspend || actions.reactivate || actions.scheduleDelete || actions.cancelDelete) && (
+                                <DropdownMenuSeparator />
+                              )}
                               {actions.suspend && (
                                 <DropdownMenuItem variant="destructive" onSelect={() => setConfirmSuspend(user)}>
                                   <Ban className="w-4 h-4" /> Suspend
@@ -458,6 +489,16 @@ export default function AdminUsers() {
                               {actions.reactivate && (
                                 <DropdownMenuItem onSelect={() => handleSetActive(user, true)}>
                                   <RotateCcw className="w-4 h-4" /> Reactivate
+                                </DropdownMenuItem>
+                              )}
+                              {actions.cancelDelete && (
+                                <DropdownMenuItem onSelect={() => void handleCancelDeletion(user)}>
+                                  <RotateCcw className="w-4 h-4" /> Cancel deletion
+                                </DropdownMenuItem>
+                              )}
+                              {actions.scheduleDelete && (
+                                <DropdownMenuItem variant="destructive" onSelect={() => void openDeleteDialog(user)}>
+                                  <Trash2 className="w-4 h-4" /> Delete account
                                 </DropdownMenuItem>
                               )}
                             </DropdownMenuContent>
@@ -487,6 +528,48 @@ export default function AdminUsers() {
         }}
       />
 
+      {/* Delete account confirmation */}
+      <ConfirmActionDialog
+        open={confirmDelete !== null}
+        onOpenChange={(open) => !open && setConfirmDelete(null)}
+        tone="destructive"
+        title={
+          deleteBlockers?.length
+            ? `${confirmDelete?.display_name ?? 'This user'} can't be deleted yet`
+            : `Delete ${confirmDelete?.display_name ?? 'this user'}?`
+        }
+        description={
+          deleteBlockers?.length
+            ? 'Deleting them now would remove data other travelers depend on. These need to be resolved first:'
+            : 'The account is deactivated now and permanently deleted in 30 days, along with their trips, chats, verification documents and guild progress. They get an email, and you can cancel it until then.'
+        }
+        confirmLabel="Schedule deletion"
+        confirmDisabled={!deleteBlockers || deleteBlockers.length > 0}
+        notes={deleteBlockers?.length === 0 ? { label: 'Reason', required: true, placeholder: 'e.g. User asked by email on Oct 8' } : undefined}
+        typeToConfirm={deleteBlockers?.length === 0 ? 'DELETE' : undefined}
+        onConfirm={async (reason) => {
+          if (!confirmDelete) return;
+          if (!(await handleScheduleDeletion(confirmDelete, reason))) return false;
+          setConfirmDelete(null);
+        }}
+      >
+        {deleteBlockers === null ? (
+          <p className="text-sm text-muted-foreground">Checking this account…</p>
+        ) : deleteBlockers.length > 0 ? (
+          <ul className="space-y-2">
+            {deleteBlockers.map((blocker) => (
+              <li
+                key={`${blocker.kind}-${blocker.ref_id}`}
+                className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm"
+              >
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                <span>{blocker.label}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </ConfirmActionDialog>
+
       {/* Manual verify confirmation */}
       <ConfirmActionDialog
         open={confirmVerify !== null}
@@ -504,14 +587,17 @@ export default function AdminUsers() {
         <SheetContent side="right" className="sm:max-w-md w-full overflow-y-auto">
           {shownDetailUser && (
             <>
-              <SheetHeader className="items-center text-center pt-8">
-                <UserAvatar user={shownDetailUser} size="lg" />
+              <div className="h-24 -mb-14 bg-gradient-to-br from-primary/25 via-primary/10 to-transparent" />
+              <SheetHeader className="items-center text-center pt-0">
+                <div className="rounded-full ring-4 ring-background">
+                  <UserAvatar user={shownDetailUser} size="lg" />
+                </div>
                 <SheetTitle className="text-xl mt-2">{shownDetailUser.display_name}</SheetTitle>
                 <SheetDescription>{shownDetailUser.email ?? 'No email'}</SheetDescription>
                 <div className="flex flex-wrap justify-center items-center gap-2 mt-2">
                   <RoleBadge role={shownDetailUser.role} />
                   <VerificationBadge status={shownDetailUser.verification_status} />
-                  {!shownDetailUser.is_active && <SuspendedPill />}
+                  <StatusPills user={shownDetailUser} />
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   Joined {joinedFormat.format(new Date(shownDetailUser.created_at))}
@@ -546,8 +632,41 @@ export default function AdminUsers() {
                       </div>
                       <div className="flex justify-between gap-4">
                         <dt className="text-muted-foreground">Phone</dt>
-                        <dd className="font-medium text-foreground text-right">{detail.phone ?? '—'}</dd>
+                        <dd className="text-right">
+                          <span className="font-medium text-foreground">{detail.phone ?? '—'}</span>
+                          {detail.phoneChanges.some((change) => change.old_phone) && (
+                            <span className="block text-xs text-orange-600 dark:text-orange-400">
+                              Changed {timeAgo(detail.phoneChanges.find((change) => change.old_phone)!.changed_at)}
+                            </span>
+                          )}
+                        </dd>
                       </div>
+                      {detail.phoneChanges.length > 0 && (
+                        <div>
+                          <dt className="text-muted-foreground mb-1.5">Number history</dt>
+                          <dd>
+                            <ol className="space-y-1.5 border-l border-border pl-3">
+                              {detail.phoneChanges.map((change) => (
+                                <li key={change.id} className="text-xs">
+                                  <p className="font-mono text-foreground">
+                                    {change.old_phone ? (
+                                      <>
+                                        <span className="text-muted-foreground line-through">{change.old_phone}</span> → {change.new_phone ?? 'removed'}
+                                      </>
+                                    ) : (
+                                      <>Added {change.new_phone}</>
+                                    )}
+                                  </p>
+                                  <p className="text-muted-foreground">
+                                    {formatDateTime(change.changed_at)}
+                                    {change.changed_by && change.changed_by !== detailUser?.id ? ' · by an admin' : ''}
+                                  </p>
+                                </li>
+                              ))}
+                            </ol>
+                          </dd>
+                        </div>
+                      )}
                       {detail.bio && (
                         <div>
                           <dt className="text-muted-foreground mb-1">Bio</dt>
@@ -581,7 +700,7 @@ export default function AdminUsers() {
 
                 {(() => {
                   const actions = actionButtons(shownDetailUser);
-                  if (!actions.verify && !actions.suspend && !actions.reactivate) return null;
+                  if (!Object.values(actions).some(Boolean)) return null;
                   return (
                     <div className="flex gap-2 pt-2 border-t border-border">
                       {actions.verify && (
@@ -609,6 +728,22 @@ export default function AdminUsers() {
                           className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-border hover:bg-secondary text-sm font-medium disabled:opacity-50"
                         >
                           <RotateCcw className="w-4 h-4" /> Reactivate
+                        </button>
+                      )}
+                      {actions.cancelDelete && (
+                        <button
+                          onClick={() => void handleCancelDeletion(shownDetailUser)}
+                          className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-border hover:bg-secondary text-sm font-medium"
+                        >
+                          <RotateCcw className="w-4 h-4" /> Cancel deletion
+                        </button>
+                      )}
+                      {actions.scheduleDelete && (
+                        <button
+                          onClick={() => void openDeleteDialog(shownDetailUser)}
+                          className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-destructive/40 text-destructive hover:bg-destructive/10 text-sm font-medium"
+                        >
+                          <Trash2 className="w-4 h-4" /> Delete
                         </button>
                       )}
                     </div>

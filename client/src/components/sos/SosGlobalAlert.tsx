@@ -43,7 +43,7 @@ interface SosGlobalAlertProps {
   basePath: '/staff' | '/admin';
 }
 
-// Rendered by StaffLayout/AdminLayout so a new SOS reaches staff on every
+// Rendered by AdminLayout so a new SOS reaches staff on every
 // page: a sticky banner, a siren, and a browser notification. The banner stays
 // until the alert is resolved or dismissed here.
 export default function SosGlobalAlert({ alerts, isLoading, basePath }: SosGlobalAlertProps) {

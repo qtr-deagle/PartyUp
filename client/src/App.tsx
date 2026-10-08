@@ -46,6 +46,8 @@ import MobileOnlyNotice from "./pages/MobileOnlyNotice";
 import AccountSettings from "./pages/AccountSettings";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
 
 // The traveler dashboard (Home, Discovery, Chat, Map, Profile, Tours,
 // Carpooling, etc.) lives in the PartyUp mobile app, not this website --
@@ -84,6 +86,8 @@ function Router() {
       <Route path="/register" component={Register} />
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
+      <Route path="/terms" component={Terms} />
+      <Route path="/privacy" component={Privacy} />
       <Route path="/" component={() => <ProtectedRoute component={Home} />} />
       <Route path="/discovery" component={() => <ProtectedRoute component={Discovery} />} />
       <Route path="/find-buddy" component={() => <ProtectedRoute component={Discovery} />} />

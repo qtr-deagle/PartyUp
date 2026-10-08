@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
-import { Search, Calendar, Users, TrendingUp, Filter } from 'lucide-react';
+import { Calendar, CheckCircle2, Heart, MapPin, Search, Star, Trophy, Users } from 'lucide-react';
+import { Avatar, Card, EmptyState, PageHeader, Pill, SearchField, Segmented, StatGrid, StatTile, TD, TH, TR, Toolbar } from '@/components/admin/AdminUI';
 import { toast } from 'sonner';
 import { listPairingHistory, type PairingHistoryRow } from '@/lib/pairingHistory';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
@@ -87,37 +88,6 @@ export default function AdminPairingHistory() {
     ? Math.round((ratedPairings.reduce((sum, p) => sum + (p.rating ?? 0), 0) / ratedPairings.length) * 10) / 10
     : 0;
 
-  const stats = [
-    {
-      label: 'Total Pairings',
-      value: pairingHistory.length.toLocaleString(),
-      icon: Users,
-      color: 'bg-primary/10',
-      textColor: 'text-primary'
-    },
-    {
-      label: 'Avg Compatibility',
-      value: `${avgCompatibility}%`,
-      icon: TrendingUp,
-      color: 'bg-green-500/10',
-      textColor: 'text-green-500'
-    },
-    {
-      label: 'Success Rate',
-      value: `${successRate}%`,
-      icon: TrendingUp,
-      color: 'bg-emerald-500/10',
-      textColor: 'text-emerald-500'
-    },
-    {
-      label: 'Avg Rating',
-      value: `${avgRating.toFixed(1)}/5.0`,
-      icon: TrendingUp,
-      color: 'bg-accent/10',
-      textColor: 'text-accent'
-    },
-  ];
-
   const mostCompatible = [...pairingHistory].sort((a, b) => b.compatibility - a.compatibility).slice(0, 3);
   const highestRated = [...ratedPairings].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0)).slice(0, 3);
   const destinationCounts = pairingHistory.reduce<Record<string, number>>((acc, p) => {
@@ -127,68 +97,97 @@ export default function AdminPairingHistory() {
   const popularDestinations = Object.entries(destinationCounts)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3);
+  const topDestinationCount = popularDestinations[0]?.[1] ?? 1;
+  const compatTone = (value: number) => (value >= 75 ? 'bg-green-500' : value >= 50 ? 'bg-yellow-400' : 'bg-orange-500');
 
   return (
     <AdminLayout>
       <div className="space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Pairing History</h1>
-          <p className="text-sm text-muted-foreground mt-2">Track user pairings and travel buddy matches</p>
-        </div>
+        <PageHeader title="Pairing History" subtitle="Who traveled together, how well they matched, and how it went" />
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {stats.map((stat, index) => {
-            const Icon = stat.icon;
-            return (
-              <div key={index} className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-                <div className="flex items-start justify-between mb-4">
-                  <div className={`${stat.color} p-3 rounded-lg`}>
-                    <Icon className={`${stat.textColor} w-6 h-6`} />
-                  </div>
-                </div>
-                <p className="text-muted-foreground text-sm mb-1">{stat.label}</p>
-                <p className="text-3xl font-bold text-foreground">{stat.value}</p>
+        <StatGrid>
+          <StatTile icon={Users} tone="bg-primary/10 text-primary" label="Total pairings" value={pairingHistory.length.toLocaleString()} />
+          <StatTile icon={Heart} tone="bg-pink-500/15 text-pink-600 dark:text-pink-400" label="Avg compatibility" value={`${avgCompatibility}%`} />
+          <StatTile
+            icon={CheckCircle2}
+            tone="bg-green-500/15 text-green-600 dark:text-green-400"
+            label="Completed together"
+            value={`${successRate}%`}
+            onClick={() => setFilterStatus(filterStatus === 'completed' ? '' : 'completed')}
+            active={filterStatus === 'completed'}
+          />
+          <StatTile icon={Star} tone="bg-yellow-500/15 text-yellow-600 dark:text-yellow-400" label="Avg rating" value={`${avgRating.toFixed(1)}`} hint={`${ratedPairings.length} rated`} />
+        </StatGrid>
+
+        {/* Highlights */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <Card title="Most compatible pairs" icon={Heart} bodyClassName="p-4 space-y-3">
+            {mostCompatible.length === 0 && <p className="text-sm text-muted-foreground">No data yet.</p>}
+            {mostCompatible.map((pairing) => (
+              <div key={pairing.id} className="flex items-center gap-3">
+                <PairAvatars a={pairing.user1_name} b={pairing.user2_name} />
+                <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                  {pairing.user1_name} & {pairing.user2_name}
+                </span>
+                <Pill tone="green">{pairing.compatibility}%</Pill>
               </div>
-            );
-          })}
+            ))}
+          </Card>
+          <Card title="Highest rated trips" icon={Trophy} bodyClassName="p-4 space-y-3">
+            {highestRated.length === 0 && <p className="text-sm text-muted-foreground">No ratings yet.</p>}
+            {highestRated.map((pairing) => (
+              <div key={pairing.id} className="flex items-center gap-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-yellow-500/15 text-yellow-600 dark:text-yellow-400">
+                  <Star className="w-4 h-4" />
+                </span>
+                <span className="min-w-0 flex-1 truncate text-sm text-foreground">{pairing.destination}</span>
+                <span className="text-sm font-bold text-foreground">{pairing.rating?.toFixed(1)}</span>
+              </div>
+            ))}
+          </Card>
+          <Card title="Popular destinations" icon={MapPin} bodyClassName="p-4 space-y-3">
+            {popularDestinations.length === 0 && <p className="text-sm text-muted-foreground">No data yet.</p>}
+            {popularDestinations.map(([destination, count]) => (
+              <div key={destination}>
+                <div className="flex items-baseline justify-between gap-2 text-sm">
+                  <span className="truncate text-foreground">{destination}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {count} pair{count === 1 ? '' : 's'}
+                  </span>
+                </div>
+                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-secondary">
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${(count / topDestinationCount) * 100}%` }} />
+                </div>
+              </div>
+            ))}
+          </Card>
         </div>
 
-        {/* Search & Filter */}
-        <div className="flex gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search by users or destination..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-smooth"
-            />
-          </div>
-          <div className="flex gap-2">
-            <Filter className="w-5 h-5 text-muted-foreground mt-3" />
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-3 bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-smooth"
-            >
-              <option value="">All Status</option>
-              <option value="active">Active</option>
-              <option value="completed">Completed</option>
-            </select>
-          </div>
-        </div>
+        <Toolbar>
+          <SearchField value={searchTerm} onChange={setSearchTerm} placeholder="Search by users or destination..." />
+          <Segmented
+            value={filterStatus}
+            options={[
+              { value: '', label: 'All' },
+              { value: 'active', label: 'Active' },
+              { value: 'completed', label: 'Completed' },
+            ]}
+            onChange={setFilterStatus}
+          />
+        </Toolbar>
 
         {/* Pairing History Table */}
         <div data-paginated className="bg-card rounded-2xl shadow-elevation-2 border border-border overflow-hidden">
           {isLoading ? (
-            <p className="text-sm text-muted-foreground p-6">Loading pairing history...</p>
+            <div className="space-y-2 p-5">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="h-10 rounded-lg bg-secondary animate-pulse" />
+              ))}
+            </div>
           ) : loadError ? (
             <p className="text-sm text-destructive p-6">Failed to load pairing history: {loadError}</p>
           ) : filteredPairings.length === 0 ? (
-            <p className="text-sm text-muted-foreground p-6">No pairings found.</p>
+            <EmptyState icon={searchTerm || filterStatus ? Search : Users} title="No pairings found" text={searchTerm || filterStatus ? 'Try a different search or filter.' : undefined} />
           ) : (
           <div className="overflow-x-auto">
             {/* Fixed column widths so sorting or paging doesn't shift the columns. */}
@@ -196,66 +195,69 @@ export default function AdminPairingHistory() {
               <colgroup>
                 <col />
                 <col />
-                <col style={{ width: 170 }} />
+                <col style={{ width: 160 }} />
                 <col style={{ width: 200 }} />
                 <col style={{ width: 150 }} />
                 <col style={{ width: 140 }} />
               </colgroup>
               <thead>
-                <tr className="border-b border-border bg-secondary">
-                  <SortableTh label="Users" sortKey="users" sort={pairingSort.sort} onSort={pairingSort.toggle} />
-                  <SortableTh label="Trip" sortKey="trip" sort={pairingSort.sort} onSort={pairingSort.toggle} />
-                  <SortableTh label="Dates" sortKey="date" sort={pairingSort.sort} onSort={pairingSort.toggle} />
-                  <SortableTh label="Compatibility" sortKey="compatibility" sort={pairingSort.sort} onSort={pairingSort.toggle} />
-                  <SortableTh label="Rating" sortKey="rating" sort={pairingSort.sort} onSort={pairingSort.toggle} />
-                  <SortableTh label="Status" sortKey="status" sort={pairingSort.sort} onSort={pairingSort.toggle} />
+                <tr className="border-b border-border bg-secondary/50">
+                  <SortableTh className={TH} label="Travelers" sortKey="users" sort={pairingSort.sort} onSort={pairingSort.toggle} />
+                  <SortableTh className={TH} label="Trip" sortKey="trip" sort={pairingSort.sort} onSort={pairingSort.toggle} />
+                  <SortableTh className={TH} label="Date" sortKey="date" sort={pairingSort.sort} onSort={pairingSort.toggle} />
+                  <SortableTh className={TH} label="Compatibility" sortKey="compatibility" sort={pairingSort.sort} onSort={pairingSort.toggle} />
+                  <SortableTh className={TH} label="Rating" sortKey="rating" sort={pairingSort.sort} onSort={pairingSort.toggle} />
+                  <SortableTh className={TH} label="Status" sortKey="status" sort={pairingSort.sort} onSort={pairingSort.toggle} />
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-border">
                 {pairingsPage.pageItems.map((pairing) => (
-                  <tr key={pairing.id} className="border-b border-border hover:bg-secondary/50 transition-smooth">
-                    <td className="px-6 py-4">
-                      <div className="truncate text-sm font-medium text-foreground">{pairing.user1_name}</div>
-                      <div className="truncate text-xs text-muted-foreground">& {pairing.user2_name}</div>
+                  <tr key={pairing.id} className={TR}>
+                    <td className={TD}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <PairAvatars a={pairing.user1_name} b={pairing.user2_name} />
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-foreground">{pairing.user1_name}</div>
+                          <div className="truncate text-xs text-muted-foreground">& {pairing.user2_name}</div>
+                        </div>
+                      </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-foreground capitalize">{pairing.trip_type}</div>
-                      <div className="truncate text-xs text-muted-foreground" title={pairing.destination}>{pairing.destination}</div>
+                    <td className={TD}>
+                      <Pill tone={pairing.trip_type === 'tour' ? 'violet' : 'blue'} className="capitalize">
+                        {pairing.trip_type}
+                      </Pill>
+                      <div className="mt-1 truncate text-xs text-muted-foreground" title={pairing.destination}>
+                        {pairing.destination}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-foreground">
-                      <div className="flex items-center gap-1 text-xs">
-                        <Calendar className="w-4 h-4" />
+                    <td className={`${TD} text-sm text-foreground`}>
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
                         {formatDate(pairing.start_at)}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className={TD}>
                       <div className="flex items-center gap-2">
-                        <div className="w-16 bg-secondary rounded-full h-2">
-                          <div
-                            className="bg-green-500 h-2 rounded-full"
-                            style={{ width: `${pairing.compatibility}%` }}
-                          />
+                        <div className="w-20 bg-secondary rounded-full h-2 overflow-hidden">
+                          <div className={`${compatTone(pairing.compatibility)} h-2 rounded-full`} style={{ width: `${pairing.compatibility}%` }} />
                         </div>
-                        <span className="text-sm font-medium text-foreground">{pairing.compatibility}%</span>
+                        <span className="text-sm font-semibold tabular-nums text-foreground">{pairing.compatibility}%</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className={TD}>
                       {pairing.rating !== null ? (
-                        <span className="text-sm font-medium text-foreground">{pairing.rating.toFixed(1)}/5.0 ⭐</span>
+                        <span className="inline-flex items-center gap-1 text-sm font-semibold text-foreground">
+                          <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
+                          {pairing.rating.toFixed(1)}
+                        </span>
                       ) : (
-                        <span className="text-xs text-muted-foreground">Pending</span>
+                        <span className="text-xs italic text-muted-foreground">Not rated yet</span>
                       )}
                     </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          pairing.status === 'completed'
-                            ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300'
-                            : 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300'
-                        }`}
-                      >
+                    <td className={TD}>
+                      <Pill tone={pairing.status === 'completed' ? 'green' : 'blue'} dot>
                         {pairing.status.charAt(0).toUpperCase() + pairing.status.slice(1)}
-                      </span>
+                      </Pill>
                     </td>
                   </tr>
                 ))}
@@ -265,49 +267,20 @@ export default function AdminPairingHistory() {
           </div>
           )}
         </div>
-
-        {/* Summary Stats */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-            <h3 className="text-lg font-bold text-foreground mb-4">Most Compatible Pairs</h3>
-            <div className="space-y-3">
-              {mostCompatible.length === 0 && <p className="text-sm text-muted-foreground">No data yet.</p>}
-              {mostCompatible.map((pairing) => (
-                <div key={pairing.id} className="flex justify-between items-center">
-                  <span className="text-sm text-foreground">{pairing.user1_name} & {pairing.user2_name}</span>
-                  <span className="text-sm font-bold text-green-500">{pairing.compatibility}%</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-            <h3 className="text-lg font-bold text-foreground mb-4">Highest Rated Trips</h3>
-            <div className="space-y-3">
-              {highestRated.length === 0 && <p className="text-sm text-muted-foreground">No ratings yet.</p>}
-              {highestRated.map((pairing) => (
-                <div key={pairing.id} className="flex justify-between items-center">
-                  <span className="text-sm text-foreground">{pairing.destination}</span>
-                  <span className="text-sm font-bold text-accent">{pairing.rating?.toFixed(1)} ⭐</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
-            <h3 className="text-lg font-bold text-foreground mb-4">Popular Destinations</h3>
-            <div className="space-y-3">
-              {popularDestinations.length === 0 && <p className="text-sm text-muted-foreground">No data yet.</p>}
-              {popularDestinations.map(([destination, count]) => (
-                <div key={destination} className="flex justify-between items-center">
-                  <span className="text-sm text-foreground">{destination}</span>
-                  <span className="text-sm font-bold text-primary">{count} pair{count === 1 ? '' : 's'}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
       </div>
     </AdminLayout>
+  );
+}
+
+function PairAvatars({ a, b }: { a: string; b: string }) {
+  return (
+    <div className="flex shrink-0 -space-x-2">
+      <span className="rounded-full ring-2 ring-card">
+        <Avatar name={a} size="sm" />
+      </span>
+      <span className="rounded-full ring-2 ring-card">
+        <Avatar name={b} size="sm" />
+      </span>
+    </div>
   );
 }

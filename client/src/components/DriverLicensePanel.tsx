@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, CircleHelp, IdCard, QrCode, XCircle } from 'lucide-react';
 import { getDriverLicenseFor, getDriverLicensePhotoUrl, type DriverLicense, type LicenseAiFlag } from '@/lib/vehicles';
 import { formatDateTime } from '@/lib/datetime';
@@ -47,9 +47,13 @@ interface Props {
   license?: DriverLicense | null;
   userId?: string;
   onOpenImage: (src: string) => void;
+  /** Leave the photos out (the review screen shows them in its own viewer). */
+  hidePhotos?: boolean;
+  /** Signed photo URLs as they load (undefined = loading), or null when there's no license. */
+  onPhotos?: (photos: { front?: string | null; back?: string | null } | null) => void;
 }
 
-export default function DriverLicensePanel({ license: given, userId, onOpenImage }: Props) {
+export default function DriverLicensePanel({ license: given, userId, onOpenImage, hidePhotos = false, onPhotos }: Props) {
   const [fetched, setFetched] = useState<DriverLicense | null | undefined>(undefined);
   const [photos, setPhotos] = useState<{ front?: string | null; back?: string | null }>({});
   const [showQr, setShowQr] = useState(false);
@@ -81,6 +85,13 @@ export default function DriverLicensePanel({ license: given, userId, onOpenImage
     // photoKey captures every field read from `license`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photoKey]);
+
+  const onPhotosRef = useRef(onPhotos);
+  onPhotosRef.current = onPhotos;
+  useEffect(() => {
+    if (license === undefined) return;
+    onPhotosRef.current?.(license ? { front: photos.front, back: license.back_image_path ? photos.back : null } : null);
+  }, [license, photos]);
 
   if (license === undefined) return <p className="text-sm text-muted-foreground">Loading driver's license…</p>;
   if (license === null) {
@@ -117,10 +128,12 @@ export default function DriverLicensePanel({ license: given, userId, onOpenImage
         {flag && <span className={`ml-auto text-xs font-semibold px-2.5 py-1 rounded-full ${flag.className}`}>{flag.label}</span>}
       </div>
 
+      {!hidePhotos && (
       <div className="grid grid-cols-2 gap-4">
         <Photo label="Front" src={photos.front} onOpen={onOpenImage} />
         <Photo label="Back" src={license.back_image_path ? photos.back : null} onOpen={onOpenImage} />
       </div>
+      )}
 
       <div className="rounded-lg border border-border bg-secondary p-3 space-y-1.5">
         <CheckRow label="Name" ok={license.ai_name_match} detail={license.ai_name_match === null ? 'Unreadable' : license.ai_name_match ? 'Matches the traveler' : "Doesn't match the traveler"} />

@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { confirmDiscard } from '@/lib/unsavedChanges';
 import { X, Camera, Upload, AlertCircle } from 'lucide-react';
 
 interface IDVerificationModalProps {
@@ -62,13 +63,13 @@ export function IDVerificationModal({ isOpen, onClose, onSubmit, isLoading }: ID
 
     try {
       await onSubmit({ idImage, selfieImage });
-      handleClose();
+      discardAndClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Submission failed');
     }
   };
 
-  const handleClose = () => {
+  const discardAndClose = () => {
     setStep('select');
     setIdImage(null);
     setSelfieImage(null);
@@ -77,6 +78,9 @@ export function IDVerificationModal({ isOpen, onClose, onSubmit, isLoading }: ID
     setError('');
     onClose();
   };
+  // ×, Cancel and the backdrop ask first when something was entered.
+  const handleClose = () => confirmDiscard(!!(idImage || selfieImage), discardAndClose, { message: "Your ID photos aren't submitted yet. If you close this, you'll need to add them again." });
+
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">

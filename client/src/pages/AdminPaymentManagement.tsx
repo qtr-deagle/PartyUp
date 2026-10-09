@@ -16,6 +16,7 @@ import {
   type PaymentHistoryRow,
 } from '@/lib/payments';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog';
+import { REASON_PRESETS } from '@/lib/reasonPresets';
 import { toast } from 'sonner';
 import { runUndoable } from '@/lib/undoable';
 import { formatDate, formatDateTime } from '@/lib/datetime';
@@ -48,7 +49,6 @@ export default function AdminPaymentManagement() {
   );
   const [isLoadingIssues, setIsLoadingIssues] = useState(true);
   const [resolvingReport, setResolvingReport] = useState<{ report: ReportRow; status: ReportStatus } | null>(null);
-  const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [evidenceReportId, setEvidenceReportId] = useState<string | null>(null);
   const [evidenceUrls, setEvidenceUrls] = useState<string[] | null>(null);
@@ -183,11 +183,9 @@ export default function AdminPaymentManagement() {
     setEvidenceUrls(urls.filter((url): url is string => Boolean(url)));
   };
 
-  const handleResolutionSubmit = () => {
+  const handleResolutionSubmit = (notes: string) => {
     if (!resolvingReport) return;
     changeStatus(resolvingReport.report, resolvingReport.status, notes);
-    setResolvingReport(null);
-    setNotes('');
   };
 
   const paidTransactions = transactions.filter((t) => t.status === 'paid');
@@ -547,47 +545,22 @@ export default function AdminPaymentManagement() {
         )}
       </div>
 
-      {resolvingReport && (
-        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card rounded-2xl max-w-md w-full shadow-elevation-3 border border-border">
-            <div className="p-6 border-b border-border">
-              <h3 className="text-lg font-bold text-foreground capitalize">{resolvingReport.status} Report</h3>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-foreground mb-2">Resolution Notes</label>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={4}
-                  placeholder="What action was taken?"
-                  className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary transition-colors"
-                />
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => {
-                    setResolvingReport(null);
-                    setNotes('');
-                  }}
-                  className="flex-1 border border-border text-foreground py-2.5 rounded-lg hover:bg-secondary font-semibold transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleResolutionSubmit}
-                  disabled={isSubmitting}
-                  className={`flex-1 text-white py-2.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-colors ${
-                    resolvingReport.status === 'resolved' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
-                  }`}
-                >
-                  {resolvingReport.status === 'resolved' ? 'Resolve' : 'Dismiss'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmActionDialog
+        open={resolvingReport !== null}
+        onOpenChange={(open) => !open && setResolvingReport(null)}
+        tone={resolvingReport?.status === 'dismissed' ? 'destructive' : 'default'}
+        title={resolvingReport?.status === 'resolved' ? 'Resolve this payment issue?' : 'Dismiss this payment issue?'}
+        description="The reporter gets your notes as a reply in their ticket."
+        notes={{
+          label: 'Notes for the reporter',
+          required: true,
+          placeholder: 'Add details (optional)',
+          presets: resolvingReport?.status === 'dismissed' ? REASON_PRESETS.reportDismiss : REASON_PRESETS.paymentResolve,
+          audience: 'The reporter',
+        }}
+        confirmLabel={resolvingReport?.status === 'resolved' ? 'Resolve' : 'Dismiss'}
+        onConfirm={handleResolutionSubmit}
+      />
 
       {evidenceReportId && (
         <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setEvidenceReportId(null)}>
@@ -641,7 +614,8 @@ export default function AdminPaymentManagement() {
         notes={{
           label: settling?.outcome === 'paid' ? 'How did you confirm it?' : 'Reason',
           required: true,
-          placeholder: settling?.outcome === 'paid' ? 'e.g. Seen as paid in the PayMongo dashboard' : 'e.g. Rider abandoned the checkout',
+          placeholder: 'Add details (optional)',
+          presets: settling?.outcome === 'paid' ? REASON_PRESETS.paymentSettle : REASON_PRESETS.paymentCancel,
         }}
         onConfirm={handleSettle}
       />

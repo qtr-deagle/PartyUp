@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import DraftBanner from '@/components/DraftBanner';
+import { allowNextLeave, guardedNavigate, useDraft, useUnsavedChanges } from '@/lib/unsavedChanges';
 import Layout from '@/components/Layout';
 import { ArrowLeft, Plus, X, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
@@ -34,6 +36,21 @@ export default function ToursCreate() {
   const [isCreating, setIsCreating] = useState(false);
 
   const isVerified = user?.verified ?? false;
+
+  // Unsaved work: guard leaving, and keep a draft in this browser.
+  const dirty =
+    !!(formData.title.trim() || formData.destination.trim() || formData.origin.trim() || formData.date || formData.description.trim() || formData.price) ||
+    formData.itinerary.some((day) => day.trim()) ||
+    selectedInterests.length > 0;
+  useUnsavedChanges(dirty, "Your tour isn't created yet. We'll keep a draft, but leaving now closes the form.");
+  const draft = useDraft(isVerified ? 'tour-create' : null, { formData, selectedInterests }, () => !dirty);
+  const restoreDraft = () => {
+    const saved = draft.restore();
+    if (!saved) return;
+    setFormData(saved.formData);
+    setSelectedInterests(saved.selectedInterests ?? []);
+  };
+  const leave = (path: string) => guardedNavigate(dirty, () => setLocation(path));
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -105,6 +122,8 @@ export default function ToursCreate() {
     }
 
     toast.success('Tour created successfully!');
+    draft.clear();
+    allowNextLeave();
     setLocation('/tours/manage');
   };
 
@@ -139,7 +158,7 @@ export default function ToursCreate() {
       {/* Header */}
       <div className="sticky top-0 bg-card border-b border-border z-30 px-6 md:px-6 py-4">
         <div className="flex items-center gap-2">
-          <button onClick={() => setLocation('/tours')} className="p-1 hover:bg-secondary rounded-lg transition-colors flex-shrink-0">
+          <button onClick={() => leave('/tours')} className="p-1 hover:bg-secondary rounded-lg transition-colors flex-shrink-0">
             <ArrowLeft className="w-4 h-4 text-foreground" />
           </button>
           <h1 className="text-base font-bold text-foreground">Create Tour</h1>
@@ -148,6 +167,11 @@ export default function ToursCreate() {
 
       {/* Content */}
       <div className="max-w-3xl mx-auto p-4 md:p-6">
+        {draft.offer && (
+          <div className="mb-4">
+            <DraftBanner savedAt={draft.offer.savedAt} preview={draft.offer.value.formData.title || null} onContinue={restoreDraft} onStartFresh={draft.dismiss} />
+          </div>
+        )}
         <div className="space-y-6">
           {/* Basic Info */}
           <div className="bg-card rounded-2xl p-6 border border-border">
@@ -312,7 +336,7 @@ export default function ToursCreate() {
           {/* Actions */}
           <div className="flex gap-4">
             <button
-              onClick={() => setLocation('/tours')}
+              onClick={() => leave('/tours')}
               className="flex-1 px-6 py-3 border border-border text-foreground rounded-lg font-medium hover:bg-secondary transition-smooth"
             >
               Cancel

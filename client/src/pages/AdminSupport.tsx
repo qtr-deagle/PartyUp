@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearch } from 'wouter';
 import { toast } from 'sonner';
+import { clearDraft, loadDraft, saveDraft } from '@/lib/drafts';
 import { AlertCircle, Archive, CheckCircle, Eye, Flag, HelpCircle, LifeBuoy, Plane, RotateCcw, Send, UserRound, XCircle } from 'lucide-react';
 import { Avatar, Pill, SearchField, Segmented, type PillTone } from '@/components/admin/AdminUI';
 import { EmptyDetail, Kbd, QueueItem, QueuePanel, ReviewPage, ReviewToolbar, useReviewShortcuts } from '@/components/review/ReviewWorkspace';
@@ -11,6 +12,7 @@ import { ImageLightbox } from '@/components/ImageLightbox';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
 import { useClientPagination } from '@/hooks/usePagination';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog';
+import { REASON_PRESETS } from '@/lib/reasonPresets';
 import { instantUndoable, runUndoable } from '@/lib/undoable';
 import { formatDateTime, timeAgo } from '@/lib/datetime';
 import { updateReportStatus, type ReportStatus } from '@/lib/reports';
@@ -63,7 +65,24 @@ export default function AdminSupport() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<TicketMessageRow[]>([]);
   const [photos, setPhotos] = useState<string[]>([]);
-  const [reply, setReply] = useState('');
+  // Unsent replies are kept per ticket, so switching tickets (or reloading)
+  // never loses or carries over a half-written reply.
+  const [replies, setReplies] = useState<Record<string, string>>(() => {
+    const saved = loadDraft<Record<string, string>>('admin-support-replies');
+    return saved?.value ?? {};
+  });
+  const reply = selectedId ? (replies[selectedId] ?? '') : '';
+  const setReply = (text: string) => {
+    if (!selectedId) return;
+    setReplies((current) => {
+      const next = { ...current };
+      if (text.trim()) next[selectedId] = text;
+      else delete next[selectedId];
+      if (Object.keys(next).length) saveDraft('admin-support-replies', next);
+      else clearDraft('admin-support-replies');
+      return next;
+    });
+  };
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   const loadTickets = useCallback(async (status: TicketStatus | 'all', silent = false) => {
@@ -447,8 +466,8 @@ export default function AdminSupport() {
                 </button>
               </div>
               <p className="mt-1.5 hidden xl:flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <Kbd>Ctrl</Kbd>+<Kbd>Enter</Kbd> to send · <Kbd>J</Kbd>
-                <Kbd>K</Kbd> next / previous ticket
+                <Kbd>Ctrl</Kbd>+<Kbd>Enter</Kbd> to send · <Kbd>Q</Kbd>
+                <Kbd>W</Kbd> previous / next ticket
               </p>
             </footer>
           </section>
@@ -471,7 +490,9 @@ export default function AdminSupport() {
         notes={{
           label: 'Notes for the reporter',
           required: true,
-          placeholder: 'What was done? The reporter sees this in their ticket.',
+          placeholder: 'Add details (optional)',
+          presets: decision?.status === 'dismissed' ? REASON_PRESETS.reportDismiss : REASON_PRESETS.reportResolve,
+          audience: 'The reporter',
         }}
         confirmLabel={decision?.status === 'resolved' ? 'Resolve report' : 'Dismiss report'}
         onConfirm={(notes) => {

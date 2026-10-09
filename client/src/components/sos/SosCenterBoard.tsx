@@ -631,7 +631,7 @@ export default function SosCenterBoard({ padded = true }: { padded?: boolean }) 
                     {renderMap(mapRef, false)}
                     <button
                       onClick={() => setFollow((value) => !value)}
-                      className={`absolute top-3 right-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold shadow-elevation-2 border transition-colors ${
+                      className={`absolute top-3 left-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold shadow-elevation-2 border transition-colors ${
                         follow ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-foreground border-border'
                       }`}
                     >
@@ -640,7 +640,7 @@ export default function SosCenterBoard({ padded = true }: { padded?: boolean }) 
                     <button
                       onClick={() => setExpanded(true)}
                       title="Open the full-screen response view"
-                      className="absolute top-3 left-3 inline-flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground shadow-elevation-2 hover:shadow-elevation-3 transition-smooth"
+                      className="absolute top-3 right-3 inline-flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground shadow-elevation-2 hover:shadow-elevation-3 transition-smooth"
                     >
                       <Maximize2 className="w-4 h-4" /> Expand
                     </button>

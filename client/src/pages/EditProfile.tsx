@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { allowNextLeave, guardedNavigate, useUnsavedChanges } from '@/lib/unsavedChanges';
 import Layout from '@/components/Layout';
 import { ArrowLeft, Save, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -35,6 +36,12 @@ export default function EditProfile() {
   const [newInterest, setNewInterest] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
+  // Snapshot of what the page opened with, to warn before losing edits.
+  const [start] = useState(() => JSON.stringify({ formData, interests }));
+  const dirty = JSON.stringify({ formData, interests }) !== start;
+  useUnsavedChanges(dirty, "Your profile changes aren't saved yet. Leave anyway?");
+  const leave = () => guardedNavigate(dirty, () => setLocation('/profile'));
+
   const allInterests = [
     'Hiking', 'Museums', 'Food', 'Photography', 'Beaches',
     'Shopping', 'Nightlife', 'History', 'Nature', 'Art',
@@ -65,6 +72,7 @@ export default function EditProfile() {
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
       toast.success('Profile updated successfully!');
+      allowNextLeave();
       setLocation('/profile');
     } catch (error) {
       toast.error('Failed to update profile');
@@ -80,7 +88,7 @@ export default function EditProfile() {
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setLocation('/profile')}
+              onClick={leave}
               className="p-1 hover:bg-secondary rounded-lg transition-colors flex-shrink-0"
             >
               <ArrowLeft className="w-4 h-4 text-foreground" />
@@ -254,7 +262,7 @@ export default function EditProfile() {
           {/* Action Buttons */}
           <div className="flex gap-4 pt-4">
             <button
-              onClick={() => setLocation('/profile')}
+              onClick={leave}
               className="flex-1 px-6 py-3 border border-border text-foreground rounded-lg font-medium hover:bg-secondary transition-smooth"
             >
               Cancel

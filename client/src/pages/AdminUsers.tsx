@@ -50,6 +50,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog';
+import { REASON_PRESETS } from '@/lib/reasonPresets';
 import { runUndoable } from '@/lib/undoable';
 import { formatDate, formatDateTime, timeAgo } from '@/lib/datetime';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -545,7 +546,7 @@ export default function AdminUsers() {
         }
         confirmLabel="Schedule deletion"
         confirmDisabled={!deleteBlockers || deleteBlockers.length > 0}
-        notes={deleteBlockers?.length === 0 ? { label: 'Reason', required: true, placeholder: 'e.g. User asked by email on Oct 8' } : undefined}
+        notes={deleteBlockers?.length === 0 ? { label: 'Reason', required: true, placeholder: 'e.g. User asked by email on Oct 8', presets: REASON_PRESETS.accountDeletion } : undefined}
         typeToConfirm={deleteBlockers?.length === 0 ? 'DELETE' : undefined}
         onConfirm={async (reason) => {
           if (!confirmDelete) return;

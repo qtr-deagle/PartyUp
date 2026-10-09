@@ -11,6 +11,12 @@ export interface VehicleRow {
   year: number | null;
   color: string | null;
   plate_number: string | null;
+  // Added by mobile migration 202610090010; null on older vehicles.
+  vehicle_type: 'sedan' | 'hatchback' | 'suv' | 'mpv' | 'van' | 'pickup' | null;
+  /** Seats including the driver. */
+  seat_capacity: number | null;
+  /** OR/CR registration valid until (YYYY-MM-DD). */
+  registration_expiry: string | null;
   verification_status: VehicleVerificationStatus;
   is_primary: boolean;
   notes: string | null;

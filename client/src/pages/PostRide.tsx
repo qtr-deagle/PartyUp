@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import DraftBanner from '@/components/DraftBanner';
+import { allowNextLeave, guardedNavigate, useDraft, useUnsavedChanges } from '@/lib/unsavedChanges';
 import Layout from '@/components/Layout';
 import { ArrowLeft, MapPin, Calendar, Clock, Users, DollarSign, AlertCircle } from 'lucide-react';
 import { useLocation } from 'wouter';
@@ -21,6 +23,16 @@ export default function PostRide() {
     musicPreference: 'any',
   });
 
+  // Unsaved work: guard leaving, and keep a draft in this browser.
+  const dirty = !!(formData.from || formData.to || formData.date || formData.time || formData.description.trim() || formData.carModel || formData.carColor || formData.carPlate);
+  useUnsavedChanges(dirty, "Your ride isn't posted yet. Leave anyway?");
+  const draft = useDraft('post-ride', formData, () => !dirty);
+  const restoreDraft = () => {
+    const saved = draft.restore();
+    if (saved) setFormData(saved);
+  };
+  const leave = () => guardedNavigate(dirty, () => setLocation('/carpooling'));
+
   const handleChange = (e: any) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({
@@ -32,6 +44,8 @@ export default function PostRide() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log('Ride posted:', formData);
+    draft.clear();
+    allowNextLeave();
     setLocation('/carpooling');
   };
 
@@ -41,7 +55,7 @@ export default function PostRide() {
         <div className="sticky top-0 bg-card border-b border-border shadow-elevation-1 z-10">
           <div className="p-4 md:p-8 flex items-center gap-4">
             <button
-              onClick={() => setLocation('/carpooling')}
+              onClick={leave}
               className="p-2 hover:bg-secondary rounded-lg transition-smooth"
             >
               <ArrowLeft className="w-5 h-5 text-foreground" />
@@ -51,6 +65,16 @@ export default function PostRide() {
         </div>
 
         <div className="p-4 md:p-8 max-w-2xl mx-auto">
+          {draft.offer && (
+            <div className="mb-6">
+              <DraftBanner
+                savedAt={draft.offer.savedAt}
+                preview={draft.offer.value.from && draft.offer.value.to ? `${draft.offer.value.from} → ${draft.offer.value.to}` : null}
+                onContinue={restoreDraft}
+                onStartFresh={draft.dismiss}
+              />
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border">
               <h2 className="text-lg font-bold text-foreground mb-6">Route Details</h2>
@@ -287,7 +311,7 @@ export default function PostRide() {
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => setLocation('/carpooling')}
+                onClick={leave}
                 className="flex-1 py-3 px-4 bg-secondary text-foreground rounded-lg font-medium border border-border hover:bg-secondary/80 transition-smooth"
               >
                 Cancel

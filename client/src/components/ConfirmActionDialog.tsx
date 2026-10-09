@@ -11,7 +11,10 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import ReasonChips from '@/components/ReasonChips';
+import { composeReason, EMPTY_REASON, type ReasonPreset, type ReasonValue } from '@/lib/reasonPresets';
 import { cn } from '@/lib/utils';
+import { confirmDiscard } from '@/lib/unsavedChanges';
 
 // The one confirmation dialog for admin actions. Optional extras make the
 // admin slow down for risky ones: a checkbox they must tick, notes they
@@ -28,7 +31,16 @@ export interface ConfirmActionDialogProps {
   confirmLabel?: string;
   cancelLabel?: string;
   checkbox?: { label: string };
-  notes?: { label: string; required?: boolean; placeholder?: string; initial?: string };
+  notes?: {
+    label: string;
+    required?: boolean;
+    placeholder?: string;
+    initial?: string;
+    /** Quick-reason chips; the confirmed notes are the picked sentences plus any typed details. */
+    presets?: ReasonPreset[];
+    /** Who receives the reason, e.g. "The applicant". Omit when it's internal only. */
+    audience?: string;
+  };
   /** The admin must type this exact text to enable the confirm button. */
   typeToConfirm?: string;
   /** Keeps the confirm button disabled, e.g. while a precondition is loading or unmet. */
@@ -57,6 +69,7 @@ export default function ConfirmActionDialog({
 }: ConfirmActionDialogProps) {
   const [checked, setChecked] = useState(false);
   const [noteText, setNoteText] = useState(notes?.initial ?? '');
+  const [reason, setReason] = useState<ReasonValue>(EMPTY_REASON);
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -65,6 +78,7 @@ export default function ConfirmActionDialog({
     if (open) {
       setChecked(false);
       setNoteText(notes?.initial ?? '');
+      setReason({ selected: [], details: notes?.initial ?? '' });
       setTyped('');
       setBusy(false);
     }
@@ -72,18 +86,19 @@ export default function ConfirmActionDialog({
   }, [open]);
 
   const destructive = tone === 'destructive';
+  const finalNotes = notes?.presets ? composeReason(notes.presets, reason) : noteText.trim();
   const ready =
     !busy &&
     !confirmDisabled &&
     (!checkbox || checked) &&
-    (!notes?.required || noteText.trim().length > 0) &&
+    (!notes?.required || finalNotes.length > 0) &&
     (!typeToConfirm || typed.trim() === typeToConfirm.trim());
 
   const handleConfirm = async () => {
     if (!ready) return;
     setBusy(true);
     try {
-      const result = await onConfirm(noteText.trim());
+      const result = await onConfirm(finalNotes);
       if (result !== false) onOpenChange(false);
     } finally {
       setBusy(false);
@@ -91,8 +106,30 @@ export default function ConfirmActionDialog({
   };
 
   return (
-    <AlertDialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
-      <AlertDialogContent className={cn(destructive && 'border-red-500/40')}>
+    <AlertDialog
+      open={open}
+      onOpenChange={(next) => {
+        if (busy) return;
+        // Esc / Cancel with a typed reason or picked chips: ask first.
+        const initial = (notes?.initial ?? '').trim();
+        const hasInput = (noteText.trim() !== initial && noteText.trim().length > 0) || reason.selected.length > 0 || (reason.details.trim() !== initial && reason.details.trim().length > 0);
+        if (!next && hasInput) {
+          confirmDiscard(true, () => onOpenChange(false), { title: 'Discard your reason?', message: "What you picked or typed here won't be saved." });
+          return;
+        }
+        onOpenChange(next);
+      }}
+    >
+      <AlertDialogContent
+        className={cn(destructive && 'border-red-500/40')}
+        onKeyDown={(e) => {
+          // Ctrl/Cmd+Enter confirms from anywhere in the dialog.
+          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            void handleConfirm();
+          }
+        }}
+      >
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
             {destructive && (
@@ -111,7 +148,17 @@ export default function ConfirmActionDialog({
 
         {children}
 
-        {notes && (
+        {notes?.presets ? (
+          <ReasonChips
+            presets={notes.presets}
+            value={reason}
+            onChange={setReason}
+            label={notes.label}
+            required={notes.required}
+            audience={notes.audience}
+            detailsPlaceholder={notes.placeholder}
+          />
+        ) : notes && (
           <div className="space-y-1.5">
             <label className="text-sm font-medium">
               {notes.label}

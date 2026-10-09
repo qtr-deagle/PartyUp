@@ -13,6 +13,8 @@ import {
 import { useTableRealtime } from '@/hooks/useTableRealtime';
 import { useClientPagination } from '@/hooks/usePagination';
 import TablePagination from '@/components/TablePagination';
+import ConfirmActionDialog from '@/components/ConfirmActionDialog';
+import { REASON_PRESETS } from '@/lib/reasonPresets';
 import { runUndoable, usePendingUndoKeys } from '@/lib/undoable';
 import { timeAgo as formatAgo } from '@/lib/datetime';
 import SortableTh from '@/components/SortableTh';
@@ -29,7 +31,6 @@ export function LeaderApplications({ onDecided, onCount }: { onDecided: () => vo
   const [rows, setRows] = useState<LeaderApplicationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [deciding, setDeciding] = useState<{ row: LeaderApplicationRow; approve: boolean } | null>(null);
-  const [notes, setNotes] = useState('');
 
   const load = useCallback(async () => {
     const { data, error } = await listLeaderApplications('pending');
@@ -46,14 +47,12 @@ export function LeaderApplications({ onDecided, onCount }: { onDecided: () => vo
   useTableRealtime(['guild_leader_applications', 'profiles'], () => void load());
 
   const open = (row: LeaderApplicationRow, approve: boolean) => {
-    setNotes('');
     setDeciding({ row, approve });
   };
 
-  const submit = () => {
+  const submit = (note: string) => {
     if (!deciding) return;
     const { row, approve } = deciding;
-    const note = notes;
     setDeciding(null);
     runUndoable({
       key: `leader-app:${row.id}`,
@@ -125,16 +124,16 @@ export function LeaderApplications({ onDecided, onCount }: { onDecided: () => vo
                   {row.pitch}
                 </blockquote>
               </div>
-              <div className="flex gap-2 md:flex-col md:w-32">
+              <div className="flex shrink-0 gap-2.5 md:w-44 md:flex-col">
                 <button
                   onClick={() => open(row, true)}
-                  className="flex-1 flex items-center justify-center gap-1.5 h-9 px-4 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-smooth"
+                  className="flex-1 md:flex-none flex items-center justify-center gap-2 h-11 px-6 rounded-xl bg-green-600 text-white text-sm font-semibold shadow-sm hover:bg-green-700 transition-smooth"
                 >
                   <Check className="w-4 h-4" /> Approve
                 </button>
                 <button
                   onClick={() => open(row, false)}
-                  className="flex-1 flex items-center justify-center gap-1.5 h-9 px-4 rounded-lg border border-red-300 text-red-600 text-sm font-semibold hover:bg-red-50 dark:border-red-500/40 dark:text-red-400 dark:hover:bg-red-500/10 transition-smooth"
+                  className="flex-1 md:flex-none flex items-center justify-center gap-2 h-11 px-6 rounded-xl border border-red-300 text-red-600 text-sm font-semibold hover:bg-red-50 dark:border-red-500/40 dark:text-red-400 dark:hover:bg-red-500/10 transition-smooth"
                 >
                   <X className="w-4 h-4" /> Decline
                 </button>
@@ -145,51 +144,26 @@ export function LeaderApplications({ onDecided, onCount }: { onDecided: () => vo
         </div>
       )}
 
-      {deciding && (
-        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card rounded-2xl max-w-md w-full shadow-elevation-3 border border-border">
-            <div className="p-6 border-b border-border flex items-center justify-between">
-              <h3 className="text-lg font-bold text-foreground">
-                {deciding.approve ? 'Approve' : 'Decline'} {deciding.row.display_name}
-              </h3>
-              <button onClick={() => setDeciding(null)} className="p-1 hover:bg-secondary rounded-lg transition-colors">
-                <X className="w-5 h-5 text-muted-foreground" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-muted-foreground">
-                {deciding.approve
-                  ? `They become a Guild Leader, leave their current guild (their points stay with it), and "${deciding.row.guild_name}" is founded for them with approval-required joining.`
-                  : 'They get a notification with your note and can apply again later.'}
-              </p>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder={deciding.approve ? 'Welcome note (optional)' : 'Reason (shared with the applicant)'}
-                rows={3}
-                className="w-full px-4 py-2.5 bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-smooth text-sm"
-              />
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setDeciding(null)}
-                  className="flex-1 border border-border text-foreground py-2.5 rounded-lg hover:bg-secondary font-semibold transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={submit}
-                  
-                  className={`flex-1 py-2.5 rounded-lg disabled:opacity-50 font-semibold transition-colors ${
-                    deciding.approve ? 'bg-primary text-primary-foreground hover:shadow-lg' : 'bg-destructive text-white hover:bg-destructive/90'
-                  }`}
-                >
-                  {deciding.approve ? 'Approve & found guild' : 'Decline'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmActionDialog
+        open={deciding !== null}
+        onOpenChange={(open) => !open && setDeciding(null)}
+        tone={deciding?.approve ? 'default' : 'destructive'}
+        title={`${deciding?.approve ? 'Approve' : 'Decline'} ${deciding?.row.display_name ?? ''}`}
+        description={
+          deciding?.approve
+            ? `They become a Guild Leader, leave their current guild (their points stay with it), and "${deciding.row.guild_name}" is founded for them with approval-required joining.`
+            : 'They get a notification with your reason and can apply again later.'
+        }
+        notes={{
+          label: deciding?.approve ? 'Welcome note' : 'Reason',
+          required: !deciding?.approve,
+          placeholder: 'Add details (optional)',
+          presets: deciding?.approve ? REASON_PRESETS.leaderApprove : REASON_PRESETS.leaderDecline,
+          audience: 'The applicant',
+        }}
+        confirmLabel={deciding?.approve ? 'Approve & found guild' : 'Decline'}
+        onConfirm={(note) => submit(note)}
+      />
     </div>
   );
 }

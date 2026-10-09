@@ -3,6 +3,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Redirect, Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
+import UnsavedChangesGuard from "./components/UnsavedChangesGuard";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { SafetyProvider } from "./contexts/SafetyContext";
@@ -149,6 +150,7 @@ function App() {
             <TooltipProvider>
               <Toaster />
               <Router />
+              <UnsavedChangesGuard />
             </TooltipProvider>
           </SafetyProvider>
         </AuthProvider>

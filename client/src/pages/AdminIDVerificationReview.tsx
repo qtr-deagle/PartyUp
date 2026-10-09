@@ -10,6 +10,7 @@ import { useClientPagination } from '@/hooks/usePagination';
 import { AiAddressCheck } from '@/components/AiAddressBadge';
 import AiSimilarityBadge from '@/components/AiSimilarityBadge';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog';
+import { REASON_PRESETS } from '@/lib/reasonPresets';
 import {
   DecisionBar,
   DetailHeading,
@@ -47,8 +48,6 @@ export default function AdminIDVerificationReview() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [images, setImages] = useState<{ front?: string | null; back?: string | null; selfie?: string | null }>({});
-  const [rejectionReason, setRejectionReason] = useState<string>('');
-  const [otherReason, setOtherReason] = useState('');
   const [showRejectionModal, setShowRejectionModal] = useState(false);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('pending');
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
@@ -155,16 +154,10 @@ export default function AdminIDVerificationReview() {
     setShowRejectionModal(true);
   };
 
-  // Picking "Other" requires typing the reason; that text is what gets saved.
-  const finalRejectionReason = rejectionReason === 'Other' ? otherReason.trim() : rejectionReason;
-
-  const handleRejectSubmit = () => {
+  const handleRejectSubmit = (reason: string) => {
     const row = verifications.find((v) => v.id === selectedId);
-    if (!row || !finalRejectionReason) return;
-    review(row, 'rejected', finalRejectionReason);
-    setShowRejectionModal(false);
-    setRejectionReason('');
-    setOtherReason('');
+    if (!row || !reason) return;
+    review(row, 'rejected', reason);
   };
 
   useReviewShortcuts({
@@ -301,57 +294,16 @@ export default function AdminIDVerificationReview() {
         )}
       </ReviewPage>
 
-      {showRejectionModal && (
-        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card rounded-2xl max-w-md w-full shadow-elevation-3 border border-border">
-            <div className="p-6 border-b border-border">
-              <h3 className="text-lg font-bold text-foreground">Reject Verification</h3>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-foreground mb-2">Reason for Rejection</label>
-                <select
-                  value={rejectionReason}
-                  onChange={(e) => setRejectionReason(e.target.value)}
-                  className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary transition-colors"
-                >
-                  <option value="">Select a reason...</option>
-                  <option value="Poor image quality">Poor image quality</option>
-                  <option value="Face does not match ID">Face does not match ID</option>
-                  <option value="Invalid or expired ID">Invalid or expired ID</option>
-                  <option value="Face or ID obscured">Face or ID obscured</option>
-                  <option value="Other">Other</option>
-                </select>
-                {rejectionReason === 'Other' && (
-                  <textarea
-                    value={otherReason}
-                    onChange={(e) => setOtherReason(e.target.value)}
-                    placeholder="Describe the reason (the user will see this)"
-                    rows={3}
-                    autoFocus
-                    className="mt-3 w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary transition-colors resize-none"
-                  />
-                )}
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setShowRejectionModal(false)}
-                  className="flex-1 border border-border text-foreground py-2.5 rounded-lg hover:bg-secondary font-semibold transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleRejectSubmit}
-                  disabled={!finalRejectionReason}
-                  className="flex-1 bg-red-600 text-white py-2.5 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-colors"
-                >
-                  Reject
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmActionDialog
+        open={showRejectionModal}
+        onOpenChange={setShowRejectionModal}
+        tone="destructive"
+        title={`Reject ${selected?.profiles?.display_name ?? 'this'}'s ID?`}
+        description="They get a notification and an email with your reason, and can submit a new ID."
+        notes={{ label: 'Reason', required: true, placeholder: 'Add details (optional)', presets: REASON_PRESETS.idReject, audience: 'The traveler' }}
+        confirmLabel="Reject ID"
+        onConfirm={handleRejectSubmit}
+      />
 
       <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
       <ConfirmActionDialog

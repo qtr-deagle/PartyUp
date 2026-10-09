@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useUnsavedChanges } from '@/lib/unsavedChanges';
 import Layout from '@/components/Layout';
 import { Link } from 'wouter';
 import { MapPin, Calendar, Users, Plus, Edit2, Trash2, X, Map, Phone, MessageCircle, AlertCircle, Clock, Gauge, Star, History, Compass, Archive } from 'lucide-react';
@@ -243,6 +244,13 @@ export default function MyTrips() {
   const closeModal = () => {
     setSelectedTrip(null);
   };
+
+  // The create forms keep their input when the popup closes; leaving the page
+  // with something typed asks first.
+  const createDirty =
+    !!(carpoolForm.from || carpoolForm.to || carpoolForm.date || carpoolForm.time || carpoolForm.price || carpoolForm.description.trim() || carpoolForm.carModel || carpoolForm.carPlate) ||
+    !!(tourForm.title || tourForm.destination || tourForm.date || tourForm.price || tourForm.description.trim() || tourForm.itinerary.trim());
+  useUnsavedChanges(createDirty, "Your new trip isn't saved yet. Leave anyway?");
 
   const openCreateMenu = () => {
     setCreateMode('choose');

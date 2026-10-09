@@ -12,6 +12,8 @@ import { useSortable } from '@/hooks/useSortable';
 import SortableTh from '@/components/SortableTh';
 import TablePagination from '@/components/TablePagination';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog';
+import { REASON_PRESETS } from '@/lib/reasonPresets';
+import { confirmDiscard } from '@/lib/unsavedChanges';
 import { instantUndoable, runUndoable, usePendingUndoKeys } from '@/lib/undoable';
 import { formatDateTime } from '@/lib/datetime';
 import {
@@ -69,8 +71,12 @@ export default function AdminGuilds() {
   const isSubmitting = false;
 
   const [handling, setHandling] = useState<{ row: RedemptionRow; status: 'fulfilled' | 'rejected' } | null>(null);
-  const [handleNotes, setHandleNotes] = useState('');
-  const [editingReward, setEditingReward] = useState<{ id?: string; values: RewardInput } | null>(null);
+  const [editingReward, setEditingReward] = useState<{ id?: string; values: RewardInput; start?: RewardInput } | null>(null);
+  // Cancel asks first when the reward form was changed.
+  const closeRewardEditor = () =>
+    confirmDiscard(!!editingReward && JSON.stringify(editingReward.values) !== JSON.stringify(editingReward.start), () => setEditingReward(null), {
+      message: editingReward?.id ? "Your changes to this reward won't be saved." : "This reward isn't added yet. Discard it?",
+    });
   const [disbanding, setDisbanding] = useState<Pick<GuildStanding, 'guild_id' | 'name' | 'member_count'> | null>(null);
   const [viewingGuildId, setViewingGuildId] = useState<string | null>(null);
   const [adjust, setAdjust] = useState({ email: '', amount: '', note: '' });
@@ -122,16 +128,10 @@ export default function AdminGuilds() {
   );
   const redemptionsPage = useClientPagination(redemptionSort.sorted, [statusFilter, redemptionSort.sort]);
 
-  const submitHandle = () => {
+  const submitHandle = (notes: string) => {
     if (!handling) return;
-    if (handling.status === 'rejected' && !handleNotes.trim()) {
-      toast.error('Add a reason so the user knows why it was declined.');
-      return;
-    }
     const { row, status } = handling;
-    const notes = handleNotes;
     setHandling(null);
-    setHandleNotes('');
     runUndoable({
       key: `redemption:${row.id}`,
       message: status === 'fulfilled' ? `Fulfilling "${row.reward?.title ?? 'reward'}"…` : `Declining "${row.reward?.title ?? 'reward'}"…`,
@@ -519,12 +519,12 @@ export default function AdminGuilds() {
               <RewardCard
                 key={reward.id}
                 reward={reward}
-                onEdit={() => setEditingReward({ id: reward.id, values: rewardInput(reward, reward.is_active) })}
+                onEdit={() => setEditingReward({ id: reward.id, values: rewardInput(reward, reward.is_active), start: rewardInput(reward, reward.is_active) })}
                 onToggle={() => void toggleReward(reward)}
               />
             ))}
             <button
-              onClick={() => setEditingReward({ values: { ...EMPTY_REWARD } })}
+              onClick={() => setEditingReward({ values: { ...EMPTY_REWARD }, start: { ...EMPTY_REWARD } })}
               className="min-h-[13rem] flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary hover:bg-primary/5 transition-smooth"
             >
               <span className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary">
@@ -602,6 +602,22 @@ export default function AdminGuilds() {
                   className={inputClass}
                 />
               </label>
+              <div className="flex flex-wrap gap-1.5">
+                {REASON_PRESETS.pointsAdjust.map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => setAdjust({ ...adjust, note: preset.text })}
+                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                      adjust.note === preset.text
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border text-muted-foreground hover:text-foreground hover:bg-secondary'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="bg-card rounded-2xl p-6 shadow-elevation-2 border border-border flex flex-col gap-4 lg:self-start">
@@ -635,53 +651,30 @@ export default function AdminGuilds() {
       </div>
 
       {/* Fulfill / decline dialog */}
-      {handling && (
-        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card rounded-2xl max-w-md w-full shadow-elevation-3 border border-border">
-            <div className="p-6 border-b border-border">
-              <h3 className="text-lg font-bold text-foreground">
-                {handling.status === 'fulfilled' ? 'Mark as fulfilled' : 'Decline request'}
-              </h3>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">{handling.row.reward?.title}</span> for{' '}
-                <span className="font-medium text-foreground">{handling.row.user?.display_name}</span>.{' '}
-                {handling.status === 'fulfilled'
-                  ? 'Only confirm once you have actually delivered it.'
-                  : `Their ${handling.row.cost} coins will be refunded.`}
-              </p>
-              <textarea
-                value={handleNotes}
-                onChange={(e) => setHandleNotes(e.target.value)}
-                placeholder={handling.status === 'fulfilled' ? 'Optional note to the user' : 'Reason (sent to the user)'}
-                rows={3}
-                className={inputClass}
-              />
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setHandling(null);
-                    setHandleNotes('');
-                  }}
-                  className="flex-1 border border-border text-foreground py-2.5 rounded-lg hover:bg-secondary font-semibold transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => void submitHandle()}
-                  disabled={isSubmitting}
-                  className={`flex-1 text-white py-2.5 rounded-lg disabled:opacity-50 font-semibold transition-colors ${
-                    handling.status === 'fulfilled' ? 'bg-green-600 hover:bg-green-700' : 'bg-destructive hover:bg-destructive/90'
-                  }`}
-                >
-                  {handling.status === 'fulfilled' ? 'Fulfilled' : 'Decline & Refund'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmActionDialog
+        open={handling !== null}
+        onOpenChange={(open) => !open && setHandling(null)}
+        tone={handling?.status === 'rejected' ? 'destructive' : 'default'}
+        title={handling?.status === 'fulfilled' ? 'Mark as fulfilled?' : 'Decline request?'}
+        description={
+          <>
+            <span className="font-medium text-foreground">{handling?.row.reward?.title}</span> for{' '}
+            <span className="font-medium text-foreground">{handling?.row.user?.display_name}</span>.{' '}
+            {handling?.status === 'fulfilled'
+              ? 'Only confirm once you have actually delivered it.'
+              : `Their ${handling?.row.cost ?? 0} coins will be refunded.`}
+          </>
+        }
+        notes={{
+          label: handling?.status === 'fulfilled' ? 'Note to the user' : 'Reason',
+          required: handling?.status === 'rejected',
+          placeholder: 'Add details (optional)',
+          presets: handling?.status === 'fulfilled' ? REASON_PRESETS.redemptionFulfil : REASON_PRESETS.redemptionDecline,
+          audience: 'The user',
+        }}
+        confirmLabel={handling?.status === 'fulfilled' ? 'Mark fulfilled' : 'Decline & refund'}
+        onConfirm={(notes) => submitHandle(notes)}
+      />
 
       {/* Reward editor */}
       {editingReward && (
@@ -753,7 +746,7 @@ export default function AdminGuilds() {
               </label>
               <div className="flex gap-3 pt-2">
                 <button
-                  onClick={() => setEditingReward(null)}
+                  onClick={closeRewardEditor}
                   className="flex-1 border border-border text-foreground py-2.5 rounded-lg hover:bg-secondary font-semibold transition-colors"
                 >
                   Cancel

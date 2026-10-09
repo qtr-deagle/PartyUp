@@ -12,6 +12,8 @@ import { getSignedImageUrl, listIdVerifications, reviewIdVerification, type IdVe
 import { listReports, updateReportStatus, type ReportRow } from '@/lib/reports';
 import { type SosAlertDetail } from '@/lib/sos';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog';
+import ReasonChips from '@/components/ReasonChips';
+import { composeReason, EMPTY_REASON, REASON_PRESETS, type ReasonValue } from '@/lib/reasonPresets';
 import ResolveSosDialog, { useSosResolving } from '@/components/sos/ResolveSosDialog';
 import { runUndoable, usePendingUndoKeys } from '@/lib/undoable';
 import { formatDateTime } from '@/lib/datetime';
@@ -160,10 +162,7 @@ function ReviewIdAction({ role, onChanged }: { role: Role; onChanged: () => void
   const queue = rawQueue?.filter((row) => !pendingKeys.has(`id-review:${row.id}`)) ?? null;
   const [confirmApprove, setConfirmApprove] = useState(false);
   const [images, setImages] = useState<{ front: string | null; back: string | null; selfie: string | null }>({ front: null, back: null, selfie: null });
-  const [rejectReason, setRejectReason] = useState('');
-  const [otherReason, setOtherReason] = useState('');
-  // Picking "Other" requires typing the reason; that text is what gets saved.
-  const finalRejectReason = rejectReason === 'Other' ? otherReason.trim() : rejectReason;
+  const [rejectReason, setRejectReason] = useState<ReasonValue>(EMPTY_REASON);
 
   const loadQueue = useCallback(async () => {
     const { data, error } = await listIdVerifications('pending');
@@ -189,8 +188,7 @@ function ReviewIdAction({ role, onChanged }: { role: Role; onChanged: () => void
   // (e.g. the AI result landing) keeps the photos and the typed reason.
   useEffect(() => {
     setImages({ front: null, back: null, selfie: null });
-    setRejectReason('');
-    setOtherReason('');
+    setRejectReason(EMPTY_REASON);
     if (!currentId) return;
     let cancelled = false;
     Promise.all([getSignedImageUrl(frontPath), getSignedImageUrl(backPath), getSignedImageUrl(selfiePath)]).then(([front, back, selfie]) => {
@@ -203,11 +201,13 @@ function ReviewIdAction({ role, onChanged }: { role: Role; onChanged: () => void
 
   // Held for the Undo window (same key as the ID review page), so an
   // undone decision never notifies or emails the traveler.
+  const rejectReady = rejectReason.selected.length > 0 || rejectReason.details.trim().length > 0;
+
   const decide = (decision: 'approved' | 'rejected') => {
     if (!current) return;
     const row = current;
     const name = row.profiles?.display_name ?? 'this traveler';
-    const notes = decision === 'approved' ? `Approved by ${role === 'admin' ? 'an admin' : 'a Guild Leader'} after manual review.` : finalRejectReason;
+    const notes = decision === 'approved' ? `Approved by ${role === 'admin' ? 'an admin' : 'a Guild Leader'} after manual review.` : composeReason(REASON_PRESETS.idReject, rejectReason);
     runUndoable({
       key: `id-review:${row.id}`,
       message: decision === 'approved' ? `Approving ${name}'s ID…` : `Rejecting ${name}'s ID…`,
@@ -278,28 +278,16 @@ function ReviewIdAction({ role, onChanged }: { role: Role; onChanged: () => void
         <span className="text-xs text-muted-foreground italic">AI is advisory only.</span>
       </div>
 
-      <select value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} className={inputClass}>
-        <option value="">Rejection reason (required to reject)...</option>
-        <option value="Poor image quality">Poor image quality</option>
-        <option value="Face does not match ID">Face does not match ID</option>
-        <option value="Invalid or expired ID">Invalid or expired ID</option>
-        <option value="Face or ID obscured">Face or ID obscured</option>
-        <option value="Name does not match ID">Name does not match ID</option>
-        <option value="Other">Other</option>
-      </select>
-      {rejectReason === 'Other' && (
-        <textarea
-          value={otherReason}
-          onChange={(e) => setOtherReason(e.target.value)}
-          placeholder="Describe the reason (the user will see this)"
-          rows={3}
-          autoFocus
-          className={`${inputClass} resize-none`}
-        />
-      )}
+      <ReasonChips
+        presets={REASON_PRESETS.idReject}
+        value={rejectReason}
+        onChange={setRejectReason}
+        label="Reason, if rejecting"
+        audience="The traveler"
+      />
 
       <DialogFooter>
-        <button onClick={() => decide('rejected')} disabled={!finalRejectReason} className={`${primaryButton} bg-red-600 hover:bg-red-700 flex items-center gap-2`}>
+        <button onClick={() => decide('rejected')} disabled={!rejectReady} className={`${primaryButton} bg-red-600 hover:bg-red-700 flex items-center gap-2`}>
           <XCircle className="w-4 h-4" /> Reject
         </button>
         <button onClick={() => setConfirmApprove(true)} className={`${primaryButton} bg-green-600 hover:bg-green-700 flex items-center gap-2`}>
@@ -412,7 +400,13 @@ function TriageReportAction({ reportsHref, onChanged }: { reportsHref: string; o
             ? 'The report is closed as handled and the reporter gets your notes as a reply.'
             : 'The report is closed with no action and the reporter gets your notes as a reply.'
         }
-        notes={{ label: 'Notes for the reporter', required: true, placeholder: 'What was done? The reporter sees this in their ticket.' }}
+        notes={{
+          label: 'Notes for the reporter',
+          required: true,
+          placeholder: 'Add details (optional)',
+          presets: deciding === 'dismissed' ? REASON_PRESETS.reportDismiss : REASON_PRESETS.reportResolve,
+          audience: 'The reporter',
+        }}
         confirmLabel={deciding === 'resolved' ? 'Resolve report' : 'Dismiss report'}
         onConfirm={(notes) => {
           if (deciding) decide(deciding, notes);
@@ -488,23 +482,11 @@ function ResolveSosAction({ alerts, sosHref }: { alerts: SosAlertDetail[]; sosHr
   );
 }
 
-const VEHICLE_REJECT_REASONS = [
-  'Poor image quality',
-  'Photos do not match vehicle details',
-  'Plate or OR/CR unreadable',
-  'Vehicle or documents look suspicious',
-  'Owner authorization incomplete or invalid',
-  'Other',
-];
-
 /** Oldest pending vehicle first; after each decision the next one loads in place. */
 function ReviewVehicleAction({ onChanged }: { onChanged: () => void }) {
   const [queue, setQueue] = useState<VehicleRow[] | null>(null);
   const [photos, setPhotos] = useState<{ label: string; src: string | null }[]>([]);
-  const [rejectReason, setRejectReason] = useState('');
-  const [otherReason, setOtherReason] = useState('');
-  // Picking "Other" requires typing the reason; that text is what gets saved.
-  const finalRejectReason = rejectReason === 'Other' ? otherReason.trim() : rejectReason;
+  const [rejectReason, setRejectReason] = useState<ReasonValue>(EMPTY_REASON);
 
   const loadQueue = useCallback(async () => {
     const { data, error } = await listVehicles('pending');
@@ -528,8 +510,7 @@ function ReviewVehicleAction({ onChanged }: { onChanged: () => void }) {
 
   useEffect(() => {
     const current = currentRef.current;
-    setRejectReason('');
-    setOtherReason('');
+    setRejectReason(EMPTY_REASON);
     if (!current) {
       setPhotos([]);
       return;
@@ -553,11 +534,13 @@ function ReviewVehicleAction({ onChanged }: { onChanged: () => void }) {
     };
   }, [currentId]);
 
+  const rejectReady = rejectReason.selected.length > 0 || rejectReason.details.trim().length > 0;
+
   const decide = (decision: 'approved' | 'rejected') => {
     if (!current) return;
     const row = current;
     const name = row.profiles?.display_name ?? 'this traveler';
-    const notes = decision === 'approved' ? 'Approved by an admin after manual review.' : finalRejectReason;
+    const notes = decision === 'approved' ? 'Approved by an admin after manual review.' : composeReason(REASON_PRESETS.vehicleReject, rejectReason);
     runUndoable({
       key: `vehicle-review:${row.id}`,
       message: decision === 'approved' ? `Approving ${name}'s vehicle…` : `Rejecting ${name}'s vehicle…`,
@@ -617,27 +600,16 @@ function ReviewVehicleAction({ onChanged }: { onChanged: () => void }) {
         <DriverLicensePanel key={current.user_id} userId={current.user_id} onOpenImage={(src) => window.open(src, '_blank', 'noreferrer')} />
       </div>
 
-      <select value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} className={inputClass}>
-        <option value="">Rejection reason (required to reject)...</option>
-        {VEHICLE_REJECT_REASONS.map((reason) => (
-          <option key={reason} value={reason}>
-            {reason}
-          </option>
-        ))}
-      </select>
-      {rejectReason === 'Other' && (
-        <textarea
-          value={otherReason}
-          onChange={(e) => setOtherReason(e.target.value)}
-          placeholder="Describe the reason (the user will see this)"
-          rows={3}
-          autoFocus
-          className={`${inputClass} resize-none`}
-        />
-      )}
+      <ReasonChips
+        presets={REASON_PRESETS.vehicleReject}
+        value={rejectReason}
+        onChange={setRejectReason}
+        label="Reason, if rejecting"
+        audience="The owner"
+      />
 
       <DialogFooter>
-        <button onClick={() => decide('rejected')} disabled={!finalRejectReason} className={`${primaryButton} bg-red-600 hover:bg-red-700 flex items-center gap-2`}>
+        <button onClick={() => decide('rejected')} disabled={!rejectReady} className={`${primaryButton} bg-red-600 hover:bg-red-700 flex items-center gap-2`}>
           <XCircle className="w-4 h-4" /> Reject
         </button>
         <button onClick={() => decide('approved')} className={`${primaryButton} bg-green-600 hover:bg-green-700 flex items-center gap-2`}>

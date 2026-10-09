@@ -7,8 +7,8 @@ import { cn } from '@/lib/utils';
 // Building blocks for the admin review screens (ID and vehicle verification).
 // The page fills the viewport and never scrolls: the queue and the side panel
 // scroll on their own, the photos stay in view, and Approve/Reject stay pinned
-// at the bottom. Keyboard: J/K or arrows move through the queue, A approves,
-// R rejects, left/right flip photos.
+// at the bottom. Keyboard: Q/W or up/down move through the queue, A/D or
+// left/right flip photos, E approves, R rejects.
 
 export type ReviewStatus = 'pending' | 'approved' | 'rejected';
 
@@ -245,8 +245,8 @@ export function EmptyDetail({ icon: Icon, text }: { icon: ComponentType<{ classN
       <Icon className="w-12 h-12 text-muted-foreground/50" />
       <p className="text-muted-foreground">{text}</p>
       <p className="hidden lg:flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Kbd>J</Kbd>
-        <Kbd>K</Kbd> to move through the queue
+        <Kbd>Q</Kbd>
+        <Kbd>W</Kbd> to move through the queue
       </p>
     </section>
   );
@@ -288,15 +288,15 @@ export function DecisionBar({
   return (
     <footer className="flex flex-wrap items-center gap-3 border-t border-border bg-card px-5 py-3">
       <p className="hidden xl:flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Kbd>J</Kbd>
-        <Kbd>K</Kbd> move
+        <Kbd>Q</Kbd>
+        <Kbd>W</Kbd> move
         <span className="mx-1">·</span>
-        <Kbd>←</Kbd>
-        <Kbd>→</Kbd> photos
+        <Kbd>A</Kbd>
+        <Kbd>D</Kbd> photos
         {pending && (
           <>
             <span className="mx-1">·</span>
-            <Kbd>A</Kbd> approve
+            <Kbd>E</Kbd> approve
             <span className="mx-1">·</span>
             <Kbd>R</Kbd> reject
           </>
@@ -340,7 +340,7 @@ function dialogOpen() {
 }
 
 /**
- * Big photo stage with a thumbnail strip. With `keyboard`, left/right flip
+ * Big photo stage with a thumbnail strip. With `keyboard`, A/D or left/right flip
  * through the photos (only one viewer per screen should set it).
  */
 export function PhotoViewer({
@@ -373,9 +373,10 @@ export function PhotoViewer({
     if (!keyboard) return;
     const handleKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target) || dialogOpen()) return;
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      const key = e.key.toLowerCase();
+      if (key === 'a' || key === 'd' || key === 'arrowleft' || key === 'arrowright') {
         e.preventDefault();
-        stepRef.current(e.key === 'ArrowRight' ? 1 : -1);
+        stepRef.current(key === 'd' || key === 'arrowright' ? 1 : -1);
       }
     };
     window.addEventListener('keydown', handleKey);
@@ -489,14 +490,14 @@ export function useReviewShortcuts(options: {
       const { ids, selectedId, onSelect, onApprove, onReject, enabled } = latest.current;
       if (!enabled || e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target) || dialogOpen()) return;
       const key = e.key.toLowerCase();
-      if (key === 'j' || key === 'k' || key === 'arrowdown' || key === 'arrowup') {
+      if (key === 'q' || key === 'w' || key === 'arrowdown' || key === 'arrowup') {
         if (!ids.length) return;
         e.preventDefault();
         const current = selectedId ? ids.indexOf(selectedId) : -1;
-        const forward = key === 'j' || key === 'arrowdown';
+        const forward = key === 'w' || key === 'arrowdown';
         const next = current === -1 ? 0 : Math.min(ids.length - 1, Math.max(0, current + (forward ? 1 : -1)));
         onSelect(ids[next]);
-      } else if (key === 'a' && onApprove) {
+      } else if (key === 'e' && onApprove) {
         e.preventDefault();
         onApprove();
       } else if (key === 'r' && onReject) {

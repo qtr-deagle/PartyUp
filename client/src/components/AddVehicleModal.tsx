@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { confirmDiscard } from '@/lib/unsavedChanges';
 import { X } from 'lucide-react';
 
 interface AddVehicleModalProps {
@@ -39,10 +40,13 @@ export default function AddVehicleModal({ isOpen, onClose, onSubmit }: AddVehicl
     });
   };
 
-  const handleClose = () => {
+  const discardAndClose = () => {
     resetForm();
     onClose();
   };
+  // ×, Cancel and the backdrop ask first when something was entered.
+  const handleClose = () => confirmDiscard(vehicle.model.trim() !== '' || vehicle.description.trim() !== '' || vehicle.seats !== 5 || vehicle.year !== new Date().getFullYear(), discardAndClose, { message: "The vehicle details you entered won't be saved." });
+
 
   if (!isOpen) return null;
 

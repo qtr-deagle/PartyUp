@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { confirmDiscard } from '@/lib/unsavedChanges';
 import { X } from 'lucide-react';
 
 interface CreateRideModalProps {
@@ -42,7 +43,7 @@ export default function CreateRideModal({ isOpen, onClose, onSubmit }: CreateRid
     }
   };
 
-  const handleClose = () => {
+  const discardAndClose = () => {
     setRide({
       from: '',
       to: '',
@@ -54,6 +55,9 @@ export default function CreateRideModal({ isOpen, onClose, onSubmit }: CreateRid
     });
     onClose();
   };
+  // ×, Cancel and the backdrop ask first when something was entered.
+  const handleClose = () => confirmDiscard(!!(ride.from || ride.to || ride.date || ride.time || ride.description.trim() || ride.pricePerPerson) || ride.seats !== 3, discardAndClose, { message: "Your ride isn't posted yet. Discard it?" });
+
 
   if (!isOpen) return null;
 

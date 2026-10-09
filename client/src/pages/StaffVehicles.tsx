@@ -16,6 +16,7 @@ import DriverLicensePanel from '@/components/DriverLicensePanel';
 import { useTableRealtime } from '@/hooks/useTableRealtime';
 import { useClientPagination } from '@/hooks/usePagination';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog';
+import { REASON_PRESETS } from '@/lib/reasonPresets';
 import {
   DecisionBar,
   DetailHeading,
@@ -93,8 +94,6 @@ export default function StaffVehicles() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [images, setImages] = useState<VehicleImages>({});
   const [licensePhotos, setLicensePhotos] = useState<LicensePhotos | undefined>(undefined);
-  const [rejectionReason, setRejectionReason] = useState('');
-  const [otherReason, setOtherReason] = useState('');
   const [showRejectionModal, setShowRejectionModal] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('pending');
@@ -274,16 +273,10 @@ export default function StaffVehicles() {
     setShowRejectionModal(true);
   };
 
-  // Picking "Other" requires typing the reason; that text is what gets saved.
-  const finalRejectionReason = rejectionReason === 'Other' ? otherReason.trim() : rejectionReason;
-
-  const handleRejectSubmit = () => {
+  const handleRejectSubmit = (reason: string) => {
     const row = vehicles.find((v) => v.id === selectedId);
-    if (!row || !finalRejectionReason) return;
-    review(row, 'rejected', finalRejectionReason);
-    setShowRejectionModal(false);
-    setRejectionReason('');
-    setOtherReason('');
+    if (!row || !reason) return;
+    review(row, 'rejected', reason);
   };
 
   // Selecting from the keyboard can land on another page of the queue.
@@ -501,6 +494,20 @@ export default function StaffVehicles() {
                           <span className="font-mono">{selected.plate_number}</span>
                         </InfoRow>
                       )}
+                      {selected.vehicle_type && (
+                        <InfoRow label="Type">
+                          <span className="capitalize">{selected.vehicle_type === 'suv' || selected.vehicle_type === 'mpv' ? selected.vehicle_type.toUpperCase() : selected.vehicle_type}</span>
+                          {selected.seat_capacity ? ` · ${selected.seat_capacity} seats` : ''}
+                        </InfoRow>
+                      )}
+                      {selected.registration_expiry && (
+                        <InfoRow label="Registration until">
+                          <span className={selected.registration_expiry < new Date().toISOString().slice(0, 10) ? 'text-red-600 dark:text-red-400' : ''}>
+                            {new Date(`${selected.registration_expiry}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
+                          <span className="block text-xs font-normal text-muted-foreground">Check it matches the OR/CR</span>
+                        </InfoRow>
+                      )}
                       <InfoRow label="Submitted">{selected.submitted_at ? formatDateTime(selected.submitted_at) : 'Unknown'}</InfoRow>
                       {selected.reviewer_notes && <InfoRow label="Notes">{selected.reviewer_notes}</InfoRow>}
                     </InfoCard>
@@ -523,58 +530,16 @@ export default function StaffVehicles() {
         )}
       </ReviewPage>
 
-      {showRejectionModal && (
-        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card rounded-2xl max-w-md w-full shadow-elevation-3 border border-border">
-            <div className="p-6 border-b border-border">
-              <h3 className="text-lg font-bold text-foreground">Reject Verification</h3>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-foreground mb-2">Reason for Rejection</label>
-                <select
-                  value={rejectionReason}
-                  onChange={(e) => setRejectionReason(e.target.value)}
-                  className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary transition-colors"
-                >
-                  <option value="">Select a reason...</option>
-                  <option value="Poor image quality">Poor image quality</option>
-                  <option value="Photos do not match vehicle details">Photos do not match vehicle details</option>
-                  <option value="Plate or OR/CR unreadable">Plate or OR/CR unreadable</option>
-                  <option value="Vehicle or documents look suspicious">Vehicle or documents look suspicious</option>
-                  <option value="Owner authorization incomplete or invalid">Owner authorization incomplete or invalid</option>
-                  <option value="Other">Other</option>
-                </select>
-                {rejectionReason === 'Other' && (
-                  <textarea
-                    value={otherReason}
-                    onChange={(e) => setOtherReason(e.target.value)}
-                    placeholder="Describe the reason (the user will see this)"
-                    rows={3}
-                    autoFocus
-                    className="mt-3 w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary transition-colors resize-none"
-                  />
-                )}
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setShowRejectionModal(false)}
-                  className="flex-1 border border-border text-foreground py-2.5 rounded-lg hover:bg-secondary font-semibold transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleRejectSubmit}
-                  disabled={!finalRejectionReason}
-                  className="flex-1 bg-red-600 text-white py-2.5 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-colors"
-                >
-                  Reject
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmActionDialog
+        open={showRejectionModal}
+        onOpenChange={setShowRejectionModal}
+        tone="destructive"
+        title="Reject this vehicle?"
+        description="The owner gets a notification and an email with your reason, and can submit it again."
+        notes={{ label: 'Reason', required: true, placeholder: 'Add details (optional)', presets: REASON_PRESETS.vehicleReject, audience: 'The owner' }}
+        confirmLabel="Reject vehicle"
+        onConfirm={handleRejectSubmit}
+      />
 
       <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
       <ConfirmActionDialog
@@ -593,7 +558,7 @@ export default function StaffVehicles() {
         }
         notes={
           licenseDecision?.decision === 'rejected'
-            ? { label: 'Reason (the traveler sees this)', required: true, placeholder: "e.g. The QR code doesn't match the license photo." }
+            ? { label: 'Reason', required: true, placeholder: 'Add details (optional)', presets: REASON_PRESETS.licenseReject, audience: 'The traveler' }
             : undefined
         }
         confirmLabel={licenseDecision?.decision === 'rejected' ? 'Reject license' : 'Approve license'}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { confirmDiscard } from '@/lib/unsavedChanges';
 import { X, AlertCircle, CheckCircle2, Phone, Mail } from 'lucide-react';
 
 interface AddContactModalProps {
@@ -83,12 +84,15 @@ export default function AddContactModal({ isOpen, onClose, onSubmit }: AddContac
     }
   };
 
-  const handleClose = () => {
+  const discardAndClose = () => {
     setNewContact({ name: '', phone: '', email: '', relationship: '', emergencyInfo: '' });
     setStep('details');
     setErrors({});
     onClose();
   };
+  // ×, Cancel and the backdrop ask first when something was entered.
+  const handleClose = () => confirmDiscard(Object.values(newContact).some((value) => value.trim() !== ''), discardAndClose, { message: "This contact isn't added yet. Discard it?" });
+
 
   if (!isOpen) return null;
 

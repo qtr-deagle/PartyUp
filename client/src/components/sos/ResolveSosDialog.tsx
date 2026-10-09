@@ -1,4 +1,5 @@
 import ConfirmActionDialog from '@/components/ConfirmActionDialog';
+import { REASON_PRESETS } from '@/lib/reasonPresets';
 import { resolveSosAlert } from '@/lib/sos';
 import { runUndoable, usePendingUndoKeys } from '@/lib/undoable';
 import { formatDateTime, timeAgo } from '@/lib/datetime';
@@ -63,6 +64,7 @@ export default function ResolveSosDialog({
         label: 'How was it resolved?',
         required: true,
         placeholder: 'e.g. Called them at 3:40 PM, they were at the hospital with family and are fine.',
+        presets: REASON_PRESETS.sosResolve,
       }}
       confirmLabel="Resolve SOS"
       onConfirm={(notes) => {
